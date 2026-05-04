@@ -1,0 +1,1 @@
+ALTER TABLE request_records ADD COLUMN client_ip VARCHAR(45) NOT NULL DEFAULT '';

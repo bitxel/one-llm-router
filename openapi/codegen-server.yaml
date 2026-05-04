@@ -1,0 +1,41 @@
+# oapi-codegen v2 config — admin server stubs (strict + std-http).
+#
+# Why `strict-server: true`:
+#   The strict server model forces handlers to accept fully-parsed
+#   request types and return typed responses, eliminating the class
+#   of bugs where a handler forgets to call `r.ParseForm()` or to set
+#   `Content-Type` before writing the body. oapi-codegen's docs call
+#   this "RPC-style" boilerplate reduction; it matches the project's
+#   HTTP API Style rule in AGENTS.md ("Unified JSON envelope" — every
+#   response shape is registry-pinned, so having the compiler enforce
+#   that the handler emits the right variant is a huge win).
+#
+# Why pair strict-server with `std-http-server: true`:
+#   - AGENTS.md Tech Stack pins `net/http` (built-in routing). The
+#     other backends (Chi, Echo, Gin, …) would drag a framework dep we
+#     do not use and could not CI-pin cleanly.
+#   - Go 1.22+ `http.ServeMux` gained method+path patterns, which
+#     `std-http-server` target emits natively (`m.HandleFunc("GET "+…)`).
+#   - oapi-codegen docs explicitly require strict-server to be paired
+#     with a concrete server backend: strict-server alone is an
+#     abstract shape, std-http-server is the wire.
+#
+# Why NO `models: true` here:
+#   Types live in types.gen.go (same package). Setting `models: true`
+#   in BOTH configs would emit duplicate `type Xxx struct { … }`
+#   declarations, which the Go compiler rejects. Strict-server wrapper
+#   types (e.g. `OauthBrowserStart200JSONResponse`) are still emitted
+#   here because they are server-plumbing types, not schema models.
+#
+# See also:
+#   - openapi/codegen-types.yaml (the sibling file that owns models)
+#   - scripts/codegen-go.sh (runs both configs back-to-back)
+#   - upstream config reference: https://pkg.go.dev/github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen#Configuration
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.6.0/configuration-schema.json
+package: adminapi
+output: internal/generated/adminapi/server.gen.go
+generate:
+  strict-server: true
+  std-http-server: true
+output-options:
+  skip-prune: true

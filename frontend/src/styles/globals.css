@@ -1,0 +1,349 @@
+/* =====================================================================
+ * one-llm-router · global styles
+ *
+ * Source of visual truth: specs/002-.../mocks/v9-neoretro-grafana.html
+ * Aesthetic direction: Neo Retro layout × Grafana-Ops chrome.
+ *   - Dense, mono-forward, telemetry-first, kebab-sharp corners (2px).
+ *   - Flame-orange (#F46800 dark / #E7712B light) as the *single* accent.
+ *   - IBM Plex Sans/Mono, mono for numbers + identifiers + code paths.
+ *   - Dark is the native home; light is a first-class companion.
+ *
+ * Token naming mirrors the mock to keep cross-referencing trivial.
+ * We also alias the older OKLCH-named tokens (`--color-surface-*`,
+ * `--color-fg-*`) to the new raw tokens so legacy shadcn-styled
+ * components render cohesively during the parity pass.
+ * ===================================================================== */
+
+/* ---- Google Fonts (load before Tailwind resets) --------------------- */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+@import "tailwindcss";
+
+/* =====================================================================
+ * 1. Raw v9 token system (native to the mock)
+ *    `data-theme="dark"` is the default; `data-theme="light"` overrides.
+ * ===================================================================== */
+
+:root,
+[data-theme="dark"] {
+  --bg:          #111217;
+  --bg-2:        #0E0F12;
+  --panel:       #181B1F;
+  --panel-hi:    #1E2127;
+  --panel-2:     #22252B;
+  --panel-head:  #1A1D22;
+
+  --line:        #2D3037;
+  --line-2:      #3D4048;
+  --line-3:      #4B4F57;
+
+  --text:        #D8D9DA;
+  --text-dim:    #B3B8BE;
+  --text-muted:  #8A9099;
+  --text-faint:  #6E7277;
+
+  --accent:      #F46800;
+  --accent-hi:   #FF8330;
+  --accent-soft: rgba(244, 104, 0, 0.12);
+  --accent-hair: rgba(244, 104, 0, 0.30);
+  --accent-fg:   #1A0E00;
+
+  --info:        #3274D9;
+  --ok:          #6CC35D;
+  --ok-soft:     rgba(108, 195, 93, 0.10);
+  --ok-line:     #264B26;
+  --warn:        #F2CC0C;
+  --err:         #E02F44;
+  --err-soft:    rgba(224, 47, 68, 0.10);
+  --err-line:    rgba(224, 47, 68, 0.35);
+
+  --grid:        rgba(45, 48, 55, 0.35);
+  --grid-size:   56px;
+
+  --shadow-btn:  0 1px 0 rgba(0, 0, 0, 0.5);
+  --focus:       0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+[data-theme="light"] {
+  --bg:          #F4F5F5;
+  --bg-2:        #FFFFFF;
+  --panel:       #FFFFFF;
+  --panel-hi:    #FAFAFB;
+  --panel-2:     #F1F3F5;
+  --panel-head:  #F8F9FA;
+
+  --line:        #E4E7EB;
+  --line-2:      #D0D3D6;
+  --line-3:      #B6BAC0;
+
+  --text:        #1B1D1F;
+  --text-dim:    #464C54;
+  --text-muted:  #596573;
+  --text-faint:  #8A929B;
+
+  --accent:      #E7712B;
+  --accent-hi:   #D25E18;
+  --accent-soft: rgba(231, 113, 43, 0.10);
+  --accent-hair: rgba(231, 113, 43, 0.35);
+  --accent-fg:   #FFFFFF;
+
+  --info:        #1F5BD3;
+  --ok:          #1A7F37;
+  --ok-soft:     rgba(26, 127, 55, 0.08);
+  --ok-line:     #B7E0C4;
+  --warn:        #B88400;
+  --err:         #B3261E;
+  --err-soft:    rgba(179, 38, 30, 0.08);
+  --err-line:    rgba(179, 38, 30, 0.35);
+
+  --grid:        rgba(20, 25, 30, 0.025);
+  --grid-size:   56px;
+
+  --shadow-btn:  0 1px 0 rgba(15, 20, 25, 0.06);
+  --focus:       0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+/* Respect system preference on first paint (before JS flips [data-theme]) */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg:          #F4F5F5;
+    --bg-2:        #FFFFFF;
+    --panel:       #FFFFFF;
+    --panel-hi:    #FAFAFB;
+    --panel-2:     #F1F3F5;
+    --panel-head:  #F8F9FA;
+    --line:        #E4E7EB;
+    --line-2:      #D0D3D6;
+    --line-3:      #B6BAC0;
+    --text:        #1B1D1F;
+    --text-dim:    #464C54;
+    --text-muted:  #596573;
+    --text-faint:  #8A929B;
+    --accent:      #E7712B;
+    --accent-hi:   #D25E18;
+    --accent-soft: rgba(231, 113, 43, 0.10);
+    --accent-hair: rgba(231, 113, 43, 0.35);
+    --accent-fg:   #FFFFFF;
+    --info:        #1F5BD3;
+    --ok:          #1A7F37;
+    --ok-soft:     rgba(26, 127, 55, 0.08);
+    --ok-line:     #B7E0C4;
+    --warn:        #B88400;
+    --err:         #B3261E;
+    --err-soft:    rgba(179, 38, 30, 0.08);
+    --err-line:    rgba(179, 38, 30, 0.35);
+    --grid:        rgba(20, 25, 30, 0.025);
+    --shadow-btn:  0 1px 0 rgba(15, 20, 25, 0.06);
+  }
+}
+
+/* =====================================================================
+ * 2. Tailwind @theme bridge — exposes v9 tokens as Tailwind classes
+ *    so existing utility callsites (`bg-(--color-surface-base)`,
+ *    `text-(--color-fg-muted)`) keep working without a mass rename,
+ *    while new code can use the raw `--bg` / `--text` tokens directly.
+ * ===================================================================== */
+
+@theme inline {
+  /* Surface tiers (aliased onto v9 raw tokens) */
+  --color-surface-base:    var(--bg);
+  --color-surface-raised:  var(--panel);
+  --color-surface-card:    var(--panel-hi);
+  --color-surface-overlay: var(--panel-2);
+
+  /* Foreground tiers */
+  --color-fg-base:     var(--text);
+  --color-fg-muted:    var(--text-dim);
+  --color-fg-subtle:   var(--text-muted);
+  --color-fg-faint:    var(--text-faint);
+  --color-fg-inverse:  var(--accent-fg);
+
+  /* Semantic */
+  --color-accent:      var(--accent);
+  --color-accent-hi:   var(--accent-hi);
+  --color-accent-fg:   var(--accent-fg);
+  --color-primary:     var(--accent);
+  --color-primary-fg:  var(--accent-fg);
+  --color-success:     var(--ok);
+  --color-warning:     var(--warn);
+  --color-danger:      var(--err);
+  --color-info:        var(--info);
+
+  /* Borders */
+  --color-border-subtle: var(--line);
+  --color-border-strong: var(--line-2);
+
+  /* Radii (sharp — 2 px is the identity) */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+
+  /* Typography */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-sm: 120ms;
+  --duration-md: 220ms;
+  --duration-lg: 400ms;
+}
+
+/* Legacy `.light` escape hatch — old ThemeToggle sets `.light` on the
+   root; we redirect it to `[data-theme="light"]` via a class rule. */
+.light {
+  color-scheme: light;
+}
+
+/* =====================================================================
+ * 3. Base layer — reset, grid backdrop, typography defaults
+ * ===================================================================== */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: var(--line);
+  }
+
+  html {
+    color-scheme: dark light;
+  }
+  [data-theme="dark"] {
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: var(--grid-size) var(--grid-size);
+    background-position: -1px -1px;
+    background-attachment: fixed;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1 {
+    font-family: var(--font-sans);
+    font-size: 30px;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.12;
+    color: var(--text);
+  }
+
+  @media (min-width: 640px) {
+    h1 {
+      font-size: 36px;
+    }
+  }
+
+  [data-theme="light"] h1 {
+    font-weight: 500;
+  }
+
+  h1 strong {
+    font-weight: 500;
+    color: var(--accent);
+    background-image: linear-gradient(var(--accent), var(--accent));
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: 100% 2px;
+    padding-bottom: 1px;
+  }
+
+  h2 {
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text);
+  }
+
+  h3 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  code,
+  pre,
+  kbd,
+  samp,
+  .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum", "zero";
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+    border-radius: 2px;
+  }
+
+  button:not(:disabled),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Scrollbars — subtle + monochrome (mock styling) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-2);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--line-3);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+}
+
+/* =====================================================================
+ * 4. Reduced motion
+ * ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

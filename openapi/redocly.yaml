@@ -1,0 +1,8 @@
+extends:
+  - recommended
+
+rules:
+  operation-4xx-response: off
+apis:
+  admin@v0.3.0:
+    root: admin.yaml

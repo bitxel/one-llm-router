@@ -1,0 +1,69 @@
+# Binaries
+/router
+/one-llm-router
+/bin/
+
+# Go build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test & coverage
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Dependency vendor (not used — we rely on Go modules)
+/vendor/
+
+# Local dev databases
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+/router.db
+/tmp/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Secrets / local config
+.env
+.env.local
+/config.json
+/config.json.tmp.*
+
+# Build output
+/dist/
+/frontend/dist/
+/frontend/node_modules/
+*.tsbuildinfo
+
+# Embedded SPA — populated by `make spa-stage`; .gitkeep keeps the
+# directory present so `//go:embed all:dist` compiles on a fresh
+# clone without a frontend toolchain.
+/internal/spa/dist/*
+!/internal/spa/dist/.gitkeep
+
+# Frontend test/cache artefacts
+/frontend/coverage/
+/frontend/playwright-report/
+/frontend/test-results/
+/frontend/.vite/
+
+# @hey-api/openapi-ts crash dumps (emitted to the CWD of the
+# generator when it fails mid-run; safe to delete between runs).
+/frontend/openapi-ts-error-*.log
+
+# Go workspace (local-only)
+/go.work
+/go.work.sum
+
+# pnpm cache
+.pnpm-store/
+pnpm-debug.log*

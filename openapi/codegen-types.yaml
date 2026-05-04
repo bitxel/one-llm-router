@@ -1,0 +1,41 @@
+# oapi-codegen v2 config — admin schema **types only**.
+#
+# Why a dedicated config file (not CLI flags):
+#   oapi-codegen configs are the upstream-blessed way to pin every
+#   toggle so two engineers on different machines cannot drift. CLI
+#   flags are fine for one-shot use but wouldn't round-trip cleanly
+#   through the CI freshness gate (T-008).
+#
+# Why split types + server into TWO configs (this file + codegen-server.yaml):
+#   - types.gen.go is stable — schema additions cause additive diffs.
+#   - server.gen.go is generated boilerplate that pulls in the
+#     `github.com/oapi-codegen/runtime` dependency; keeping it
+#     isolated makes it trivial to audit runtime coupling and (later)
+#     to swap server framework without touching models.
+#   - Diff review is crisper: a schema-only change shouldn't rewrite
+#     server plumbing, and vice-versa.
+#
+# Why `models: true` without `embedded-spec: true`:
+#   We do NOT want the OpenAPI YAML embedded into the binary — that
+#   would leak spec prose into deployed artefacts and grow the image
+#   for no runtime gain. `oapi-codegen -generate spec` would add that.
+#   Admin.yaml travels as a source-controlled artefact only.
+#
+# See also:
+#   - upstream config reference: https://pkg.go.dev/github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen#Configuration
+#   - tools/oapi-codegen.go (dependency pin rationale)
+#   - scripts/codegen-go.sh (orchestrates this config + the server config)
+#   - openapi/README.md §Codegen pipeline
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.6.0/configuration-schema.json
+package: adminapi
+output: internal/generated/adminapi/types.gen.go
+generate:
+  models: true
+output-options:
+  # skip-prune keeps component schemas that are defined in admin.yaml
+  # but not transitively referenced by an operation's request/response.
+  # Envelope / redaction DTOs should still emit as Go types so the
+  # adminapi handlers can construct them directly without hand-rolling
+  # parallel structs. The alternative (pruning) saves a handful of KB
+  # but forces us to reference every schema from an operation — brittle.
+  skip-prune: true

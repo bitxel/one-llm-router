@@ -1,0 +1,99 @@
+# golangci-lint v2 configuration — one-llm-router.
+#
+# Scope of this file:
+#   - Keep the default linter set (errcheck, govet, ineffassign,
+#     staticcheck, unused), since they catch real bugs.
+#   - Add gofmt + misspell to cover formatting drift and typos in a
+#     single run. CI therefore only needs one lint step.
+#   - Do NOT hide duplicate findings (max-*-issues = 0) so the same
+#     pattern appearing in many files always surfaces.
+#
+# Intentionally NOT enabled:
+#   - gosec, cyclop, gocyclo, lll, funlen, etc.: high-noise style
+#     linters that typically drown real bugs. Can be revisited when
+#     the codebase stabilises and we've agreed on thresholds.
+#
+# Exclusions rationale:
+#   - fmt.Fprint* to CLI writers: the project convention (already used
+#     in cmd/one-llm-router/*) treats these as fire-and-forget. Wrapping every
+#     call in `_, _ = fmt.Fprint(...)` would pollute 20+ sites without
+#     catching any real bug. Close() errors, by contrast, ARE checked
+#     explicitly throughout the codebase, so errcheck stays strict
+#     there.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - misspell
+    # bodyclose: ensures http.Response.Body is closed on every path.
+    # Complements errcheck (which only sees top-level unchecked errors
+    # and misses "body leaks via ignored branch").
+    - bodyclose
+    # errorlint: catches non-idiomatic error handling — `err == target`
+    # instead of errors.Is, `fmt.Errorf("%v", err)` instead of %w, and
+    # type assertions on errors that should use errors.As. Our core
+    # services already wrap errors carefully (see errcode wrapping in
+    # internal/api/); this locks that in.
+    - errorlint
+    # revive: modern golint replacement. We enable only a curated
+    # subset (see settings.revive below) to avoid the noise that
+    # ruined golint's reputation.
+    - revive
+  settings:
+    errcheck:
+      exclude-functions:
+        # CLI writers — stdout/stderr/os.File. Matches project convention.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    staticcheck:
+      # Default staticcheck set is 'all' minus the quick-fix (QF*)
+      # checks. We inherit that default. If a future refactor enables
+      # QF checks, add them here.
+      checks:
+        - all
+    revive:
+      # Curated rule set. We deliberately omit style rules that clash
+      # with project conventions (e.g. package-comments: the codebase
+      # uses file-level doc comments, not package-level sentinels).
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-return
+        - name: error-strings     # 'error strings should not be capitalized'
+        - name: error-naming      # exported err vars must be ErrXxx
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unreachable-code
+        - name: var-declaration
+        - name: var-naming
+    errorlint:
+      # errorf: enforce %w for wrapping; asserts: type-assertion on errors
+      # must use errors.As. Comparison rules caught by default; the
+      # test-code path uses errors.Is already, so no exclusions needed.
+      errorf: true
+      asserts: true
+      comparison: true
+
+formatters:
+  # gofmt is a formatter in v2, not a linter. `golangci-lint run` will
+  # flag any file that differs from gofmt -d and fail CI. This replaces
+  # the separate `gofmt -l .` step in the workflow.
+  enable:
+    - gofmt
+
+issues:
+  # Never hide duplicate findings. Default caps (50 per linter, 3 per
+  # same-issue) mask ongoing debt and cause whack-a-mole fixes.
+  max-issues-per-linter: 0
+  max-same-issues: 0

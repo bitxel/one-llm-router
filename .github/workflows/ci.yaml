@@ -1,0 +1,461 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      live_upstream_smoke:
+        description: Run opt-in live upstream smoke
+        required: false
+        default: false
+        type: boolean
+
+# Cancel superseded runs on the same ref so only the latest commit
+# spends runner time. Main is excluded from cancellation so deploy
+# signals there are never lost.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: lint + build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Frontend toolchain ---
+      #
+      # pnpm must be on PATH BEFORE actions/setup-node so that
+      # `cache: pnpm` can resolve `pnpm store path`. Version of
+      # pnpm is pinned by frontend/package.json's "packageManager"
+      # field and pnpm/action-setup@v4 honours it automatically.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend lint (biome)
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: pnpm typecheck
+
+      - name: Frontend unit tests (vitest)
+        working-directory: frontend
+        run: pnpm test
+
+      - name: Frontend build (vite)
+        working-directory: frontend
+        run: pnpm build
+
+      # Stage the built SPA into internal/spa/dist so //go:embed
+      # picks up the real bundle. Without this, the Go binary would
+      # embed only the .gitkeep sentinel and the 4 SPA tests that
+      # assert against real assets would silently t.Skip(...).
+      - name: Stage SPA bundle for //go:embed
+        run: make spa-stage
+
+      # --- Backend toolchain ---
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # golangci-lint owns gofmt (via the formatters block in
+      # .golangci.yml), govet (in the default linter set), and the rest
+      # of the static-analysis surface. One step replaces the previous
+      # separate `gofmt -l` and `go vet` steps.
+      - name: Go lint (golangci-lint)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11.4
+
+      - name: Go build
+        run: go build ./...
+
+      - name: Go tests (race + coverage)
+        run: go test -race -coverprofile=coverage.out -count=1 ./...
+
+      - name: Upload coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  openapi-freshness:
+    # Enforce AGENTS.md §API Contract rules #2–#3: every PR that
+    # touches `openapi/admin.yaml` MUST also regenerate both the Go
+    # server stubs (internal/generated/adminapi/) AND the TS client
+    # (frontend/src/generated/openapi/) in the SAME PR. The gate also
+    # runs `redocly lint` against the spec so a syntactically broken
+    # OpenAPI can never slip through.
+    #
+    # Runs in parallel with the main `ci` job because it needs both
+    # toolchains but no runtime dependencies — fails fast and gives
+    # the PR author an actionable diff before CPU-expensive tests
+    # finish.
+    name: openapi freshness (codegen + lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Both the pinned @redocly/cli and @hey-api/openapi-ts live in
+      # frontend/package.json, so this install is the single place
+      # where the freshness job pulls its toolchain.
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Check OpenAPI freshness (lint + regen + diff)
+        run: bash scripts/check-openapi-freshness.sh
+
+  frontend-e2e:
+    name: frontend e2e (playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Frontend build (vite)
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build router binary with staged SPA
+        run: make go-build
+
+      - name: Playwright E2E
+        id: frontend_e2e
+        working-directory: frontend
+        run: |
+          mkdir -p ../test-output
+          pnpm test:e2e 2>&1 | tee ../test-output/frontend-e2e.log
+
+      - name: Scrub frontend E2E logs
+        id: frontend_e2e_scrub
+        if: always()
+        run: bash scripts/log-scrub.sh test-output frontend/test-results
+
+      - name: Upload scrubbed Playwright logs
+        if: failure() && steps.frontend_e2e_scrub.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-logs
+          path: |
+            test-output
+            frontend/test-results/**/*.log
+          if-no-files-found: ignore
+
+  live-upstream-smoke:
+    name: live upstream smoke
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.live_upstream_smoke }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LIVE_UPSTREAM_SMOKE: "1"
+      LIVE_OPENAI_API_KEY: ${{ secrets.LIVE_OPENAI_API_KEY }}
+      LIVE_OPENAI_BASE_URL: ${{ secrets.LIVE_OPENAI_BASE_URL }}
+      LIVE_OPENAI_MODEL: ${{ vars.LIVE_OPENAI_MODEL }}
+      LIVE_OPENAI_CHAT_MODEL: ${{ vars.LIVE_OPENAI_CHAT_MODEL }}
+      OPENAI_PYTHON_VERSION: "2.32.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run live upstream smoke
+        id: live_upstream_smoke
+        run: |
+          mkdir -p test-output frontend/test-results
+          make live-upstream-smoke 2>&1 | tee test-output/live-upstream-smoke.log
+
+      - name: Scrub live smoke logs
+        if: always()
+        run: bash scripts/log-scrub.sh test-output frontend/test-results
+
+  migration-rollback:
+    name: migration rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: router
+          POSTGRES_USER: router
+          POSTGRES_PASSWORD: router
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U router -d router"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: mysql
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_DSN: postgres://router:router@localhost:5432/router?sslmode=disable
+      TEST_MYSQL_DSN: root:root@tcp(localhost:3306)/mysql
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run migration rollback gate
+        run: bash scripts/migration-rollback-test.sh
+
+  envelope-parity:
+    name: envelope parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend build (vite)
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Stage SPA bundle for //go:embed
+        run: make spa-stage
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run envelope parity gate
+        run: bash scripts/envelope-parity.sh
+
+  coverage-floor:
+    name: coverage floor
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend build (vite)
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Stage SPA bundle for //go:embed
+        run: make spa-stage
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run coverage floor gate
+        env:
+          COVERAGE_PROFILE_PATH: coverage-floor.out
+        run: bash scripts/coverage-floor.sh
+
+      - name: Upload coverage floor profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-floor-profile
+          path: coverage-floor.out
+          if-no-files-found: error
+
+  log-scrub:
+    name: log scrub
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Frontend build (vite)
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build router binary with staged SPA
+        run: make go-build
+
+      - name: Capture Go + E2E logs
+        id: capture_go_e2e_logs
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p test-output
+          go_status=0
+          frontend_status=0
+
+          go test ./internal/oauth/... ./internal/api/... ./internal/app/... -count=1 -v 2>&1 | tee test-output/go-tests.log || go_status=$?
+          pnpm -C frontend test:e2e 2>&1 | tee test-output/frontend-e2e.log || frontend_status=$?
+
+          printf '%s\n' "${go_status}" > test-output/go-tests.exitcode
+          printf '%s\n' "${frontend_status}" > test-output/frontend-e2e.exitcode
+
+          if [[ "${go_status}" -ne 0 || "${frontend_status}" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Run log scrub gate
+        id: log_scrub_gate
+        if: always()
+        run: bash scripts/log-scrub.sh test-output frontend/test-results
+
+      - name: Fail if Go or E2E tests failed
+        if: always() && steps.capture_go_e2e_logs.outcome == 'failure'
+        run: |
+          echo "Go tests or frontend Playwright E2E failed; see test-output/*.log and frontend/test-results/router.log" >&2
+          exit 1
+
+      - name: Upload scrubbed log artifacts
+        if: failure() && steps.log_scrub_gate.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-scrub-artifacts
+          path: |
+            test-output
+            frontend/test-results/**/*.log
+          if-no-files-found: ignore

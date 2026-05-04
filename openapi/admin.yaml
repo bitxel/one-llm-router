@@ -1,0 +1,2373 @@
+openapi: 3.0.3
+info:
+  title: one-llm-router Admin API
+  version: 0.5.0
+  description: |
+    Admin control plane — Settings, OAuth flow, accounts, auth.json
+    import/export, request history, Account Playground, and dashboard
+    observability.
+    Authoritative source of truth for the Settings surface migrated
+    from **002-setup-wizard-and-admin-portal-skeleton** and the admin
+    surfaces added by **003-multi-mode-codex-auth** and later
+    features, per `AGENTS.md §API Contract` rule #1.
+
+    All `/api/admin/*` operations in this document follow the **HTTP 200
+    + envelope** policy defined in `docs/error-codes.md` §HTTP envelope
+    policy:
+
+      * Both success AND business errors respond with HTTP 200. The
+        outcome lives in `body.code` (0 = success, non-zero = business
+        error).
+      * HTTP 500 is reserved for system errors (`oauth_internal_error` /
+        `oauth_store_failed` / `db_unavailable`).
+      * HTTP 4xx is FORBIDDEN on any admin route. The envelope moves
+        business-error signalling into `body.code`.
+
+    **Documented exemptions (NOT in this file)**:
+
+      1. `GET /auth/callback` — the browser-facing loopback receiver of
+         Rail A (OAuth browser flow). Not under `/api/*` and not served
+         by the admin mux; prose lives in
+         `specs/003-multi-mode-codex-auth/contracts/oauth-flow-api.md`.
+      2. `POST /api/admin/accounts/{id}/export-auth-json` **success**
+         body — raw Codex CLI `auth.json` bytes with
+         `Content-Disposition: attachment`. Error bodies on the same
+         endpoint still use the envelope, so both are represented
+         below via a `oneOf` response schema.
+
+    **Transport-layer codes (not listed per-operation)**:
+
+    Every body-bearing admin operation can additionally return one
+    of the following `code` values EVEN WHEN the handler was never
+    reached. The codes are emitted by the blessed codegen wrapper
+    in `internal/generated/adminapi/strict_handler.go` and are NOT
+    enumerated in each operation's response `oneOf` because doing
+    so would duplicate six branches across every operation union
+    without adding any client-side distinction:
+
+      * **HTTP 200 · `code: 2008` `malformed_body`** — request body
+        could not be JSON-decoded OR the `Content-Type` header does
+        not match the operation's declared media type. Applies to
+        every POST operation that declares a JSON request body.
+      * **HTTP 200 · `code: 3010` `invalid_auth_json_structure`** —
+        route-specific variant of `2008` for
+        `POST /api/admin/accounts/import-auth-json`; covers wrong
+        `Content-Type`, malformed multipart envelope, missing
+        `auth_json` part, and non-JSON-object part bodies.
+      * **HTTP 500 · `code: -1` `unknown_error`** — the handler
+        returned a non-nil error or an unexpected response type.
+
+    See `docs/error-codes.md` for the authoritative registry.
+
+    Deferred to a future admin-auth feature: OpenAPI coverage of
+    the remaining 001 accounts/sessions endpoints and 002 setup-wizard
+    endpoints. Settings and request-history endpoints are now folded
+    into this document because the admin UI consumes their generated
+    client contract.
+
+  contact:
+    name: one-llm-router maintainers
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: /
+    description: Relative base path for same-origin local dev and embedded SPA deployments.
+
+security:
+  - adminAuth: []
+# Enforcement status of the global `security` block. Read this before
+# wiring generated clients:
+#
+#   - MVP (001 + 002 + 003):   NOT enforced. The router accepts every
+#     /api/admin/* request regardless of whether X-Admin-Token is
+#     present. The declaration above is aspirational — it pins the
+#     auth shape so client generation is stable when the gate lands.
+#   - Phase 2+ (future):       ENFORCED via the admin_auth plugin.
+#
+# The `x-mvp-enforcement` extension below is read by downstream
+# tooling (docs site, client-codegen post-processors) to surface the
+# "declared but not yet enforced" disclaimer. AGENTS.md §Security is
+# the source of truth for the phased rollout — see "Phase 1 / Phase
+# 2+" split in that doc.
+x-mvp-enforcement: not-enforced
+x-mvp-enforcement-tracked-by: feature/future-admin-auth
+x-mvp-enforcement-notes: |
+  The global `security: [adminAuth]` block is aspirational in MVP
+  (001/002/003). Every /api/admin/* endpoint currently accepts
+  anonymous callers — the router is expected to run on a trusted
+  internal network per AGENTS.md §Security. The admin_auth plugin
+  (target: future feature) will flip enforcement on; at that point this
+  extension flips to `enforced` and the note disappears.
+
+tags:
+  - name: settings
+    description: |
+      Hot-reloadable router runtime settings and persisted plugin
+      intents. The response never exposes secret config such as
+      `db.url`.
+  - name: oauth-flow
+    description: |
+      Endpoints that open/close the pending OAuth flow. Exactly one
+      flow can be in-flight per router instance (FR-008). Flow state
+      lives in `internal/oauth/flow.go` under an `atomic.Pointer[Flow]`.
+  - name: accounts
+    description: |
+      Upstream-account CRUD + OAuth-specific onboarding
+      (`import-auth-json`) + export.
+  - name: playground
+    description: |
+      Account debugging surface for one non-streaming single-turn text
+      probe through automatic routing or one explicit active account.
+  - name: dashboard
+    description: |
+      Read-only observability cards for the Admin Portal dashboard.
+  - name: usage
+    description: |
+      Router-local usage summary exposed through the Admin API envelope.
+  - name: requests
+    description: |
+      Request/response history search, detail inspection, and dynamic
+      filter option discovery for the admin Requests page.
+
+paths:
+  /api/admin/settings:
+    get:
+      operationId: settingsGet
+      tags: [settings]
+      summary: Return hot-reloadable runtime settings.
+      description: |
+        Returns the live Settings page projection: the five
+        hot-reloadable runtime controls, non-secret DB identity, live
+        plugin summaries, persisted plugin intents, and build metadata.
+        `db.url` and every credential-bearing field are intentionally
+        omitted.
+      responses:
+        '200':
+          description: Envelope with Settings payload or setup-required business error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingsGetResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/settings/update:
+    post:
+      operationId: settingsUpdate
+      tags: [settings]
+      summary: Patch hot-reloadable runtime settings and plugin intents.
+      description: |
+        Partial, RPC-style settings mutation. Only the five
+        `runtime.*` fields and the two persisted plugin intent flags
+        (`plugins.admin_auth.enabled`, `plugins.client_keys.enabled`)
+        are patchable. Unknown keys are rejected with
+        `2012 unknown_config_key`. On success the response returns the
+        same `data` shape as `GET /api/admin/settings` so the SPA can
+        hydrate its cache without a follow-up GET.
+
+        The endpoint has a 16 KiB JSON body cap and reports body-cap
+        failures as HTTP 200 + `2009 request_body_too_large` with
+        `data.scope="envelope"` and `data.limit_bytes=16384`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettingsPatchRequest' }
+      responses:
+        '200':
+          description: Envelope — success or Settings business error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingsUpdateResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/oauth/browser/start:
+    post:
+      operationId: oauthBrowserStart
+      tags: [oauth-flow]
+      summary: Start a browser PKCE OAuth flow (dual-rail).
+      description: |
+        Opens a single browser-OAuth flow per FR-012. The server always
+        tries to bind the loopback listener (Rail A) AND always accepts
+        a manually-pasted callback URL (Rail B); the UI unconditionally
+        renders the paste textarea. Whichever rail delivers a valid
+        `code + state` first wins via a `Flow.Consumed` atomic CAS.
+
+        There is no `mode` / `topology` parameter. Unknown JSON keys in
+        the request body are silently ignored (forward-compat).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthStartRequest' }
+      responses:
+        '200':
+          description: Envelope with success or business-error payload.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrowserStartResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/oauth/browser/manual-callback:
+    post:
+      operationId: oauthBrowserManualCallback
+      tags: [oauth-flow]
+      summary: Rail B — submit a manually-pasted callback URL.
+      description: |
+        Processing order: URL prefix validation → required-param check
+        (`code` OR `error` present) → constant-time `state` comparison
+        → `Flow.Consumed` CAS → `/oauth/token` code-exchange. **State
+        validation runs BEFORE any branch including `error=access_denied`
+        — an unauthenticated cancel MUST NOT tear down a live flow.**
+        See `contracts/oauth-flow-api.md` §`POST /browser/manual-callback`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualCallbackRequest' }
+      responses:
+        '200':
+          description: Envelope — success, cancel, or per-rail rejection.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManualCallbackResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/oauth/device/start:
+    post:
+      operationId: oauthDeviceStart
+      tags: [oauth-flow]
+      summary: Start a device-code OAuth flow.
+      description: |
+        Kicks off a background polling goroutine that hits OpenAI's
+        device-auth token endpoint per `research.md` Decision 1
+        (endpoint bag + RFC 8628 §3.5 interval fallback). On
+        `slow_down` the poller **doubles** the current interval
+        (capped at 60s) — NOT "+5s".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthStartRequest' }
+      responses:
+        '200':
+          description: Envelope — success or business-error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceStartResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/oauth/flow:
+    get:
+      operationId: oauthFlowStatus
+      tags: [oauth-flow]
+      summary: Status poll — the only endpoint the UI hits during a flow.
+      description: |
+        Returns `idle` / `pending` / `success` / `error` inside
+        `data.status`. Success and error are **one-shot** — the server
+        flips back to idle on the NEXT read so the UI never sees the
+        same terminal outcome twice.
+      responses:
+        '200':
+          description: Envelope — always `code:0`; detail lives in `data.status`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlowStatusEnvelope' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/oauth/cancel:
+    post:
+      operationId: oauthCancel
+      tags: [oauth-flow]
+      summary: Cancel the pending flow (operator-initiated teardown).
+      description: Idempotent — cancelling an idle flow returns `status:"idle"` with `code:0`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelFlowRequest' }
+      responses:
+        '200':
+          description: Envelope — idle success or `flow_id_mismatch`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthCancelResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/accounts/import-auth-json:
+    post:
+      operationId: accountsImportAuthJSON
+      tags: [accounts]
+      summary: Onboard an OAuth account from a Codex CLI `auth.json`.
+      description: |
+        **Wire shapes**:
+
+          * File upload: `multipart/form-data` with ONE required part
+            `auth_json` whose body is the raw Codex CLI `auth.json`
+            bytes.
+          * Paste/import text: `application/json` with
+            `{ "auth_json": "<raw Codex CLI auth.json JSON text>" }`.
+
+        No `name` / `provider` fields are accepted — the server
+        derives `name` from the ID token's `email` claim (fallback
+        `chatgpt_account_id`) and `provider` is always `"openai"` in
+        003. The multipart shape remains aligned with the codex-lb
+        reference implementation; the JSON shape supports admin-portal
+        paste without fabricating a browser file.
+
+        **Dual-layer body cap** (per `research.md` Decision 7):
+
+          * **Outer envelope cap** — 64 KB on the entire
+            `multipart/form-data` request body via
+            `http.MaxBytesReader`. Over-limit returns
+            `code:2009 request_body_too_large` with
+            `data.scope="envelope"` and `data.limit_bytes=65536`.
+            Sized generously so legitimate multipart clients never
+            trip it (framing overhead for a single `auth_json`
+            part is 300–500 bytes; 64 KB gives ~48 KB of
+            preamble/header headroom before OOM defence kicks in).
+          * **Inner payload cap** — 16 KB on the `auth_json` part's
+            content or JSON field value. Over-limit returns
+            `code:2009 request_body_too_large` with
+            `data.scope="part"` and `data.limit_bytes=16384`. This
+            is the semantic payload budget — a typical Codex CLI
+            `auth.json` is 5–8 KB (3 JWTs + metadata); 16 KB is
+            2× the observed max to cover multi-org/large-plan
+            edge cases.
+
+        The outer cap defends against preamble / header-flood
+        attacks that never reach the `auth_json` part; the inner
+        cap keeps the happy-path payload accounting precise.
+
+        Unknown top-level keys inside the parsed JSON are
+        **ignored** (US-6 edge case 4). Extracted claims populate
+        the row's `email`, `plan_type`, `chatgpt_account_id`
+        metadata.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [auth_json]
+              properties:
+                auth_json:
+                  type: string
+                  format: binary
+                  description: |
+                    Raw Codex CLI `auth.json` bytes. Structural shape
+                    documented by `CodexAuthJSON` below — the server
+                    parses the bytes as JSON, validates the required
+                    `tokens.*` fields, and derives account metadata
+                    from the decoded claims.
+          application/json:
+            schema:
+              type: object
+              required: [auth_json]
+              additionalProperties: true
+              properties:
+                auth_json:
+                  type: string
+                  minLength: 1
+                  maxLength: 16384
+                  description: |
+                    Raw Codex CLI `auth.json` JSON text pasted by the
+                    operator. The server parses this string as JSON,
+                    validates the required `tokens.*` fields, and
+                    derives account metadata from the decoded claims.
+      responses:
+        '200':
+          description: Envelope — success, validation, or body-too-large.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportAuthJSONResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/accounts/{id}/export-auth-json:
+    post:
+      operationId: accountsExportAuthJSON
+      tags: [accounts]
+      summary: Export an OAuth account row as a Codex CLI `auth.json` attachment.
+      description: |
+        **Dual-shape success**: the success body is raw Codex CLI
+        `auth.json` bytes (byte-compatible with the shape Codex reads)
+        served with `Content-Disposition: attachment; filename="auth.json"`
+        — the second documented envelope exemption in 003. ERROR
+        responses still use the envelope.
+
+        Every hit is audited at WARN level via `oauth_auth_json_exported`
+        (success) or `oauth_auth_json_export_rejected` (business
+        error). No rate limit (explicit clarification per spec.md
+        §Clarifications 2026-04-15).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: |
+            Raw `auth.json` attachment on success, envelope on business
+            error. Callers MUST branch on `Content-Type`
+            (`application/json` + `Content-Disposition: attachment`
+            ⇒ raw; `application/json` without `Content-Disposition`
+            ⇒ envelope).
+          headers:
+            Content-Disposition:
+              description: Present on success only — `attachment; filename="auth.json"`.
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string, example: "no-store, private" }
+            X-Content-Type-Options:
+              schema: { type: string, example: "nosniff" }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportAuthJSONResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/dashboard:
+    get:
+      operationId: dashboardGet
+      tags: [dashboard]
+      summary: Return the Admin Dashboard observability snapshot.
+      description: |
+        Returns read-only dashboard card metrics derived from retained
+        request records and current account state. The default range is
+        the latest seven days. Time-ranged cards can be filtered to one
+        upstream account; the active-account card always reflects current
+        router capacity across all accounts.
+      parameters:
+        - name: range
+          in: query
+          schema: { $ref: '#/components/schemas/DashboardRange' }
+          description: Time window for time-ranged cards. Defaults to `7d`.
+        - name: account_id
+          in: query
+          schema: { type: integer, format: int64, minimum: 1 }
+          description: Optional upstream account id filter for time-ranged cards.
+      responses:
+        '200':
+          description: Envelope with dashboard card data or a filter validation error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/usage:
+    get:
+      operationId: usageGet
+      tags: [usage]
+      summary: Return router-local usage summary.
+      description: |
+        Returns usage counters derived from retained router request
+        records, plus a Codex-account status projection derived from
+        active OAuth accounts. This is a router-owned Admin API endpoint
+        and therefore uses the standard `{code,msg,data}` envelope.
+        It is the only router-local usage surface in Feature 006.
+      responses:
+        '200':
+          description: Envelope with router-local usage data.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsageEnvelope' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/requests:
+    get:
+      operationId: requestsList
+      tags: [requests]
+      summary: Search request/response history.
+      description: |
+        Returns a cursor-paginated list of request records without the
+        potentially large `client_request_body`, `upstream_request_body`, and
+        `upstream_response_body` fields.
+        Use `GET /api/admin/requests/{id}` to inspect body capture for
+        one record. Query parameters are additive: repeated array
+        parameters are OR'd within the same field and AND'd across
+        fields.
+      parameters:
+        - name: start
+          in: query
+          schema: { type: string, format: date-time }
+          description: Inclusive lower bound on `created_at`.
+        - name: end
+          in: query
+          schema: { type: string, format: date-time }
+          description: Inclusive upper bound on `created_at`.
+        - name: account_id
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { type: integer, format: int64, minimum: 1 }
+          description: Repeat to filter by one or more upstream account ids.
+        - name: outcome
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { $ref: '#/components/schemas/RequestOutcome' }
+        - name: model
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { type: string, minLength: 1, maxLength: 128 }
+        - name: response_mode
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { $ref: '#/components/schemas/RequestResponseMode' }
+        - name: search
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 256 }
+          description: Case-insensitive substring search over request id, client IP, path, model, session key, method, and error code.
+        - name: before
+          in: query
+          schema: { type: integer, format: int64, minimum: 1 }
+          description: "Cursor: return records with `id < before`."
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Envelope with matching request-log rows or a filter validation error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RequestsListResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/requests/options:
+    get:
+      operationId: requestsOptions
+      tags: [requests]
+      summary: Return dynamic request-log filter options.
+      description: |
+        Returns distinct account ids, outcomes, models, and response
+        modes currently present in retained request records. Time and
+        search filters may be supplied to scope the option set.
+      parameters:
+        - name: start
+          in: query
+          schema: { type: string, format: date-time }
+        - name: end
+          in: query
+          schema: { type: string, format: date-time }
+        - name: account_id
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { type: integer, format: int64, minimum: 1 }
+        - name: outcome
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { $ref: '#/components/schemas/RequestOutcome' }
+        - name: model
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { type: string, minLength: 1, maxLength: 128 }
+        - name: response_mode
+          in: query
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { $ref: '#/components/schemas/RequestResponseMode' }
+        - name: search
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200':
+          description: Envelope with distinct filter options or a validation error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RequestsOptionsResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/requests/{id}:
+    get:
+      operationId: requestsGet
+      tags: [requests]
+      summary: Get one request-log record including captured bodies.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: Envelope with the request-log detail or not-found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RequestDetailResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/playground/run:
+    post:
+      operationId: playgroundRun
+      tags: [playground]
+      summary: Run one Account Playground text probe.
+      description: |
+        Executes one non-streaming single-turn text probe against the
+        selected data-plane endpoint (`/v1/responses` or
+        `/v1/chat/completions`) using either the router's normal
+        automatic account selection or one explicit active account.
+        The operation is an Admin API control-plane endpoint; browser
+        clients MUST NOT call `/v1/*` directly for Playground runs.
+
+        Prompt text is capped at 16,000 trimmed Unicode characters.
+        The JSON request body cap is 96 KiB (98,304 bytes) so valid
+        non-ASCII prompts can fit the character limit without tripping
+        the transport cap.
+
+        P0 duplicate-submit protection is UI-only while a run is
+        pending. The endpoint is not API-idempotent and does not accept
+        a client-run identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlaygroundRunRequest' }
+      responses:
+        '200':
+          description: Envelope — success or Playground business error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlaygroundRunResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+components:
+  securitySchemes:
+    adminAuth:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+      description: |
+        Admin-auth plugin (target future feature). 003+ endpoints are
+        **ready** to be gated by this scheme but the plugin
+        implementation ships with a later feature; until it lands the
+        scheme is advisory (no enforcement) so that single-operator
+        local deploys continue to work out-of-the-box. See the
+        top-level `x-mvp-enforcement: not-enforced` extension for the
+        machine-readable disclaimer and tracked-by pointer.
+
+  responses:
+    SystemError:
+      description: |
+        HTTP 500 — reserved for system errors (panic, DB unavailable,
+        store write failure, export read failure, transport-layer
+        handler bug). The envelope is the same shape; `code` is always
+        one of `-1` / 1900 / 1901 / 2903 / 3900 / 3901 / 3902 / 4900 / 5900 / 6900.
+        Clients SHOULD treat any HTTP 500 as a retriable server fault and surface the
+        `code`/`msg` to the operator.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/EnvelopeSystemError'
+
+  schemas:
+    # ---- Core envelope primitives ----
+
+    EnvelopeBase:
+      type: object
+      required: [code, msg, data]
+      properties:
+        code:
+          type: integer
+          description: |
+            0 ⇒ success. Non-zero ⇒ business error (HTTP 200) or system
+                error (HTTP 500). Authoritative registry lives in
+                `docs/error-codes.md`.
+        msg:
+          type: string
+          description: snake_case symbol for the code (e.g. `"ok"`, `"oauth_flow_in_progress"`).
+        data:
+          description: Endpoint-specific payload. Empty object `{}` when there is nothing to say.
+
+    EnvelopeSystemError:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code:
+              type: integer
+              enum: [-1, 1900, 1901, 2903, 3900, 3901, 3902, 4900, 5900, 6900]
+              description: |
+                `-1` = `unknown_error` — transport-layer catch-all
+                emitted by the `adminapi` strict-handler when a
+                generated operation returned a non-nil error or an
+                unexpected response type (the handler could not
+                produce ANY response at all, e.g. DB handle closed,
+                OS I/O failure, programmer-level mistake inside the
+                handler). See `docs/error-codes.md` §"Reserved codes"
+                and `internal/generated/adminapi/strict_handler.go`
+                `envelopeResponseError`.
+                1900 = `db_unavailable`; 1901 = `internal_error`;
+                2903 = `config_write_failed` (raised by
+                `POST /api/admin/settings/update` when the config
+                file cannot be written atomically);
+                3900 = `oauth_internal_error`;
+                3901 = `oauth_store_failed`;
+                3902 = `oauth_export_read_failed` (raised only by
+                `POST /api/admin/accounts/{id}/export-auth-json` when
+                the OAuth credential row cannot be read from the store);
+                4900 = `playground_internal_error`;
+                5900 = `dashboard_internal_error`;
+                6900 = `usage_internal_error`.
+
+    # ---- Shared request types ----
+
+    OAuthStartRequest:
+      type: object
+      additionalProperties: true
+      description: |
+        Unknown keys are ignored to keep forward compatibility painless
+        when the CLI adds a new parameter.
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [openai]
+
+    ManualCallbackRequest:
+      type: object
+      required: [callback_url]
+      properties:
+        callback_url:
+          type: string
+          format: uri
+          description: |
+            Must start with `http://localhost:1455/auth/callback`
+            (case-sensitive path, literal `localhost`). Query string
+            carries `code + state` on happy path or `error + state` on
+            cancel.
+          example: "http://localhost:1455/auth/callback?code=abc&state=s_xyz"
+
+    CancelFlowRequest:
+      type: object
+      required: [flow_id]
+      properties:
+        flow_id:
+          type: string
+          pattern: '^fl_[A-Za-z0-9_-]{22,}$'
+
+    SettingsPatchRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        Partial Settings update. Empty objects are legal no-ops. Any
+        top-level key other than `runtime` or `plugins`, any unknown
+        `runtime.*` key, and any unknown `plugins.*` or
+        `plugins.*.*` key returns `2012 unknown_config_key`.
+      properties:
+        runtime: { $ref: '#/components/schemas/SettingsRuntimePatch' }
+        plugins: { $ref: '#/components/schemas/SettingsPluginsPatch' }
+
+    SettingsRuntimePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        log_client_request_body:
+          type: boolean
+          description: Capture client request bodies into request history on subsequent `/v1/*` calls.
+        log_upstream_request_body:
+          type: boolean
+          description: Capture provider-adapted upstream request bodies into request history.
+        log_upstream_response_body:
+          type: boolean
+          description: Capture upstream/provider response bodies into request history.
+        log_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+        log_level:
+          type: string
+          enum: [debug, info, warn, error]
+
+    SettingsPluginsPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        admin_auth: { $ref: '#/components/schemas/SettingsPluginFlagPatch' }
+        client_keys: { $ref: '#/components/schemas/SettingsPluginFlagPatch' }
+
+    SettingsPluginFlagPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+
+    PlaygroundRunRequest:
+      type: object
+      additionalProperties: false
+      required: [selection_mode, model, text]
+      properties:
+        selection_mode:
+          type: string
+          enum: [auto, account]
+        endpoint:
+          type: string
+          enum: [responses, chat_completions]
+          default: responses
+          description: |
+            Data-plane operation to exercise. Omitted means `responses`
+            for backward-compatible callers created before endpoint
+            selection was added to the Playground UI.
+        account_id:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Required iff `selection_mode == "account"`.
+        session_key:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Optional sticky key used only by automatic selection.
+        model:
+          type: string
+          minLength: 1
+          maxLength: 128
+          default: gpt-5.4-mini
+          description: |
+            Provider model id. The UI defaults this field to
+            `gpt-5.4-mini`; direct API callers must still send a
+            non-empty value.
+        text:
+          type: string
+          minLength: 1
+          maxLength: 16000
+          description: Trimmed Unicode-character prompt text.
+        max_output_tokens:
+          type: integer
+          minimum: 1
+          maximum: 4096
+          default: 1024
+        include_raw_response:
+          type: boolean
+          default: false
+
+    # ---- Domain types ----
+
+    SettingsPayload:
+      type: object
+      required: [runtime, db, plugins, plugin_intents, system]
+      properties:
+        runtime: { $ref: '#/components/schemas/RuntimeSettings' }
+        db: { $ref: '#/components/schemas/DBSettings' }
+        plugins:
+          type: array
+          items: { $ref: '#/components/schemas/PluginSummary' }
+        plugin_intents:
+          type: array
+          items: { $ref: '#/components/schemas/PluginIntent' }
+        system: { $ref: '#/components/schemas/SystemSummary' }
+
+    RuntimeSettings:
+      type: object
+      required:
+        - log_client_request_body
+        - log_upstream_request_body
+        - log_upstream_response_body
+        - log_retention_days
+        - log_level
+      properties:
+        log_client_request_body: { type: boolean }
+        log_upstream_request_body: { type: boolean }
+        log_upstream_response_body: { type: boolean }
+        log_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+        log_level:
+          type: string
+          enum: [debug, info, warn, error]
+
+    DBSettings:
+      type: object
+      required: [driver, host, database_name]
+      description: |
+        Non-secret database identity. The raw DSN/URL is never exposed
+        because it may include credentials.
+      properties:
+        driver:
+          type: string
+          description: Database driver (`sqlite3`, `postgres`, or `mysql` in current builds).
+        host:
+          type: string
+          description: '"local" for sqlite3, otherwise host:port when parseable.'
+        database_name:
+          type: string
+          description: SQLite basename or relational database/schema name when parseable.
+
+    PluginSummary:
+      type: object
+      required: [id, label, enabled]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        enabled: { type: boolean }
+
+    PluginIntent:
+      type: object
+      required: [id, label, enabled, status]
+      description: |
+        Operator-persisted plugin preference from `config.json`, even
+        when the corresponding plugin binary is not present in this
+        build.
+      properties:
+        id:
+          type: string
+          enum: [admin_auth, client_keys]
+        label: { type: string }
+        enabled: { type: boolean }
+        status: { type: string }
+
+    SystemSummary:
+      type: object
+      required: [router_version, router_git_sha, router_built_at]
+      properties:
+        router_version: { type: string }
+        router_git_sha: { type: string }
+        router_built_at: { type: string }
+
+    AccountListItem:
+      type: object
+      required: [id, name, provider, auth_method, status]
+      description: |
+        Admin projection of an account row. Works for both API-key and
+        OAuth accounts; OAuth-only fields (`email`, `plan_type`,
+        `plan_type_label`, `chatgpt_account_id`, `last_refresh`) are
+        **omitted** (key absent) when `auth_method == "api_key"` per
+        `contracts/accounts-api.md` §"Response (Success)" Notes and
+        FR-011a — clients treat key-absence as "N/A". The sole
+        exception is `access_expires_at`: present on every OAuth row
+        (JSON `null` when the provider omitted `expires_in`, so
+        clients can distinguish "unknown lifetime" from "not
+        applicable"), and omitted for API-key rows.
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        name: { type: string }
+        provider:
+          type: string
+          description: |
+            Upstream provider symbol. `openai` is the only provider
+            onboarded for Feature 003 OAuth flows, but API-key accounts
+            can carry any future provider string (US-2 preserves existing
+            non-OpenAI API-key rows).
+        base_url: { type: string, format: uri, nullable: true }
+        auth_method:
+          type: string
+          enum: [api_key, oauth_browser, oauth_device, oauth_import]
+        status:
+          type: string
+          enum: [active, disabled]
+        email: { type: string, nullable: true }
+        plan_type: { type: string, nullable: true }
+        plan_type_label:
+          type: string
+          nullable: true
+          description: Human-readable label computed from `plan_type` (e.g. `"ChatGPT Plus"`). Raw string fallback when the claim value is not in the default map.
+        chatgpt_account_id: { type: string, nullable: true }
+        last_refresh: { type: string, format: date-time, nullable: true }
+        access_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Absolute time at which the currently-persisted access_token
+            expires (derived from `id_token.exp` or, when missing,
+            `last_refresh + expires_in`, else `last_refresh + 5 min`
+            with a WARN). `null` for `auth_method == "api_key"` rows.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PlaygroundAccountSummary:
+      type: object
+      required: [id, name, provider, auth_method, status]
+      description: Non-secret account projection returned by Playground responses.
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        name: { type: string }
+        provider: { type: string }
+        auth_method:
+          type: string
+          enum: [api_key, oauth_browser, oauth_device, oauth_import]
+        status:
+          type: string
+          enum: [active, disabled]
+        email: { type: string, nullable: true }
+        plan_type: { type: string, nullable: true }
+        plan_type_label: { type: string, nullable: true }
+
+    PlaygroundRun:
+      type: object
+      required: [selection_mode, endpoint, outcome, latency_ms]
+      properties:
+        selection_mode:
+          type: string
+          enum: [auto, account]
+        endpoint:
+          type: string
+          enum: [responses, chat_completions]
+        session_key:
+          type: string
+          nullable: true
+        outcome:
+          type: string
+          enum: [success, no_extractable_text]
+        latency_ms:
+          type: integer
+          format: int64
+          minimum: 0
+
+    PlaygroundUpstreamSummary:
+      type: object
+      required: [response_mode]
+      properties:
+        status_code:
+          type: integer
+          nullable: true
+        response_mode:
+          type: string
+          enum: [json]
+
+    PlaygroundOutput:
+      type: object
+      required: [text, text_available, raw_response_available]
+      properties:
+        text:
+          type: string
+        text_available:
+          type: boolean
+        raw_response:
+          type: object
+          nullable: true
+          additionalProperties: true
+        raw_response_available:
+          type: boolean
+        raw_response_omitted_reason:
+          type: string
+          enum: [not_requested, too_large, malformed, unsafe]
+
+    PlaygroundUsage:
+      type: object
+      additionalProperties:
+        type: integer
+      properties:
+        input:
+          type: integer
+          minimum: 0
+        output:
+          type: integer
+          minimum: 0
+
+    DashboardRange:
+      type: string
+      enum: [1h, 1d, 7d, 30d]
+
+    DashboardAccountOption:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        label:
+          type: string
+          description: Display label derived from account name.
+        account:
+          $ref: '#/components/schemas/AccountListItem'
+          description: Present when the upstream account row is available.
+
+    DashboardActiveAccountsCard:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: integer
+          minimum: 0
+
+    DashboardCountPoint:
+      type: object
+      required: [timestamp, count]
+      properties:
+        timestamp: { type: string, format: date-time }
+        count: { type: integer, minimum: 0 }
+
+    DashboardRequestsCard:
+      type: object
+      required: [total, series]
+      properties:
+        total: { type: integer, minimum: 0 }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardCountPoint' }
+
+    DashboardTokenBreakdown:
+      type: object
+      required: [input_cached, input_non_cached, output]
+      properties:
+        input_cached: { type: integer, minimum: 0 }
+        input_non_cached: { type: integer, minimum: 0 }
+        output: { type: integer, minimum: 0 }
+
+    DashboardTokenPoint:
+      allOf:
+        - $ref: '#/components/schemas/DashboardTokenBreakdown'
+        - type: object
+          required: [timestamp]
+          properties:
+            timestamp: { type: string, format: date-time }
+
+    DashboardTokensCard:
+      type: object
+      required: [totals, series]
+      properties:
+        totals: { $ref: '#/components/schemas/DashboardTokenBreakdown' }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardTokenPoint' }
+
+    DashboardRatePoint:
+      type: object
+      required: [timestamp, total, errors, rate]
+      properties:
+        timestamp: { type: string, format: date-time }
+        total: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+        rate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+
+    DashboardErrorRateCard:
+      type: object
+      required: [value, total, errors, series]
+      properties:
+        value:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        total: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardRatePoint' }
+
+    DashboardTTFTPoint:
+      type: object
+      required: [timestamp, p95_ms, sample_count]
+      properties:
+        timestamp: { type: string, format: date-time }
+        p95_ms:
+          type: integer
+          nullable: true
+          minimum: 0
+        sample_count: { type: integer, minimum: 0 }
+
+    DashboardTTFTCard:
+      type: object
+      required: [p95_ms, sample_count, series]
+      properties:
+        p95_ms:
+          type: integer
+          nullable: true
+          minimum: 0
+        sample_count: { type: integer, minimum: 0 }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardTTFTPoint' }
+
+    DashboardCards:
+      type: object
+      required: [active_accounts, requests, tokens, error_rate, ttft]
+      properties:
+        active_accounts: { $ref: '#/components/schemas/DashboardActiveAccountsCard' }
+        requests: { $ref: '#/components/schemas/DashboardRequestsCard' }
+        tokens: { $ref: '#/components/schemas/DashboardTokensCard' }
+        error_rate: { $ref: '#/components/schemas/DashboardErrorRateCard' }
+        ttft: { $ref: '#/components/schemas/DashboardTTFTCard' }
+
+    DashboardData:
+      type: object
+      required:
+        - range
+        - window_start
+        - window_end
+        - bucket_seconds
+        - account_options
+        - cards
+      properties:
+        range: { $ref: '#/components/schemas/DashboardRange' }
+        selected_account_id:
+          type: integer
+          format: int64
+          nullable: true
+        window_start: { type: string, format: date-time }
+        window_end: { type: string, format: date-time }
+        bucket_seconds: { type: integer, minimum: 1 }
+        account_options:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardAccountOption' }
+        cards: { $ref: '#/components/schemas/DashboardCards' }
+
+    UsageCodexStatus:
+      type: object
+      required: [plan_type, rate_limit, credits, additional_rate_limits]
+      properties:
+        plan_type:
+          type: string
+          description: |
+            Aggregated active OAuth account plan state: `guest` when no
+            active OAuth accounts exist, `unknown` when plan metadata is
+            missing, the single plan name when all active OAuth accounts
+            agree, otherwise `mixed`.
+        rate_limit:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Reserved for future upstream quota snapshots; null when not observed.
+        credits:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Reserved for future upstream credit snapshots; null when not observed.
+        additional_rate_limits:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    UsageData:
+      type: object
+      required:
+        - request_count
+        - total_tokens
+        - cached_input_tokens
+        - total_cost_usd
+        - limits
+        - codex
+      properties:
+        request_count:
+          type: integer
+          minimum: 0
+        total_tokens:
+          type: integer
+          minimum: 0
+        cached_input_tokens:
+          type: integer
+          minimum: 0
+        total_cost_usd:
+          type: number
+          format: double
+          minimum: 0
+        limits:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          description: Reserved for future router-local limit snapshots.
+        codex: { $ref: '#/components/schemas/UsageCodexStatus' }
+
+    RequestOutcome:
+      type: string
+      enum:
+        - success
+        - upstream_error
+        - no_available_account
+        - router_error
+        - account_unavailable
+        - upstream_timeout
+        - cancelled
+        - no_extractable_text
+
+    RequestResponseMode:
+      type: string
+      enum: [json, sse, websocket]
+
+    RequestLogAccountOption:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        label:
+          type: string
+          description: Display label derived from the account name when available, otherwise `#<id>`.
+        account:
+          $ref: '#/components/schemas/AccountListItem'
+          description: Present when the upstream account row still exists and is not deleted.
+
+    RequestLogRow:
+      type: object
+      required:
+        - id
+        - request_id
+        - created_at
+        - client_ip
+        - method
+        - path
+        - status_code
+        - latency_ms
+        - outcome
+        - response_mode
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        request_id: { type: string }
+        created_at: { type: string, format: date-time }
+        client_ip:
+          type: string
+          description: Downstream client IP observed by the router from the TCP peer address. Forwarded headers are not trusted unless a future trusted-proxy configuration explicitly enables them. Empty string means unavailable, legacy, or unparsable peer address.
+        upstream_account_id:
+          type: integer
+          format: int64
+          nullable: true
+        account:
+          $ref: '#/components/schemas/AccountListItem'
+          nullable: true
+        session_key:
+          type: string
+          nullable: true
+        method: { type: string }
+        path: { type: string }
+        status_code: { type: integer }
+        latency_ms: { type: integer, minimum: 0 }
+        ttft_ms:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Time to first streamed text token in milliseconds, present only for SSE records where the first text delta was observed.
+        outcome: { $ref: '#/components/schemas/RequestOutcome' }
+        error_code:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        model_params:
+          type: object
+          nullable: true
+          additionalProperties: true
+        router_metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Router-owned audit metadata such as selected operation bridge details and the actual upstream endpoint path sent to the LLM server. Never includes tokens, headers, cookies, or body bytes.
+        response_mode: { $ref: '#/components/schemas/RequestResponseMode' }
+        token_usage:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+    RequestLogDetail:
+      allOf:
+        - $ref: '#/components/schemas/RequestLogRow'
+        - type: object
+          properties:
+            client_request_body:
+              type: string
+              nullable: true
+              description: Captured only when runtime client request-body logging is enabled for the request.
+            upstream_request_body:
+              type: string
+              nullable: true
+              description: Captured only when runtime upstream request-body logging is enabled for the request.
+            upstream_response_body:
+              type: string
+              nullable: true
+              description: Captured only when runtime upstream response-body logging is enabled for the request.
+
+    RequestsListData:
+      type: object
+      required: [records, has_more]
+      properties:
+        records:
+          type: array
+          items: { $ref: '#/components/schemas/RequestLogRow' }
+        has_more:
+          type: boolean
+        next_before_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Use as the next request's `before` cursor when `has_more` is true.
+
+    RequestDetailData:
+      type: object
+      required: [record]
+      properties:
+        record: { $ref: '#/components/schemas/RequestLogDetail' }
+
+    RequestsOptionsData:
+      type: object
+      required: [accounts, outcomes, models, response_modes]
+      properties:
+        accounts:
+          type: array
+          items: { $ref: '#/components/schemas/RequestLogAccountOption' }
+        outcomes:
+          type: array
+          items: { $ref: '#/components/schemas/RequestOutcome' }
+        models:
+          type: array
+          items: { type: string }
+        response_modes:
+          type: array
+          items: { $ref: '#/components/schemas/RequestResponseMode' }
+
+    PlaygroundRunSuccessData:
+      type: object
+      required: [run, account, upstream, output, usage]
+      properties:
+        run: { $ref: '#/components/schemas/PlaygroundRun' }
+        account: { $ref: '#/components/schemas/PlaygroundAccountSummary' }
+        upstream: { $ref: '#/components/schemas/PlaygroundUpstreamSummary' }
+        output: { $ref: '#/components/schemas/PlaygroundOutput' }
+        usage: { $ref: '#/components/schemas/PlaygroundUsage' }
+
+    CodexAuthJSON:
+      type: object
+      description: |
+        Byte-compatible shape with the Codex CLI's on-disk `auth.json`.
+        Import: unknown top-level keys are ignored (they do not fail
+        validation, but nothing is persisted from them).
+        Export: the response body is a canonical, fixed 5-field
+        projection (`OPENAI_API_KEY`, `tokens.access_token`,
+        `tokens.refresh_token`, `tokens.id_token`,
+        `tokens.account_id`, `last_refresh`) — unknown keys from the
+        original import are NOT round-tripped.
+      required: [tokens]
+      properties:
+        OPENAI_API_KEY:
+          type: string
+          nullable: true
+          description: Usually `null` for OAuth accounts.
+        tokens:
+          type: object
+          required: [access_token, refresh_token, id_token]
+          properties:
+            access_token: { type: string }
+            refresh_token: { type: string }
+            id_token: { type: string }
+            account_id:
+              type: string
+              nullable: true
+              description: Optional Codex-side account handle. Populates `chatgpt_account_id` when the derivation from id_token claims is missing.
+        last_refresh:
+          type: string
+          format: date-time
+          nullable: true
+
+    FlowID:
+      type: string
+      pattern: '^fl_[A-Za-z0-9_-]{22,}$'
+      description: |
+        Opaque flow identifier. MUST carry ≥ 128 bits of unguessable
+        entropy (`fl_` prefix + base64url-encoded 16+ bytes from
+        `crypto/rand`, i.e. ≥ 22 url-safe characters after the prefix).
+        Callers MUST NOT parse or enumerate this value.
+      example: 'fl_5bMqFJZ3sPx9yKwT2nR8vU'
+
+    OAuthMethod:
+      type: string
+      enum: [browser, device]
+
+    RailName:
+      type: string
+      enum: [loopback, manual_paste]
+
+    # ---- Success envelopes ----
+
+    SettingsEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code:
+              type: integer
+              enum: [0]
+              x-enum-varnames: [SettingsEnvelopeCodeN0]
+            msg:
+              type: string
+              enum: [ok]
+              x-enum-varnames: [SettingsEnvelopeMsgOk]
+            data: { $ref: '#/components/schemas/SettingsPayload' }
+
+    BrowserStartEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data:
+              type: object
+              required: [flow_id, authorize_url, callback_url, listener_bound, expires_at, method]
+              properties:
+                flow_id: { $ref: '#/components/schemas/FlowID' }
+                authorize_url: { type: string, format: uri }
+                callback_url: { type: string, format: uri }
+                listener_bound:
+                  type: boolean
+                  description: |
+                    `true` iff the router bound at least one of
+                    `{127.0.0.1:1455, [::1]:1455}`.
+                    Advisory only — the UI MUST still render the paste
+                    textarea regardless (FR-012).
+                expires_at: { type: string, format: date-time }
+                method:
+                  type: string
+                  enum: [browser]
+
+    DeviceStartEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data:
+              type: object
+              required: [flow_id, user_code, verification_url, interval_seconds, expires_at, method]
+              properties:
+                flow_id: { $ref: '#/components/schemas/FlowID' }
+                user_code:
+                  type: string
+                  pattern: '^[A-Z0-9]{4}-[A-Z0-9]{4}$'
+                verification_url: { type: string, format: uri }
+                interval_seconds: { type: integer, minimum: 1 }
+                expires_at: { type: string, format: date-time }
+                method:
+                  type: string
+                  enum: [device]
+
+    ManualCallbackSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data:
+              type: object
+              required: [account, rail, status]
+              properties:
+                account: { $ref: '#/components/schemas/AccountListItem' }
+                rail: { type: string, enum: [manual_paste] }
+                status: { type: string, enum: [success] }
+
+    ManualCallbackCancelEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data:
+              type: object
+              required: [status, rail]
+              properties:
+                status: { type: string, enum: [cancelled] }
+                rail: { type: string, enum: [manual_paste] }
+
+    CancelSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [idle] }
+
+    FlowStatusEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data:
+              oneOf:
+                - $ref: '#/components/schemas/FlowStatusIdle'
+                - $ref: '#/components/schemas/FlowStatusPendingBrowser'
+                - $ref: '#/components/schemas/FlowStatusPendingDevice'
+                - $ref: '#/components/schemas/FlowStatusSuccess'
+                - $ref: '#/components/schemas/FlowStatusError'
+
+    FlowStatusIdle:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [idle] }
+
+    FlowStatusPendingBrowser:
+      type: object
+      required: [status, method, flow_id, listener_bound, expires_at, created_at]
+      properties:
+        status: { type: string, enum: [pending] }
+        method: { type: string, enum: [browser] }
+        flow_id: { $ref: '#/components/schemas/FlowID' }
+        listener_bound: { type: boolean }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    FlowStatusPendingDevice:
+      type: object
+      required: [status, method, flow_id, user_code, verification_url, expires_at, created_at]
+      properties:
+        status: { type: string, enum: [pending] }
+        method: { type: string, enum: [device] }
+        flow_id: { $ref: '#/components/schemas/FlowID' }
+        user_code:
+          type: string
+          pattern: '^[A-Z0-9]{4}-[A-Z0-9]{4}$'
+        verification_url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    FlowStatusSuccess:
+      type: object
+      required: [status, method, flow_id, account]
+      properties:
+        status: { type: string, enum: [success] }
+        method: { $ref: '#/components/schemas/OAuthMethod' }
+        flow_id: { $ref: '#/components/schemas/FlowID' }
+        rail:
+          $ref: '#/components/schemas/RailName'
+          description: Browser flows only; omitted for device flows.
+        account: { $ref: '#/components/schemas/AccountListItem' }
+
+    FlowStatusError:
+      type: object
+      required: [status, method, flow_id, error]
+      properties:
+        status: { type: string, enum: [error] }
+        method: { $ref: '#/components/schemas/OAuthMethod' }
+        flow_id: { $ref: '#/components/schemas/FlowID' }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Symbolic provider/flow error code (NOT an `errcode` integer). e.g. `"access_denied"`, `"invalid_grant"`, `"expired_token"`.
+            message: { type: string }
+
+    ImportAuthJSONSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data:
+              type: object
+              required: [account]
+              properties:
+                account: { $ref: '#/components/schemas/AccountListItem' }
+
+    PlaygroundRunSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/PlaygroundRunSuccessData' }
+
+    DashboardEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/DashboardData' }
+
+    UsageEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/UsageData' }
+
+    RequestsListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/RequestsListData' }
+
+    RequestDetailEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/RequestDetailData' }
+
+    RequestsOptionsEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/RequestsOptionsData' }
+
+    # ---- Business-error envelopes (HTTP 200) ----
+
+    FlowInProgressEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3001] }
+            msg: { type: string, enum: [oauth_flow_in_progress] }
+            data:
+              type: object
+              required: [method, flow_id, expires_at, created_at]
+              properties:
+                method: { $ref: '#/components/schemas/OAuthMethod' }
+                flow_id: { $ref: '#/components/schemas/FlowID' }
+                expires_at: { type: string, format: date-time }
+                created_at: { type: string, format: date-time }
+
+    InvalidOAuthProviderEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3002] }
+            msg: { type: string, enum: [invalid_oauth_provider] }
+            data:
+              type: object
+              required: [field]
+              properties:
+                field: { type: string, enum: [provider] }
+
+    OAuthStateMismatchEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3003] }
+            msg: { type: string, enum: [oauth_state_mismatch] }
+            data:
+              type: object
+
+    NoFlowInProgressEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3004] }
+            msg: { type: string, enum: [no_flow_in_progress] }
+            data:
+              type: object
+
+    AlreadyConsumedEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3005] }
+            msg: { type: string, enum: [already_consumed] }
+            data:
+              type: object
+              required: [rail_won]
+              properties:
+                rail_won: { $ref: '#/components/schemas/RailName' }
+
+    FlowExpiredEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3006] }
+            msg: { type: string, enum: [flow_expired] }
+            data:
+              type: object
+
+    InvalidCallbackURLEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3007] }
+            msg: { type: string, enum: [invalid_callback_url] }
+            data:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [url_prefix_mismatch, missing_code_and_error]
+
+    FlowIDMismatchEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3008] }
+            msg: { type: string, enum: [flow_id_mismatch] }
+            data:
+              type: object
+              properties:
+                expected_flow_id:
+                  type: string
+                  nullable: true
+                  pattern: '^fl_[A-Za-z0-9_-]{22,}$'
+                  description: null when the router is idle, otherwise the FlowID the caller should have used.
+
+    OAuthInvalidGrantEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3009] }
+            msg: { type: string, enum: [oauth_invalid_grant] }
+            data:
+              type: object
+              required: [provider_error]
+              properties:
+                provider_error: { type: string, enum: [invalid_grant] }
+                provider_message: { type: string }
+
+    InvalidAuthJSONStructureEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3010] }
+            msg: { type: string, enum: [invalid_auth_json_structure] }
+            data:
+              type: object
+
+    InvalidAuthJSONEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3011] }
+            msg: { type: string, enum: [invalid_auth_json] }
+            data:
+              type: object
+              required: [missing_fields]
+              properties:
+                missing_fields:
+                  type: array
+                  items: { type: string }
+                  example: ["tokens.refresh_token"]
+
+    NotOAuthAccountEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3014] }
+            msg: { type: string, enum: [not_oauth_account] }
+            data:
+              type: object
+              required: [auth_method]
+              properties:
+                auth_method: { type: string, enum: [api_key] }
+
+    DeviceAuthUnavailableEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3015] }
+            msg: { type: string, enum: [device_auth_unavailable] }
+            data:
+              type: object
+              required: [provider]
+              properties:
+                provider: { type: string, enum: [openai] }
+
+    OAuthUpstreamErrorEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [3016] }
+            msg: { type: string, enum: [oauth_upstream_error] }
+            data:
+              type: object
+              required: [provider_error]
+              properties:
+                provider_error: { type: string }
+                provider_message: { type: string }
+                http_status:
+                  type: integer
+                  description: Present for HTTP-level failures; omitted for network-level.
+
+    InvalidPlaygroundRequestEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [4001] }
+            msg: { type: string, enum: [invalid_playground_request] }
+            data:
+              type: object
+              required: [field]
+              properties:
+                field:
+                  type: string
+                  enum: [selection_mode, endpoint, account_id, session_key, model, text, max_output_tokens, include_raw_response]
+                  x-enum-varnames: [SelectionMode, Endpoint, AccountId, SessionKey, Model, Text, MaxOutputTokens, IncludeRawResponse]
+                reason: { type: string }
+
+    PlaygroundNoActiveAccountEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [4002] }
+            msg: { type: string, enum: [playground_no_active_account] }
+            data:
+              type: object
+
+    PlaygroundAccountUnavailableEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [4003] }
+            msg: { type: string, enum: [playground_account_unavailable] }
+            data:
+              type: object
+              required: [requested_account_id, reason]
+              properties:
+                requested_account_id:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                reason:
+                  type: string
+                  enum: [missing, deleted, disabled, ineligible, credential_unavailable]
+
+    PlaygroundUpstreamErrorEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [4004] }
+            msg: { type: string, enum: [playground_upstream_error] }
+            data:
+              type: object
+              required: [account_id, upstream_status]
+              properties:
+                account_id: { type: integer, format: int64, minimum: 1 }
+                account: { $ref: '#/components/schemas/PlaygroundAccountSummary' }
+                upstream_status: { type: integer }
+                provider_error:
+                  type: string
+                  maxLength: 128
+                provider_message:
+                  type: string
+                  maxLength: 512
+
+    PlaygroundUpstreamTimeoutEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [4005] }
+            msg: { type: string, enum: [playground_upstream_timeout] }
+            data:
+              type: object
+              required: [account_id, wait_limit_ms]
+              properties:
+                account_id: { type: integer, format: int64, minimum: 1 }
+                account: { $ref: '#/components/schemas/PlaygroundAccountSummary' }
+                wait_limit_ms:
+                  type: integer
+                  enum: [30000]
+                  x-enum-varnames: [ThirtySeconds]
+
+    PlaygroundResponseMalformedEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [4006] }
+            msg: { type: string, enum: [playground_response_malformed] }
+            data:
+              type: object
+              required: [account_id, reason]
+              properties:
+                account_id: { type: integer, format: int64, minimum: 1 }
+                account: { $ref: '#/components/schemas/PlaygroundAccountSummary' }
+                reason:
+                  type: string
+                  enum: [invalid_json, unsafe_json]
+
+    PlaygroundResponseTooLargeEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [4007] }
+            msg: { type: string, enum: [playground_response_too_large] }
+            data:
+              type: object
+              required: [account_id, limit_bytes]
+              properties:
+                account_id: { type: integer, format: int64, minimum: 1 }
+                account: { $ref: '#/components/schemas/PlaygroundAccountSummary' }
+                limit_bytes:
+                  type: integer
+                  enum: [1048576]
+                  x-enum-varnames: [OneMiB]
+
+    DashboardInvalidFilterEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [5001] }
+            msg: { type: string, enum: [dashboard_invalid_filter] }
+            data:
+              type: object
+              properties:
+                field:
+                  type: string
+                  enum: [range, account_id]
+                reason:
+                  type: string
+
+    # ---- Reused 001/002 envelopes (registered codes) ----
+
+    AccountNotFoundEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [1001] }
+            msg: { type: string, enum: [account_not_found] }
+            data: { type: object }
+
+    RequestRecordNotFoundEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [1005] }
+            msg: { type: string, enum: [request_record_not_found] }
+            data: { type: object }
+
+    InvalidRequestFilterEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [1006] }
+            msg: { type: string, enum: [invalid_request_filter] }
+            data:
+              type: object
+              properties:
+                field:
+                  type: string
+                  description: Offending query/path field when the router can identify it.
+                reason:
+                  type: string
+
+    InvalidAPIKeyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2005] }
+            msg: { type: string, enum: [invalid_api_key] }
+            data: { type: object }
+
+    InvalidPluginFlagEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2006] }
+            msg: { type: string, enum: [invalid_plugin_flag] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
+    InvalidRetentionEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2007] }
+            msg: { type: string, enum: [invalid_retention] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
+    MalformedBodyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2008] }
+            msg: { type: string, enum: [malformed_body] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
+    SetupRequiredEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2011] }
+            msg: { type: string, enum: [setup_required] }
+            data: { type: object }
+
+    UnknownConfigKeyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2012] }
+            msg: { type: string, enum: [unknown_config_key] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
+    EnvOverrideReadonlyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2013] }
+            msg: { type: string, enum: [env_override_readonly] }
+            data:
+              type: object
+              required: [field, env_var, detail]
+              properties:
+                field: { type: string }
+                env_var: { type: string }
+                detail: { type: string }
+
+    InvalidLogLevelEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2014] }
+            msg: { type: string, enum: [invalid_log_level] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
+    # ---- Operation response body unions ----
+    #
+    # Every /api/admin/* operation whose 200 response body is a discriminated
+    # union (`oneOf`) pins that union under its own named component schema
+    # here, NOT inline on the operation. Rationale:
+    #
+    #   - oapi-codegen v2's strict-server generator emits inline oneOf
+    #     responses as opaque wrappers with an **unexported** `union
+    #     json.RawMessage` field and no public constructor — meaning the
+    #     handler package (`internal/api/adminapi`) literally cannot
+    #     return a success body and the generated interface becomes
+    #     unsatisfiable from outside the generated package.
+    #   - Ref'd named schemas, by contrast, generate as `type X union` with
+    #     exported `As<Branch>() / From<Branch>() / Merge<Branch>()`
+    #     helpers, making the strict-server contract usable from the
+    #     real handler code.
+    #
+    # Wire shape is unchanged — the spec still declares the same set of
+    # oneOf branches; only the Go type shape is affected. Named schemas
+    # also keep the OpenAPI document DRY when the same union is reused
+    # (none are reused in 003, but the layout leaves room for 004+ reuse
+    # without a schema restructure).
+    SettingsGetResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/SettingsEnvelope'
+        - $ref: '#/components/schemas/SetupRequiredEnvelope'
+
+    SettingsUpdateResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/SettingsEnvelope'
+        - $ref: '#/components/schemas/RequestBodyTooLargeEnvelope'
+        - $ref: '#/components/schemas/MalformedBodyEnvelope'
+        - $ref: '#/components/schemas/UnknownConfigKeyEnvelope'
+        - $ref: '#/components/schemas/EnvOverrideReadonlyEnvelope'
+        - $ref: '#/components/schemas/InvalidRetentionEnvelope'
+        - $ref: '#/components/schemas/InvalidLogLevelEnvelope'
+        - $ref: '#/components/schemas/InvalidPluginFlagEnvelope'
+
+    OAuthCancelResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/CancelSuccessEnvelope'
+        - $ref: '#/components/schemas/FlowIDMismatchEnvelope'
+
+    BrowserStartResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/BrowserStartEnvelope'
+        - $ref: '#/components/schemas/FlowInProgressEnvelope'
+        - $ref: '#/components/schemas/InvalidOAuthProviderEnvelope'
+
+    ManualCallbackResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/ManualCallbackSuccessEnvelope'
+        - $ref: '#/components/schemas/ManualCallbackCancelEnvelope'
+        - $ref: '#/components/schemas/InvalidCallbackURLEnvelope'
+        - $ref: '#/components/schemas/OAuthStateMismatchEnvelope'
+        - $ref: '#/components/schemas/NoFlowInProgressEnvelope'
+        - $ref: '#/components/schemas/AlreadyConsumedEnvelope'
+        - $ref: '#/components/schemas/FlowExpiredEnvelope'
+        - $ref: '#/components/schemas/OAuthInvalidGrantEnvelope'
+        - $ref: '#/components/schemas/OAuthUpstreamErrorEnvelope'
+
+    DeviceStartResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/DeviceStartEnvelope'
+        - $ref: '#/components/schemas/FlowInProgressEnvelope'
+        - $ref: '#/components/schemas/InvalidOAuthProviderEnvelope'
+        - $ref: '#/components/schemas/DeviceAuthUnavailableEnvelope'
+        - $ref: '#/components/schemas/OAuthUpstreamErrorEnvelope'
+
+    ImportAuthJSONResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/ImportAuthJSONSuccessEnvelope'
+        - $ref: '#/components/schemas/InvalidAuthJSONStructureEnvelope'
+        - $ref: '#/components/schemas/InvalidAuthJSONEnvelope'
+        - $ref: '#/components/schemas/RequestBodyTooLargeEnvelope'
+
+    ExportAuthJSONResponseBody:
+      description: |
+        Dual-shape response for `accountsExportAuthJSON` — the success
+        branch is a raw Codex CLI `auth.json` body (the actual file the
+        operator downloads), the error branches are standard envelopes.
+        `CodexAuthJSON` does NOT wrap in `{code,msg,data}` because the
+        whole point of the endpoint is to emit a byte-compatible
+        `auth.json`; see the operation description for the precise
+        Content-Disposition contract.
+      oneOf:
+        - $ref: '#/components/schemas/CodexAuthJSON'
+        - $ref: '#/components/schemas/AccountNotFoundEnvelope'
+        - $ref: '#/components/schemas/NotOAuthAccountEnvelope'
+
+    PlaygroundRunResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/PlaygroundRunSuccessEnvelope'
+        - $ref: '#/components/schemas/RequestBodyTooLargeEnvelope'
+        - $ref: '#/components/schemas/InvalidPlaygroundRequestEnvelope'
+        - $ref: '#/components/schemas/PlaygroundNoActiveAccountEnvelope'
+        - $ref: '#/components/schemas/PlaygroundAccountUnavailableEnvelope'
+        - $ref: '#/components/schemas/PlaygroundUpstreamErrorEnvelope'
+        - $ref: '#/components/schemas/PlaygroundUpstreamTimeoutEnvelope'
+        - $ref: '#/components/schemas/PlaygroundResponseMalformedEnvelope'
+        - $ref: '#/components/schemas/PlaygroundResponseTooLargeEnvelope'
+
+    DashboardResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/DashboardEnvelope'
+        - $ref: '#/components/schemas/DashboardInvalidFilterEnvelope'
+
+    RequestsListResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/RequestsListEnvelope'
+        - $ref: '#/components/schemas/InvalidRequestFilterEnvelope'
+
+    RequestDetailResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/RequestDetailEnvelope'
+        - $ref: '#/components/schemas/RequestRecordNotFoundEnvelope'
+        - $ref: '#/components/schemas/InvalidRequestFilterEnvelope'
+
+    RequestsOptionsResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/RequestsOptionsEnvelope'
+        - $ref: '#/components/schemas/InvalidRequestFilterEnvelope'
+
+    RequestBodyTooLargeEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2009] }
+            msg: { type: string, enum: [request_body_too_large] }
+            data:
+              type: object
+              required: [scope, limit_bytes]
+              properties:
+                scope:
+                  type: string
+                  enum: [envelope, part]
+                  description: |
+                    Which layer of the dual-layer body cap tripped.
+                    `envelope` = outer `http.MaxBytesReader` on the
+                    whole multipart body (64 KB for
+                    `import-auth-json`) or the whole JSON body
+                    (96 KiB for `playground/run`);
+                    `part` = inner `io.LimitReader` on the
+                    `auth_json` part content (16 KB, import only).
+                    Callers use this to distinguish preamble-flood
+                    attacks (`envelope`) from oversized legitimate
+                    payloads (`part`) and log accordingly.
+                limit_bytes:
+                  type: integer
+                  description: |
+                    Byte limit that was crossed. For
+                    `import-auth-json`: 65536 when
+                    `scope="envelope"` (outer multipart cap);
+                    16384 when `scope="part"` (inner `auth_json`
+                    part cap). For `playground/run`: 98304 when
+                    `scope="envelope"`. For other single-layer
+                    endpoints (setup 8 KiB, settings 16 KiB) the
+                    value is the endpoint's configured cap with
+                    `scope="envelope"`.
+                  example: 16384

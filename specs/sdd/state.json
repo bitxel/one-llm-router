@@ -1,0 +1,324 @@
+{
+  "project": "one-llm-router",
+  "initialized": "2026-04-15T16:00:00+08:00",
+  "features": {
+    "001-codex-router-mvp": {
+      "phase": "IMPLEMENTING",
+      "created": "2026-04-15T16:10:00+08:00",
+      "last_updated": "2026-04-16T23:30:00+08:00",
+      "description": "Codex Router MVP",
+      "artifacts": {
+        "spec": "specs/001-codex-router-mvp/spec.md",
+        "checklist": "specs/001-codex-router-mvp/checklists/spec-quality.md",
+        "plan": "specs/001-codex-router-mvp/plan/tech-design.md",
+        "tasks": "specs/001-codex-router-mvp/tasks.md"
+      },
+      "metrics": {
+        "user_stories_count": 5,
+        "priorities": {
+          "P0": 3,
+          "P1": 0,
+          "P2": 2
+        },
+        "tasks_total": 31,
+        "tasks_l1": 26,
+        "tasks_l2": 5,
+        "tasks_l3": 0
+      },
+      "blockers": []
+    },
+    "002-setup-wizard-and-admin-portal-skeleton": {
+      "phase": "REVIEWED",
+      "created": "2026-04-16T00:00:00+08:00",
+      "last_updated": "2026-04-19T23:30:00+08:00",
+      "verify_report": "specs/002-setup-wizard-and-admin-portal-skeleton/verify-report.md",
+      "review_report": "specs/002-setup-wizard-and-admin-portal-skeleton/review-report.md",
+      "description": "Setup Wizard and Admin Portal Skeleton",
+      "artifacts": {
+        "spec": "specs/002-setup-wizard-and-admin-portal-skeleton/spec.md",
+        "checklist": "specs/002-setup-wizard-and-admin-portal-skeleton/checklists/spec-quality.md",
+        "plan": "specs/002-setup-wizard-and-admin-portal-skeleton/plan.md",
+        "tasks": "specs/002-setup-wizard-and-admin-portal-skeleton/tasks.md",
+        "research": "specs/002-setup-wizard-and-admin-portal-skeleton/research.md",
+        "data_model": "specs/002-setup-wizard-and-admin-portal-skeleton/data-model.md",
+        "quickstart": "specs/002-setup-wizard-and-admin-portal-skeleton/quickstart.md",
+        "contracts": [
+          "specs/002-setup-wizard-and-admin-portal-skeleton/contracts/setup-api.md",
+          "specs/002-setup-wizard-and-admin-portal-skeleton/contracts/admin-api.md",
+          "specs/002-setup-wizard-and-admin-portal-skeleton/contracts/plugin-interface.md"
+        ],
+        "mocks": [
+          "specs/002-setup-wizard-and-admin-portal-skeleton/mocks/v9-neoretro-grafana.html",
+          "specs/002-setup-wizard-and-admin-portal-skeleton/mocks/v9-dashboard.html"
+        ]
+      },
+      "metrics": {
+        "user_stories_count": 5,
+        "priorities": {
+          "P0": 3,
+          "P1": 2,
+          "P2": 0
+        },
+        "tasks_total": 47,
+        "tasks_l1": 33,
+        "tasks_l2": 13,
+        "tasks_l3": 1,
+        "tasks_parallel": 14
+      },
+      "decisions": {
+        "visual_style": "v9 design system — Neo Retro layout × Grafana-Ops chrome, IBM Plex Sans/Mono, flame-orange single accent, dark+light themes. Direction not pixel-spec. Resolved 2026-04-17.",
+        "frontend_delivery": "React 19 + Vite 6 + TypeScript 5 (strict) + shadcn/ui + Tailwind CSS v4 + TanStack Router/Query + React Hook Form + Zod, built via pnpm build → frontend/dist/*, embedded into the Go binary via go:embed frontend/dist/*. Wizard + shell + 'Setup complete' landing only; KPI dashboard visible in v9-dashboard.html is design target for 005. Revised 2026-04-18 — supersedes earlier 'native-ESM, React deferred' decision because 003/004 portal pages need accessible forms/tables/dialogs that vanilla can't deliver economically; stack lands once in 002 and every subsequent feature rents shadcn components.",
+        "config_layering": "Single file: config.json (db + runtime + plugins + version + timestamps) — file presence is the sole setup-completion marker. plugins is a typed object-per-plugin map, e.g. {\"admin_auth\":{\"enabled\":true},\"client_keys\":{\"enabled\":false}}. Decoded into config.PluginsConfig with one sub-struct per known plugin (AdminAuthPluginConfig, ClientKeysPluginConfig) so 003/004 can add plugin-specific fields additively (no version bump). config.PluginsConfig exposes Enabled(id string) bool — the app, not the plugin, owns the enabled check. Precedence env > config.json > defaults. Plugin flags are NOT env-overridable. Atomic tmp.<pid>+fsync+rename writes, 0600 perms. In-process atomic.Value broadcaster for hot-reload. 002 adds NO new DB tables; FR-007 (rm config.json must not re-engage setup on a populated install) is satisfied by the brownfield auto-materializer in internal/setup/brownfield.go — on boot, if config.json is absent but ROUTER_DB_DRIVER+ROUTER_DB_URL are set and upstream_accounts has rows, config.json is synthesized from env+defaults. Revised 2026-04-18 PM — supersedes the earlier system_config-table design and the two-layer BootstrapConfig+RuntimeConfig design.",
+        "commit_ordering": "POST /api/setup/commit runs DB-first, file-last: os.Stat(config.json) pre-check returns HTTP 200 envelope {code:2001, msg:'setup_already_done'} if present → migrate up → BEGIN TX; INSERT upstream_accounts ON CONFLICT DO NOTHING; COMMIT TX → write config.json.tmp.<pid> 0600 + fsync → os.Rename → publish *Config via atomic.Value. Crash between COMMIT and rename is recovered by the brownfield auto-materializer on next boot with zero operator action. Added 2026-04-18 PM alongside config_layering revision; see research.md §Decision 3 and plan.md Risk R-1 (downgraded to P=low × I=low).",
+        "boot_migrations": "Boot always runs migrate up via internal/store/migrator.go (thin golang-migrate facade). Dirty state (golang-migrate Dirty()==true) logs slog.Error with Version()/Dirty() details but does NOT block boot (R-9 accepted). New cmd/one-llm-router/migrate_subcmd.go adds a one-llm-router migrate {up|down|force|version|status} CLI subcommand for operator recovery. Added 2026-04-18 PM.",
+        "plugin_registry": "internal/plugin with capability interfaces (AdminAuth, ClientKeyAuth, ProxyHook). Plugin root interface exposes ID() only — no Enabled method; the app reads cfg.Plugins.Enabled(id) from the typed config struct before calling each factory. 002 ships interfaces + registry only; no concrete plugin. SetupGate is NOT a plugin — lives in internal/setup/gate.go as always-on infra. Revised 2026-04-18.",
+        "admin_api_shape": "Admin surface is GET /api/admin/settings (read) + POST /api/admin/settings/update (partial write, RPC-style verb). All router-owned JSON APIs live under /api/* (D2); the SPA exclusively owns /admin/* and /setup/* HTML. GET response is wrapped in the project-wide envelope {code,msg,data} where data = {runtime, db, plugins, system}. Round-3 2026-04-19 simplified the shape (D4–D8): runtime is a FLAT primitive object {log_client_request_body, log_upstream_request_body, log_upstream_response_body, log_retention_days, log_level} with no {value,source} wrapper — no 002 runtime key is env-overridable; db is {driver, host, database_name} (host is '\\u003chost\\u003e:\\u003cport\\u003e' for pg/mysql, 'local' for sqlite3; database_name is parsed logical DB or file basename; db.url NEVER returned); plugins[] is {id, label, enabled} — rows emitted ONLY for plugins actually in plugin.Registry() AND wired in PluginsConfig, so 002 returns [] (SPA sidebar coming-soon entries are hard-coded client-side, making the earlier D3 projection-skip obsolete); system is {router_version (git tag, e.g. 'v0.2.0'), router_git_sha (short7), router_built_at (ISO 8601 UTC)} — NO setup_state (that lives on /api/admin/health), NO config_version (no 002 use case). POST /api/admin/settings/update returns the same settings data shape. Patchable keys: the 5 runtime.* keys + plugins.\\u003cid\\u003e.enabled (db.* is not patchable in 002). Error codes: 2012 unknown_config_key, 2013 env_override_readonly (dormant in 002 but server-side check retained for 003+), 2014 invalid_log_level. 001's /admin/health relocates to /api/admin/health with the envelope wrap (D1/D2 alignment). Last-writer-wins (no concurrent-edit conflict code). The earlier /api/admin/overview (KPI dashboard → 005) and /api/admin/bootstrap (SPA nav) endpoints are NOT introduced.",
+        "admin_api_error_conventions": "Unified envelope {code:int, msg:string, data:any} for every router-owned JSON endpoint (exclusions: /v1/*, non-JSON responses). HTTP 200 for successes and business errors; HTTP 500 reserved for system errors (panic, DB down). Integer codes registered in docs/error-codes.md — 1xxx = 001, 2xxx = 002, … Reserved 0 = success, -1 = unknown. Specific 002 codes: 2001 setup_already_done, 2003 invalid_dsn, 2006 invalid_plugin_flag (also reachable via POST /api/admin/settings/update post-D9), 2009 request_body_too_large (replaces prior HTTP 413), 2011 setup_required, 2012 unknown_config_key, 2013 env_override_readonly (dormant in 002), 2014 invalid_log_level; system-tier 2900 db_connect_failed, 2901 migrate_failed, 2902 commit_tx_failed, 2903 config_write_failed. Code 2010 is reserved (previously probe_in_progress, dropped 2026-04-19 PM per D10 — see docs/error-codes.md). X-Request-Id is strictly a response header (never duplicated into body). Revised 2026-04-18 PM — supersedes earlier 410/413/400/500-based error-status convention. 2014 added 2026-04-19 alongside Round-3 runtime schema changes. D9 (plugin-flag patching) and D10 (2010 removal) added 2026-04-19 PM during Round-4 audit.",
+        "response_envelope": "Unified {code:int, msg:string, data:any} envelope applies to all router-owned JSON endpoints under the /api/ prefix — /api/admin/*, /api/setup/*, and 001's relocated /api/admin/health (backward-incompatible for URL + body shape; HTTP status stays 200 for success and business errors, 500 for system errors). /v1/* and selected /backend-api/* data-plane paths are explicitly and permanently excluded from the Admin API envelope (D1): during setup-pending /v1/*, /backend-api, and /backend-api/* return 001's native MVP error shape {error:{code:'setup_required',...}} with HTTP 503, never the envelope. In setup-done state, /v1/* is a provider-compatible data-plane facade: API-key accounts preserve 002 OpenAI Platform-compatible forwarding except explicitly deferred/blocked paths; OAuth accounts use Feature 003's ChatGPT Codex backend transport for /v1/responses and /v1/responses/compact, with Feature 006 adding /v1/chat/completions, OAuth GET /v1/models facade, WS /v1/responses, and selected /backend-api/* paths as explicit Codex mappings. Router-local usage observability is served by the enveloped Admin API GET /api/admin/usage, not by /api/codex/usage aliases. /v1/audio/transcriptions is deferred from 006. SPA HTML at /admin/* and /setup/* is also non-enveloped. Non-JSON router responses (redirects, static assets, 405, body-cap connection-reset beyond 4× cap) bypass the envelope. docs/error-codes.md is the single source of truth for code assignments; internal/api/envelope.go (Go) and frontend/src/lib/errcode.ts (TS) mirror the registry. Added 2026-04-18 PM as architectural decision #9; refined 2026-04-19 with D1 (v1 native) + D2 (API under /api/ prefix, SPA owns /admin + /setup HTML); amended 2026-04-25 to align /v1/* upstream transport with Feature 003 OAuth Codex implementation; amended 2026-04-26 to include Feature 006 OAuth Chat Completions, OAuth GET /v1/models facade, WS /v1/responses, and selected backend-api compatibility mappings; amended 2026-04-27 to move router-local usage observability to the Admin API.",
+        "admin_mutation_verb": "All admin mutation endpoints use RPC-style POST /resource/verb (POST /api/admin/settings/update, POST /api/admin/accounts/create, POST /api/admin/accounts/{id}/disable, …). PATCH /admin/settings from earlier drafts is replaced by POST /api/admin/settings/update with identical request-body semantics. Documented as project-wide HTTP style rule in AGENTS.md §HTTP API Style. Added 2026-04-18 PM; path updated 2026-04-19 with D2.",
+        "go_version": "Go 1.25 (go.mod directive go 1.25.0). Floor set by modernc.org/sqlite@v1.48.2 which itself declares go 1.25.0. Docs aligned 2026-04-18 after an attempt to downgrade to 1.24 surfaced the dependency constraint.",
+        "openapi_deferred": "AGENTS.md 'OpenAPI 3.1 is source of truth' adoption deferred to 003. 002 writes contracts/*.md for the five 002 endpoints. Documented as the single Complexity Tracking deviation in plan.md. internal/generated/adminapi/ remains the target tree once 003 wires oapi-codegen into CI."
+      },
+      "blockers": []
+    },
+    "003-multi-mode-codex-auth": {
+      "phase": "REVIEWED",
+      "created": "2026-04-15T00:00:00+08:00",
+      "last_updated": "2026-04-25T14:50:00+08:00",
+      "verify_report": "specs/003-multi-mode-codex-auth/verify-report.md",
+      "review_report": "specs/003-multi-mode-codex-auth/review-report.md",
+      "description": "Multi-mode Codex Authentication (API key + OAuth browser/device + auth.json import + explicit auth.json export, auto-refresh, plaintext-on-disk tokens with off-host redaction except for the audited export endpoint; encryption deferred to key-vault plugin spec)",
+      "artifacts": {
+        "spec": "specs/003-multi-mode-codex-auth/spec.md",
+        "checklist": "specs/003-multi-mode-codex-auth/checklists/spec-quality.md",
+        "plan": "specs/003-multi-mode-codex-auth/plan.md",
+        "research": "specs/003-multi-mode-codex-auth/research.md",
+        "data_model": "specs/003-multi-mode-codex-auth/data-model.md",
+        "quickstart": "specs/003-multi-mode-codex-auth/quickstart.md",
+        "contracts_dir": "specs/003-multi-mode-codex-auth/contracts/",
+        "tasks": "specs/003-multi-mode-codex-auth/tasks.md"
+      },
+      "metrics": {
+        "user_stories_count": 6,
+        "acceptance_scenarios_count": 16,
+        "edge_cases_count": 16,
+        "functional_requirements_count": 15,
+        "nfrs_count": 9,
+        "priorities": {
+          "P0": 3,
+          "P1": 3,
+          "P2": 0
+        },
+        "tasks_total": 65,
+        "tasks_l1": 32,
+        "tasks_l2": 33,
+        "tasks_l3": 0,
+        "tasks_parallel": 33
+      },
+      "decisions": {
+        "token_at_rest": "Tokens (access/refresh/id) stored plaintext on disk in 003, mirroring 002's API-key storage posture. Off-host redaction is mandatory EXCEPT via the explicit FR-014 export-auth-json button path. The storage column is sealed-bytes-capable so the future key-vault plugin can wrap the same bytes without schema migration. Resolved 2026-04-15 via sdd-specify clarification session.",
+        "onboarding_modes": "Four auth modes offered in the admin portal: API key (002 path), OAuth browser (PKCE + loopback callback), OAuth device (for headless/SSH), Import auth.json (paste/upload a local ~/.codex/auth.json). US-6 added 2026-04-15 per operator request.",
+        "auth_json_export": "OAuth accounts get an explicit 'Export auth.json' button in the account detail view (FR-014). Clicking hits a dedicated endpoint that streams the full token triplet as a file download; every call emits a `oauth_auth_json_exported` WARN audit event (no token bytes). No dedicated rate limit in 003 \u2014 the export endpoint shares the generic per-operator admin-API rate envelope (operator feedback 2026-04-15 rejected the 10-per-account-24h throttle as legitimate-bulk-rotation-unfriendly). API-key accounts do NOT get this button \u2014 002's 'no plaintext API-key read-back' policy is preserved. Resolved 2026-04-15.",
+        "account_metadata_render": "Admin portal MUST render email + plan_type ONLY (human-readable label: chatgpt-plus \u2192 'ChatGPT Plus', chatgpt-team \u2192 'ChatGPT Team', chatgpt-enterprise \u2192 'ChatGPT Enterprise'; unknown plan \u2192 raw string fallback) on BOTH the account list row and the account detail panel for every OAuth account \u2014 no extra click required. API-key rows keep the 002 field set. Captured as FR-011a after operator feedback 2026-04-15 (scope trimmed from the original 6-field proposal \u2014 other fields will be covered by 005 KPI dashboard work).",
+        "data_plane_transport": "As of 2026-04-25, /v1/* remains outside the Admin API envelope but upstream transport is account-specific. API-key rows preserve 002 OpenAI Platform-compatible forwarding to account.base_url + original path/query except explicitly deferred/blocked paths. OAuth rows are ChatGPT/Codex tokens: /v1/responses maps to https://chatgpt.com/backend-api/codex/responses, /v1/responses/compact maps to /codex/responses/compact, and chatgpt-account-id is sent when stored. As of Feature 006 planning on 2026-04-26 and revised on 2026-04-27, OAuth rows also support /v1/chat/completions through an explicit Chat Completions to Codex Responses compatibility adapter, GET /v1/models through a Codex model-list facade, WS /v1/responses through the Codex Responses WebSocket, and selected /backend-api/* Codex-native paths. Router-local usage observability is served by GET /api/admin/usage with the Admin API envelope. /api/codex/usage, /api/codex/usage/, and /v1/audio/transcriptions are not supported data-plane routes in 006. OAuth rows are not eligible for arbitrary /v1/* Platform paths, arbitrary /backend-api/* proxying, or arbitrary /api/* proxying."
+      },
+      "blockers": []
+    },
+    "004-account-playground": {
+      "phase": "IMPLEMENTING",
+      "complexity": "complex",
+      "complexity_reason": "Touches backend, frontend, OpenAPI, error-code registries, and generated clients; deterministic sdd-plan rules require complex.",
+      "complexity_override": null,
+      "created": "2026-04-23T21:27:20+08:00",
+      "last_updated": "2026-04-25T14:50:00+08:00",
+      "description": "Account Playground for Admin Portal account debugging with single-turn text probes, automatic or explicit active-account selection, safe diagnostics, and non-destructive behavior.",
+      "artifacts": {
+        "spec": "specs/004-account-playground/spec.md",
+        "checklist": "specs/004-account-playground/checklists/spec-quality.md",
+        "plan": "specs/004-account-playground/plan.md",
+        "research": "specs/004-account-playground/research.md",
+        "data_model": "specs/004-account-playground/data-model.md",
+        "test_plan": "specs/004-account-playground/test-plan.md",
+        "contracts": [
+          "specs/004-account-playground/contracts/playground-api.md"
+        ],
+        "quickstart": "specs/004-account-playground/quickstart.md",
+        "tasks": "specs/004-account-playground/tasks.md"
+      },
+      "metrics": {
+        "user_stories_count": 5,
+        "acceptance_scenarios_count": 20,
+        "edge_cases_count": 18,
+        "functional_requirements_count": 22,
+        "nfrs_count": 12,
+        "priorities": {
+          "P0": 4,
+          "P1": 1,
+          "P2": 0
+        },
+        "tasks_total": 31,
+        "tasks_l1": 27,
+        "tasks_l2": 4,
+        "tasks_l3": 0,
+        "tasks_parallel": 12
+      },
+      "decisions": {
+        "prompt_limit_and_body_cap": "Preserve a 16000 trimmed Unicode-character prompt limit; use a 96 KiB JSON request body cap for /api/admin/playground/run.",
+        "model_control": "Expose a model input in the Playground UI with default value gpt-5.4-mini; API requires a non-empty model.",
+        "frontend_text_system": "Follow existing .strings.ts page-string modules for 004; do not introduce react-i18next in this feature.",
+        "duplicate_submit": "P0 duplicate-submit protection is UI-only while a run is pending; API remains non-idempotent and has no client_run_id.",
+        "provider_transport": "Playground uses the same provider transport as data-plane proxy: API-key probes call base_url + /v1/responses without chatgpt-account-id; OAuth probes call ChatGPT Codex /codex/responses with chatgpt-account-id when present."
+      },
+      "blockers": []
+    },
+    "005-dashboard-observability": {
+      "phase": "IMPLEMENTED",
+      "complexity": "complex",
+      "complexity_reason": "Touches persistence, backend aggregation, SSE proxy behavior, OpenAPI/generated clients, and frontend dashboard charts/settings.",
+      "complexity_override": null,
+      "created": "2026-04-25T21:31:42+08:00",
+      "last_updated": "2026-04-25T23:14:30+08:00",
+      "description": "Dashboard observability cards for active accounts, requests, token usage, error rate, and TTFT with range/account filters plus reorder/hide settings.",
+      "artifacts": {
+        "spec": "specs/005-dashboard-observability/spec.md",
+        "checklist": "specs/005-dashboard-observability/checklists/spec-quality.md",
+        "plan": "specs/005-dashboard-observability/plan.md",
+        "tasks": "specs/005-dashboard-observability/tasks.md"
+      },
+      "metrics": {
+        "user_stories_count": 6,
+        "priorities": {
+          "P0": 5,
+          "P1": 1,
+          "P2": 0
+        },
+        "functional_requirements_count": 12,
+        "tasks_total": 21
+      },
+      "decisions": {
+        "ttft_definition": "TTFT is measured from router request start to the first SSE JSON event with type=response.output_text.delta and non-empty delta.",
+        "range_buckets": "1h=1 minute buckets, 1d=1 hour buckets, 7d=6 hour buckets, 30d=1 day buckets.",
+        "dashboard_scope": "Core observability endpoint and dashboard UI, not a plugin; no alerts, cost chart, Prometheus exporter, or rollup table in 005."
+      },
+      "blockers": []
+    },
+    "006-openai-api-gateway": {
+      "phase": "IMPLEMENTING",
+      "complexity": "complex",
+      "complexity_reason": "Expands the provider-compatible data plane across many endpoint groups, transport shapes, request logging paths, compatibility tests, and live smoke coverage.",
+      "complexity_override": null,
+      "created": "2026-04-26T12:00:00+08:00",
+      "last_updated": "2026-04-27T00:00:00+08:00",
+      "description": "Initial OpenAI API Gateway support for API-key Responses, Conversations, Chat Completions, and Models, plus explicit OAuth Codex compatibility mappings for Responses, Chat Completions, OAuth GET /v1/models facade, selected backend-api paths, WS /v1/responses, and Admin usage observability. /api/codex/usage, /api/codex/usage/, Embeddings, Moderations, Images, Audio including /v1/audio/transcriptions, Videos, Files, Uploads, Vector Stores, Batches, Fine-tuning, Evals, and OpenAI Realtime are deferred or unsupported in 006.",
+      "artifacts": {
+        "spec": "specs/006-openai-api-gateway/spec.md",
+        "checklist": "specs/006-openai-api-gateway/checklists/spec-quality.md",
+        "research": "specs/006-openai-api-gateway/research.md",
+        "plan": "specs/006-openai-api-gateway/plan.md",
+        "tasks": "specs/006-openai-api-gateway/tasks.md",
+        "data_model": "specs/006-openai-api-gateway/data-model.md",
+        "quickstart": "specs/006-openai-api-gateway/quickstart.md",
+        "contracts": [
+          "specs/006-openai-api-gateway/contracts/v1-platform-gateway.md",
+          "specs/006-openai-api-gateway/contracts/codex-compatibility.md",
+          "specs/006-openai-api-gateway/contracts/unsupported-routes.md"
+        ]
+      },
+      "metrics": {
+        "user_stories_count": 7,
+        "acceptance_scenarios_count": 30,
+        "edge_cases_count": 15,
+        "functional_requirements_count": 16,
+        "nfrs_count": 8,
+        "priorities": {
+          "P0": 5,
+          "P1": 2,
+          "P2": 0
+        }
+      },
+      "decisions": {
+        "feature_model": "Core data-plane expansion plus Admin usage observability, not a plugin, because it changes /v1/* and selected /backend-api/* routing while router-local usage is a router-owned Admin API read; plugins do not own URL paths.",
+        "credential_scope": "OpenAI Platform gateway compatibility is API-key-account only in 006 according to the coverage matrix. Initial supported API-key paths are /v1/responses, /v1/conversations, /v1/chat/completions, and /v1/models. ChatGPT OAuth accounts support explicit Codex-backed mappings for /v1/responses, WS /v1/responses, /v1/responses/compact, /v1/chat/completions, GET /v1/models as an OpenAI-compatible Codex model-list facade, /backend-api/codex/responses, WS /backend-api/codex/responses, /backend-api/codex/responses/compact, /backend-api/codex/models, and /backend-api/transcribe. Router-local usage is exposed only through GET /api/admin/usage.",
+        "endpoint_inventory_source": "OpenAI API reference checked on 2026-04-26 is the initial endpoint inventory source; future additions require explicit coverage-matrix updates.",
+        "administration_api_scope": "OpenAI Administration API is excluded from 006 by user decision on 2026-04-26; future support requires separate admin-key credentials, audit, and permissions.",
+        "realtime_scope": "OpenAI Realtime server-to-server WebSocket is deferred from initial 006. Realtime WebRTC/SIP proxying and client-secret workflows for direct browser/mobile access are out of scope.",
+        "api_priority_policy": "Initial 006 P0 is API-key Responses, Conversations, Chat Completions, Models, explicit OAuth/Codex compatibility paths including OAuth GET /v1/models facade, WS /v1/responses, selected /backend-api/* paths, and Admin usage observability. /api/codex/usage, /api/codex/usage/, Embeddings, Moderations, Images, Audio, Videos, Files, Uploads, Vector Stores, Batches, Fine-tuning, Evals, and OpenAI Realtime WebSocket are deferred or unsupported unless a future spec promotes them.",
+        "comparable_project_research": "codex-lb is a Codex/ChatGPT OAuth compatibility reference, not a full OpenAI Platform gateway. Broad comparable gateways use API-key/provider-key or platform-token models and support varying OpenAI-compatible HTTP/WebSocket endpoint subsets.",
+        "oauth_chat_completions_mapping": "OAuth browser, OAuth device, and imported auth.json accounts must support /v1/chat/completions through a compatibility adapter that converts Chat Completions requests to Codex Responses upstream calls and reconstructs Chat Completions-compatible stream/object responses.",
+        "backend_api_transcribe_mapping": "OAuth browser, OAuth device, and imported auth.json accounts must support /backend-api/transcribe through a Codex /transcribe compatibility adapter for Codex-native clients.",
+        "initial_deferred_platform_groups": "By user decision on 2026-04-26, /v1/embeddings, /v1/moderations, Images, Audio including /v1/audio/transcriptions, Videos, Files, Uploads, Vector Stores, Batches, Fine-tuning, Evals, and OpenAI Realtime WebSocket are not supported in initial 006; they must fail with native data-plane unsupported-route behavior unless a future spec promotes them.",
+        "backend_routing_logic_matrix": "006 spec now defines backend behavior per client-facing path and upstream credential class: API-key rows direct-forward only the initial supported /v1/* subset, OAuth rows use explicit Codex mappings/adapters, Admin usage rows are router-owned envelope responses, API-key rows never use /backend-api/*, and unsupported/deferred paths fail with native data-plane unsupported-route behavior.",
+        "operation_level_coverage_matrix": "006 spec now enumerates supported P0 method/path operations for Responses, Conversations, Chat Completions, read-only Models including OAuth GET /v1/models facade, selected Codex-native backend-api paths, WS /v1/responses, and GET /api/admin/usage, plus deferred, blocked, and unsupported operation families.",
+        "codex_native_backend_api_scope": "Feature 006 includes only selected Codex-native /backend-api/* paths: /backend-api/codex/responses, WS /backend-api/codex/responses, /backend-api/codex/responses/compact, /backend-api/codex/models, and /backend-api/transcribe. Arbitrary /backend-api/* proxying is excluded.",
+        "codex_lb_cross_check_scope": "After codex-lb implementation cross-check on 2026-04-26 and revision on 2026-04-27, 006 includes WS /v1/responses and OAuth GET /v1/models facade. codex-lb usage aliases GET /api/codex/usage and GET /api/codex/usage/ are not supported data-plane routes; router-local usage is GET /api/admin/usage. POST /v1/audio/transcriptions remains unsupported in 006 by user decision.",
+        "plan_route_classifier": "006 implementation must introduce an explicit operation-level data-plane route classifier before account selection or upstream calls. This replaces the current broad /v1/ wildcard forwarding behavior so deferred, blocked, and unlisted paths fail fast with native data-plane errors.",
+        "plan_brownfield_gaps": "Current code registers only /v1/ in steady state, setup-pending native errors only cover /v1/*, OAuth mapping only handles /v1/responses and /v1/responses/compact, and no WebSocket, backend-api, or codex-lb usage handlers exist. Plan.md makes these the first implementation slices.",
+        "plan_persistence": "No database migration is planned for 006. Existing request_records columns are reused; new response_mode string value websocket is additive. Multipart request-body policy is stored as route/body metadata, not as response_mode.",
+        "plan_admin_request_log_enum": "006 adds request_record response_mode value websocket. Because /api/admin/requests exposes response_mode through the Admin OpenAPI enum, implementation must update openapi/admin.yaml, regenerate Go and TS clients, and test request-log row/filter handling for the new value.",
+        "plan_pre_body_classifier": "006 classifier must run before account selection, OAuth refresh, upstream calls, JSON decode, multipart parse, or request body capture. Unsupported/deferred/blocked routes must not business-read binary or multipart request bodies.",
+        "plan_admin_usage": "GET /api/admin/usage is a router-owned Admin API operation computed from retained request records and account metadata. It uses the Admin envelope and generated OpenAPI clients. Unknown quota/cost facts must be null, empty, or zero-by-contract and must not be fabricated.",
+        "plan_websocket_dependency": "WebSocket dependency approval resolved on 2026-04-26: use github.com/coder/websocket pinned to v1.8.14 for WS /v1/responses and WS /backend-api/codex/responses. Implementation must add the pinned module with the relay code, commit go.mod/go.sum, and must not hand-roll RFC 6455.",
+        "plan_websocket_beta_header": "WS /v1/responses and WS /backend-api/codex/responses upstream handshakes must include OpenAI-Beta: responses_websockets=2026-02-06, appending to any existing OpenAI-Beta values.",
+        "plan_review_refinements": "Senior review on 2026-04-26 tightened FR-013 to exact supported operations plus deterministic unsupported-family rules, made unsupported/blocked status policy normative, expanded the OAuth Chat Completions adapter contract, added OAuth GET /v1/models facade by user decision, added Admin request-log enum regeneration for websocket response_mode, required pre-body unsupported classification, removed request_id from native data-plane error bodies, clarified bare /backend-api handling, separated multipart body policy from response_mode, and added WebSocket beta-header coverage. On 2026-04-27, usage observability was moved from codex-lb-shaped data-plane aliases to GET /api/admin/usage with Admin envelope/OpenAPI contract; /api/codex/* is no longer a data-plane prefix.",
+        "tasks_ready": "006 tasks.md generated on 2026-04-26 and revised on 2026-04-27 with 25 tasks across classifier, setup gate, request-log enum, API-key forwarding, OAuth Codex mappings, Chat adapter, Admin usage, WebSocket, compatibility, and delivery gates. The 2026-04-27 Admin usage revision reopened affected tasks because code and generated contracts must be updated before the feature can return to implemented.",
+        "implementation_started": "sdd-implement started on 2026-04-26 after tasks.md generation and baseline context loading.",
+        "implementation_completed_2026_04_26": "sdd-implement completed on 2026-04-26 for the previous 006 scope after full local gates passed: go test ./..., go build ./..., make go-lint, frontend biome/typecheck/vitest/build, full Playwright E2E, envelope parity, coverage floor, log scrub, OpenAPI lint/codegen stability, and SDK smoke help/py_compile. This completion is superseded by the 2026-04-27 Admin usage revision until reopened tasks pass implementation and gates again."
+      },
+      "blockers": []
+    },
+    "007-data-plane-operation-bridge": {
+      "phase": "IMPLEMENTED",
+      "complexity": "complex",
+      "complexity_reason": "Refactors data-plane routing across internal/api and internal/provider/openai while preserving direct API-key, OAuth Codex facade, native Codex, SSE, WebSocket, and Admin usage boundary behavior.",
+      "complexity_override": null,
+      "created": "2026-04-27T00:00:00+08:00",
+      "last_updated": "2026-04-27T18:46:19+08:00",
+      "description": "Data-plane operation bridge architecture that assigns stable op.*, bridge.*, and contract.* identities to supported gateway operations, separates client request decoding from upstream request building, and preserves Feature 006 external behavior.",
+      "artifacts": {
+        "spec": "specs/007-data-plane-operation-bridge/spec.md",
+        "checklist": "specs/007-data-plane-operation-bridge/checklists/spec-quality.md",
+        "research": "specs/007-data-plane-operation-bridge/research.md",
+        "plan": "specs/007-data-plane-operation-bridge/plan.md",
+        "data_model": "specs/007-data-plane-operation-bridge/data-model.md",
+        "quickstart": "specs/007-data-plane-operation-bridge/quickstart.md",
+        "tasks": "specs/007-data-plane-operation-bridge/tasks.md",
+        "contracts": [
+          "specs/007-data-plane-operation-bridge/contracts/internal-bridge.md"
+        ]
+      },
+      "metrics": {
+        "user_stories_count": 5,
+        "acceptance_scenarios_count": 17,
+        "edge_cases_count": 15,
+        "functional_requirements_count": 14,
+        "nfrs_count": 8,
+        "priorities": {
+          "P0": 4,
+          "P1": 1,
+          "P2": 0
+        },
+        "tasks_total": 20,
+        "tasks_l1": 16,
+        "tasks_l2": 4,
+        "tasks_l3": 0,
+        "tasks_parallel": 3
+      },
+      "decisions": {
+        "feature_model": "Internal architecture hardening for the existing data plane, not a plugin and not an endpoint expansion.",
+        "identifier_names": "Use OpID values with op.* prefixes, BridgeID values with bridge.* prefixes, and Contract values with contract.* prefixes.",
+        "contract_names": "Use ClientContract and UpstreamContract rather than WireContract to make direction explicit while keeping the Contract type short.",
+        "provider_bridge_boundary": "Provider-agnostic bridge DTOs, credential classes, OperationBridge, ClientResponseAdapter, and registry live in internal/provider; OpenAI/Codex constants and implementations live in internal/provider/openai.",
+        "bridge_boundary": "Keep DecodeClientRequest and BuildUpstreamRequest separate for clearer error boundaries and test granularity.",
+        "response_adapter_name": "Use ClientResponseAdapter for response-side behavior because it returns the upstream/local output in the downstream client contract.",
+        "no_provider_policy_dsl": "Do not model provider behavior as provider-wide RequestPolicy flags. Provider-specific and operation-specific behavior belongs in code-owned OperationBridge implementations.",
+        "behavior_preservation": "Feature 007 must preserve the Feature 006 operation-level support matrix and must not add endpoint families, dependencies, migrations, admin APIs, or default live network calls.",
+        "contract_granularity": "Contract is a wire-shape family, not one value per URL; OpID owns exact method/path identity. Separate contracts are used for compact, WebSocket, native Codex, Chat Completions, and Models shapes where semantics differ.",
+        "admin_usage_boundary": "Router-local usage observability remains a router-owned Admin API contract at GET /api/admin/usage and is not assigned an OpID, BridgeID, ClientContract, or UpstreamContract.",
+        "bridge_metadata_storage": "New supported bridge traffic stores safe audit metadata under router_metadata.bridge. model_params remains reserved for client/model parameters and adapter-derived model metadata. Because the schema has not shipped, the current baseline DDL is updated directly instead of adding a compatibility migration.",
+        "implementation_completed": "Implemented on 2026-04-27. Tasks T-001 through T-020 are complete, including bridge execution through UpstreamRequest plus ClientResponseAdapter, safe request-log metadata, deterministic E2E metadata assertions, error-boundary coverage, overhead benchmark, historical request-log compatibility, and final gates: golangci-lint run; go test ./...; go build ./...; bash scripts/coverage-floor.sh; make data-plane-compat."
+      },
+      "blockers": []
+    }
+  },
+      "last_updated": "2026-04-27T19:00:40+08:00"
+}

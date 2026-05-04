@@ -1,0 +1,80 @@
+export const strings = {
+  eyebrow: 'Device OAuth',
+  stripe: 'Accounts',
+  titleLead: 'Approve ChatGPT sign-in from',
+  titleStrong: 'another device.',
+  intro:
+    'Use this path when the router host cannot receive a localhost callback. The router shows a short code, you approve it in your own browser, and the account appears here when the background poller succeeds.',
+  panel: {
+    code: 'Device code',
+    status: 'Flow status',
+    pending: 'Awaiting approval',
+    blocked: 'Flow blocked',
+    unavailable: 'Device flow unavailable',
+    failed: 'Flow ended',
+    metaPending: 'pending',
+    metaStarting: 'starting',
+  },
+  fields: {
+    userCode: {
+      label: 'Device code',
+      hint: 'Enter this code in the verification page opened on your own laptop or browser session.',
+    },
+    verificationURL: {
+      label: 'Verification URL',
+      hint: 'Open the provider page in a new tab, then paste the device code shown here.',
+    },
+    countdown: {
+      label: 'Countdown',
+      hint: 'Expires at the server-declared deadline. If this reaches zero before approval, restart the flow.',
+      intervalBadge: 'poll interval',
+    },
+    flow: {
+      label: 'Pending flow',
+      hint: 'Only one OAuth flow may be active per router instance. Cancelling clears the current in-memory slot.',
+    },
+  },
+  actions: {
+    copyCode: 'Copy device code',
+    copyURL: 'Copy verification URL',
+    copied: 'Copied',
+    cancelPending: 'Cancel pending flow',
+    restart: 'Restart device flow',
+    tryBrowser: 'Try browser sign-in instead',
+  },
+  status: {
+    starting: 'Starting device flow…',
+    pending: 'Waiting for approval…',
+    success: 'Signed in — redirecting…',
+    expired: 'Flow expired — please restart',
+    cancelled: 'Cancelled',
+    denied: 'Approval denied',
+    failed: 'Flow failed',
+  },
+  err: {
+    oauth_flow_in_progress: 'A flow is already pending — finish or cancel it first.',
+    device_auth_unavailable:
+      'This account cannot use the device flow — try browser sign-in instead.',
+    invalid_oauth_provider: 'The requested OAuth provider is not available for this route.',
+    oauth_upstream_error: 'OpenAI rejected the device-code request.',
+    oauth_internal_error: 'The router hit an internal OAuth error.',
+    oauth_store_failed: 'The router could not persist the OAuth account.',
+    transport_error: 'The request did not reach the router cleanly.',
+    default: 'The router rejected this request.',
+  },
+  toasts: {
+    flowExpired: 'Flow expired — start again when you are ready.',
+    flowCancelled: 'Flow cancelled.',
+    copyFailed: 'Clipboard write failed.',
+  },
+  labels: {
+    userCode: 'Device code',
+    copyCode: 'Copy device code',
+    copyURL: 'Copy verification URL',
+    conflictMethod: 'method',
+    conflictFlow: 'flow',
+    conflictExpires: 'expires',
+  },
+  countdownExpired: 'Expired',
+  countdownAwaitingServer: 'Awaiting server…',
+} as const
