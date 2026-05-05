@@ -91,7 +91,7 @@ test.describe('oauth browser dual rail', () => {
       '**/api/admin/oauth/browser/manual-callback',
     )
     await page.getByTestId('oauth-callback-input').fill(mismatchURL)
-    await page.getByRole('button', { name: /submit pasted url/i }).click()
+    await page.getByRole('button', { name: /submit callback url/i }).click()
     const mismatchResponse = await mismatchResponsePromise
     expect(mismatchResponse.status()).toBe(200)
     expect(await mismatchResponse.json()).toMatchObject({
@@ -104,7 +104,7 @@ test.describe('oauth browser dual rail', () => {
       '**/api/admin/oauth/browser/manual-callback',
     )
     await page.getByTestId('oauth-callback-input').fill(callbackURL)
-    await page.getByRole('button', { name: /submit pasted url/i }).click()
+    await page.getByRole('button', { name: /submit callback url/i }).click()
     const successResponse = await successResponsePromise
     expect(successResponse.status()).toBe(200)
     expect(await successResponse.json()).toMatchObject({
@@ -148,7 +148,7 @@ test.describe('oauth browser dual rail', () => {
     const manualResponsePromise = page.waitForResponse('**/api/admin/oauth/browser/manual-callback')
     await Promise.allSettled([
       popup.getByTestId('approve-loopback').click(),
-      page.getByRole('button', { name: /submit pasted url/i }).click(),
+      page.getByRole('button', { name: /submit callback url/i }).click(),
     ])
     const manualResponse = await manualResponsePromise
     expect(manualResponse.status()).toBe(200)

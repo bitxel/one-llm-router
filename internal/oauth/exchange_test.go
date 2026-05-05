@@ -320,6 +320,59 @@ func TestExchange(t *testing.T) {
 		}
 	})
 
+	t.Run("device poll nested pending error keeps polling", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method)
+			assert.Equal(t, "/api/accounts/deviceauth/token", r.URL.Path)
+			assert.Equal(t, jsonContentType, r.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"message":"Device authorization is unknown. Please try again.","type":"invalid_request_error","param":null,"code":"deviceauth_authorization_unknown"}}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		provider := &openAIProvider{
+			deviceTokenURL: srv.URL + "/api/accounts/deviceauth/token",
+			logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		}
+
+		_, err := provider.PollDeviceCode(context.Background(), "device-auth-id", "ABCD-1234")
+		if !assert.Error(t, err) {
+			return
+		}
+
+		var exchangeErr *TokenExchangeError
+		if assert.True(t, errors.As(err, &exchangeErr)) {
+			assert.Equal(t, "authorization_pending", exchangeErr.Code())
+			assert.Equal(t, "Device authorization is unknown. Please try again.", exchangeErr.Message())
+			assert.Equal(t, 0, exchangeErr.HTTPStatus())
+		}
+	})
+
+	t.Run("device poll nested access denied is terminal", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"code":"access_denied","message":"denied by operator"}}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		provider := &openAIProvider{
+			deviceTokenURL: srv.URL,
+			logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		}
+
+		_, err := provider.PollDeviceCode(context.Background(), "device-auth-id", "ABCD-1234")
+		if !assert.Error(t, err) {
+			return
+		}
+
+		var exchangeErr *TokenExchangeError
+		if assert.True(t, errors.As(err, &exchangeErr)) {
+			assert.Equal(t, "access_denied", exchangeErr.Code())
+			assert.Equal(t, "denied by operator", exchangeErr.Message())
+			assert.Equal(t, http.StatusForbidden, exchangeErr.HTTPStatus())
+		}
+	})
+
 	t.Run("device poll terminal status field is surfaced as provider error", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
@@ -345,7 +398,7 @@ func TestExchange(t *testing.T) {
 		}
 	})
 
-	t.Run("request device code success defaults interval and requires expires_in", func(t *testing.T) {
+	t.Run("request device code success defaults interval and requires expires_at", func(t *testing.T) {
 		var gotBody map[string]string
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
@@ -360,13 +413,14 @@ func TestExchange(t *testing.T) {
 				return
 			}
 
-			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_123","user_code":"ABCD-1234","verification_uri":"http://127.0.0.1:40123/codex/device","expires_in":900}`))
+			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_123","user_code":"ABCD-1234","verification_uri":"http://127.0.0.1:40123/codex/device","expires_at":"2026-04-15T10:15:00Z"}`))
 		}))
 		t.Cleanup(srv.Close)
 
 		provider := &openAIProvider{
 			deviceCodeURL: srv.URL + "/api/accounts/deviceauth/usercode",
 			logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+			now:           func() time.Time { return time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC) },
 		}
 
 		deviceCode, err := provider.RequestDeviceCode(context.Background())
@@ -382,7 +436,7 @@ func TestExchange(t *testing.T) {
 		assert.Equal(t, 15*time.Minute, deviceCode.ExpiresIn)
 	})
 
-	t.Run("request device code missing expires_in is invalid_response", func(t *testing.T) {
+	t.Run("request device code missing expires_at is invalid_response", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_123","user_code":"ABCD-1234","verification_uri":"https://example.com/device","interval":5}`))
 		}))
@@ -401,20 +455,70 @@ func TestExchange(t *testing.T) {
 		var exchangeErr *TokenExchangeError
 		if assert.True(t, errors.As(err, &exchangeErr)) {
 			assert.Equal(t, "invalid_response", exchangeErr.Code())
-			assert.Contains(t, exchangeErr.Message(), "missing expires_in")
+			assert.Contains(t, exchangeErr.Message(), "missing expires_at")
 			assert.Equal(t, http.StatusOK, exchangeErr.HTTPStatus())
 		}
 	})
 
-	t.Run("request device code missing verification_uri falls back to auth base url", func(t *testing.T) {
+	t.Run("request device code expires_in only is invalid_response", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_123","user_code":"ABCD-1234","expires_in":900}`))
+			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_123","user_code":"ABCD-1234","verification_uri":"https://example.com/device","expires_in":900}`))
 		}))
 		t.Cleanup(srv.Close)
 
 		provider := &openAIProvider{
 			deviceCodeURL: srv.URL,
 			logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		}
+
+		_, err := provider.RequestDeviceCode(context.Background())
+		if !assert.Error(t, err) {
+			return
+		}
+
+		var exchangeErr *TokenExchangeError
+		if assert.True(t, errors.As(err, &exchangeErr)) {
+			assert.Equal(t, "invalid_response", exchangeErr.Code())
+			assert.Contains(t, exchangeErr.Message(), "missing expires_at")
+			assert.Equal(t, http.StatusOK, exchangeErr.HTTPStatus())
+		}
+	})
+
+	t.Run("request device code expired expires_at is invalid_response", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_123","user_code":"ABCD-1234","verification_uri":"https://example.com/device","expires_at":"2026-04-15T09:59:59Z"}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		provider := &openAIProvider{
+			deviceCodeURL: srv.URL,
+			logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+			now:           func() time.Time { return time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC) },
+		}
+
+		_, err := provider.RequestDeviceCode(context.Background())
+		if !assert.Error(t, err) {
+			return
+		}
+
+		var exchangeErr *TokenExchangeError
+		if assert.True(t, errors.As(err, &exchangeErr)) {
+			assert.Equal(t, "invalid_response", exchangeErr.Code())
+			assert.Contains(t, exchangeErr.Message(), "expires_at must be in the future")
+			assert.Equal(t, http.StatusOK, exchangeErr.HTTPStatus())
+		}
+	})
+
+	t.Run("request device code missing verification_uri falls back to auth base url", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_123","user_code":"ABCD-1234","expires_at":"2026-04-15T10:15:00Z"}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		provider := &openAIProvider{
+			deviceCodeURL: srv.URL,
+			logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+			now:           func() time.Time { return time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC) },
 		}
 
 		deviceCode, err := provider.RequestDeviceCode(context.Background())
@@ -431,7 +535,7 @@ func TestExchange(t *testing.T) {
 	t.Run("request device code missing verification_uri preserves configured path prefix", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/router/api/accounts/deviceauth/usercode", r.URL.Path)
-			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_path_123","user_code":"WXYZ-9876","expires_in":900}`))
+			_, _ = w.Write([]byte(`{"device_auth_id":"dev_auth_path_123","user_code":"WXYZ-9876","expires_at":"2026-04-15T10:15:00Z"}`))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -439,6 +543,7 @@ func TestExchange(t *testing.T) {
 			deviceCodeURL:  srv.URL + "/router/api/accounts/deviceauth/usercode",
 			deviceTokenURL: srv.URL + "/router/api/accounts/deviceauth/token",
 			logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+			now:            func() time.Time { return time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC) },
 		}
 
 		deviceCode, err := provider.RequestDeviceCode(context.Background())
@@ -531,7 +636,7 @@ func TestExchange(t *testing.T) {
 		assert.Equal(t, "authorization_code", gotTokenForm.Get("grant_type"))
 		assert.Equal(t, "auth-code", gotTokenForm.Get("code"))
 		assert.Equal(t, "device-verifier", gotTokenForm.Get("code_verifier"))
-		assert.Equal(t, openAIRedirectURI, gotTokenForm.Get("redirect_uri"))
+		assert.Equal(t, srv.URL+openAIDeviceRedirectPath, gotTokenForm.Get("redirect_uri"))
 		assert.Equal(t, openAIClientID, gotTokenForm.Get("client_id"))
 		assert.Equal(t, []byte("at"), tokens.AccessToken)
 		assert.Equal(t, now, tokens.LastRefresh)

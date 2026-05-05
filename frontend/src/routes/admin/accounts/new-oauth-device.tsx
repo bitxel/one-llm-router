@@ -58,6 +58,7 @@ export function AdminAccountsNewOAuthDevice() {
     url: null,
   })
   const observedDeviceFlowIDRef = useRef<string | null>(null)
+  const autoStartAttemptedRef = useRef(false)
   const [startedFlow, setStartedFlow] = useState<StartedDeviceFlow | null>(null)
   const [conflictFlow, setConflictFlow] = useState<PendingConflict | null>(null)
   const [screenError, setScreenError] = useState<unknown>(null)
@@ -190,6 +191,10 @@ export function AdminAccountsNewOAuthDevice() {
   })
 
   useEffect(() => {
+    if (autoStartAttemptedRef.current) {
+      return
+    }
+    autoStartAttemptedRef.current = true
     void startDeviceFlow()
   }, [])
 

@@ -1,10 +1,10 @@
 export const strings = {
   eyebrow: 'Browser OAuth',
   stripe: 'Accounts',
-  titleLead: 'Sign in with ChatGPT in your',
-  titleStrong: 'browser.',
+  titleLead: 'Add ChatGPT OAuth',
+  titleStrong: 'account',
   intro:
-    'The router opens the ChatGPT sign-in tab and keeps a paste rail open in parallel. Paste the final callback URL here if the browser cannot reach localhost on the router host.',
+    'Open a ChatGPT sign-in tab. If the browser cannot return to this router, paste the localhost callback URL below.',
   panel: {
     idle: 'Browser OAuth',
     pending: 'Flow in progress',
@@ -25,25 +25,45 @@ export const strings = {
     },
     callback: {
       label: 'Paste callback URL',
-      hint: 'Paste the full localhost callback URL from your browser address bar, even if the page showed a connection-refused error.',
+      hint: 'Paste the full localhost callback URL from your browser address bar. The raw URL stays hidden by default.',
       placeholder: 'http://localhost:1455/auth/callback?code=...&state=...',
     },
     flow: {
       label: 'Pending flow',
-      hint: 'One flow may be active per router instance. Cancelling clears the in-memory slot and returns you to a clean start screen.',
+      hint: 'One OAuth flow may be active per router instance.',
+    },
+    flowStatus: {
+      label: 'Flow status',
+      hint: 'Loopback and manual paste are both accepted for this browser flow.',
     },
   },
   actions: {
     start: 'Start browser sign-in',
     openAgain: 'Open sign-in tab again',
-    submitCallback: 'Submit pasted URL',
-    cancelPending: 'Cancel pending flow',
+    submitCallback: 'Submit callback URL',
+    cancelPending: 'Cancel flow',
     startAgain: 'Start again',
+    showRawCallback: 'Show raw URL',
+    hideRawCallback: 'Hide raw URL',
+    clearCallback: 'Clear pasted URL',
   },
   status: {
     browserMethod: 'Browser OAuth',
     browserMethodDetail:
-      'Both callback rails stay open for every browser flow. There is no mode switch and no hostname heuristic.',
+      'The router opens one sign-in flow and accepts whichever callback rail finishes first.',
+    pending: 'Pending',
+    listener: 'Listener',
+    expires: 'Expires',
+  },
+  callbackSummary: {
+    title: 'Callback summary',
+    empty: 'No callback URL pasted.',
+    invalid: 'Unparseable URL',
+    codePresent: 'code present',
+    errorPresent: 'error present',
+    codeMissing: 'code missing',
+    statePresent: 'state present',
+    stateMissing: 'state missing',
   },
   validation: {
     callbackRequired: 'Paste the callback URL to continue.',
@@ -75,7 +95,7 @@ export const strings = {
   terminal: {
     defaultTitle: 'The flow ended with an error.',
     defaultDetail:
-      'Review the provider error, then start a fresh browser sign-in. The paste textarea stays hidden after a terminal error.',
+      'Review the provider error, then start a fresh browser sign-in. The callback input stays hidden after a terminal error.',
     restartHint:
       'Restart from a clean flow. The router never reuses an already-consumed callback URL.',
   },

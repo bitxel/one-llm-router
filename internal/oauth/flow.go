@@ -23,6 +23,7 @@ const (
 	openAIDeviceCodeURL           = openAIAuthBaseURL + "/api/accounts/deviceauth/usercode"
 	openAIDeviceTokenURL          = openAIAuthBaseURL + "/api/accounts/deviceauth/token"
 	openAIDeviceVerificationURL   = openAIAuthBaseURL + "/codex/device"
+	openAIDeviceRedirectPath      = "/deviceauth/callback"
 	openAIClientID                = "app_EMoamEEZ73f0CkXaXp7hrann"
 	openAIOriginator              = "codex_cli_rs"
 	openAIScope                   = "openid profile email offline_access api.connectors.read api.connectors.invoke"
@@ -475,4 +476,8 @@ func (p openAIProvider) authBaseURL() string {
 
 func (p openAIProvider) deviceVerificationEndpoint() string {
 	return p.authBaseURL() + "/codex/device"
+}
+
+func (p openAIProvider) deviceRedirectURI() string {
+	return p.authBaseURL() + openAIDeviceRedirectPath
 }

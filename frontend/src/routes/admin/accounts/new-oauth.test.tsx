@@ -181,7 +181,7 @@ beforeEach(() => {
 })
 
 describe('AdminAccountsNewOAuth', () => {
-  it('starts the browser flow, keeps the paste textarea mounted, and navigates on poll success', async () => {
+  it('starts the browser flow, keeps the paste callback input mounted, and navigates on poll success', async () => {
     callAdminMock.mockResolvedValueOnce({
       flow_id: browserStartFlowID,
       authorize_url: 'https://auth.openai.com/oauth/authorize?state=s_abc',
@@ -204,6 +204,7 @@ describe('AdminAccountsNewOAuth', () => {
     )
     expect(refetchMock).toHaveBeenCalledTimes(1)
     expect(await screen.findByLabelText('Paste callback URL')).toBeInTheDocument()
+    expect(screen.getByTestId('oauth-flow-status')).toHaveTextContent('2026-04-21 12:05 UTC')
 
     setFlowResult({
       status: 'success',
@@ -233,7 +234,7 @@ describe('AdminAccountsNewOAuth', () => {
     expect(screen.queryByTestId('detail-route')).not.toBeInTheDocument()
   })
 
-  it('keeps the textarea editable on oauth_state_mismatch', async () => {
+  it('keeps the callback URL editable on oauth_state_mismatch', async () => {
     setFlowResult({
       status: 'pending',
       flow: pendingBrowserSnapshot,
@@ -252,15 +253,15 @@ describe('AdminAccountsNewOAuth', () => {
     await renderWithRouter()
     const user = userEvent.setup()
 
-    const textarea = await screen.findByLabelText('Paste callback URL')
-    await user.type(textarea, 'http://localhost:1455/auth/callback?code=bad&state=wrong')
-    await user.click(screen.getByRole('button', { name: 'Submit pasted URL' }))
+    const input = await screen.findByLabelText('Paste callback URL')
+    await user.type(input, 'http://localhost:1455/auth/callback?code=bad&state=wrong')
+    await user.click(screen.getByRole('button', { name: 'Submit callback URL' }))
 
     expect(await screen.findByTestId('oauth-inline-error')).toHaveTextContent('State mismatch')
-    expect(textarea).toHaveValue('http://localhost:1455/auth/callback?code=bad&state=wrong')
+    expect(input).toHaveValue('http://localhost:1455/auth/callback?code=bad&state=wrong')
   })
 
-  it('shows provider_error inline and keeps the textarea editable on oauth_upstream_error', async () => {
+  it('shows provider_error inline and keeps the callback URL editable on oauth_upstream_error', async () => {
     setFlowResult({
       status: 'pending',
       flow: pendingBrowserSnapshot,
@@ -279,14 +280,45 @@ describe('AdminAccountsNewOAuth', () => {
     await renderWithRouter()
     const user = userEvent.setup()
 
-    const textarea = await screen.findByLabelText('Paste callback URL')
-    await user.type(textarea, 'http://localhost:1455/auth/callback?error=server_error&state=ok')
-    await user.click(screen.getByRole('button', { name: 'Submit pasted URL' }))
+    const input = await screen.findByLabelText('Paste callback URL')
+    await user.type(input, 'http://localhost:1455/auth/callback?error=server_error&state=ok')
+    await user.click(screen.getByRole('button', { name: 'Submit callback URL' }))
 
     const inline = await screen.findByTestId('oauth-inline-error')
     expect(inline).toHaveTextContent('OpenAI rejected the callback')
     expect(inline).toHaveTextContent('server_error')
-    expect(textarea).toHaveValue('http://localhost:1455/auth/callback?error=server_error&state=ok')
+    expect(input).toHaveValue('http://localhost:1455/auth/callback?error=server_error&state=ok')
+  })
+
+  it('conceals the pasted callback URL by default and shows only a safe summary', async () => {
+    setFlowResult({
+      status: 'pending',
+      flow: pendingBrowserSnapshot,
+      isPolling: true,
+    })
+
+    await renderWithRouter()
+    const user = userEvent.setup()
+
+    const input = await screen.findByLabelText('Paste callback URL')
+    expect(input).toHaveAttribute('type', 'password')
+
+    await user.type(
+      input,
+      'http://localhost:1455/auth/callback?code=sensitive-code&state=sensitive-state',
+    )
+
+    const summary = screen.getByTestId('oauth-callback-summary')
+    expect(summary).toHaveTextContent('localhost:1455/auth/callback')
+    expect(summary).toHaveTextContent('code present')
+    expect(summary).toHaveTextContent('state present')
+    expect(summary).not.toHaveTextContent('sensitive-code')
+    expect(summary).not.toHaveTextContent('sensitive-state')
+
+    await user.click(screen.getByRole('button', { name: 'Show raw URL' }))
+    expect(input).toHaveAttribute('type', 'text')
+    await user.click(screen.getByRole('button', { name: 'Hide raw URL' }))
+    expect(input).toHaveAttribute('type', 'password')
   })
 
   it('renders the paste-only badge when the loopback listener is unavailable', async () => {
@@ -333,7 +365,7 @@ describe('AdminAccountsNewOAuth', () => {
       await screen.findByLabelText('Paste callback URL'),
       'http://localhost:1455/auth/callback?code=winner&state=s_ok',
     )
-    await user.click(screen.getByRole('button', { name: 'Submit pasted URL' }))
+    await user.click(screen.getByRole('button', { name: 'Submit callback URL' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('detail-route')).toHaveTextContent('77')
@@ -358,7 +390,7 @@ describe('AdminAccountsNewOAuth', () => {
       await screen.findByLabelText('Paste callback URL'),
       'http://localhost:1455/auth/callback?error=access_denied&state=s_ok',
     )
-    await user.click(screen.getByRole('button', { name: 'Submit pasted URL' }))
+    await user.click(screen.getByRole('button', { name: 'Submit callback URL' }))
 
     setFlowResult({})
     await view.rerenderRoute()

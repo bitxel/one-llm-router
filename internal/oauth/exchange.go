@@ -66,29 +66,59 @@ type tokenExchangeResponse struct {
 	IDToken          string `json:"id_token"`
 	ExpiresInSeconds int64  `json:"expires_in"`
 
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description"`
+	Error            oauthErrorValue `json:"error"`
+	ErrorDescription string          `json:"error_description"`
 }
 
 type deviceCodeResponse struct {
-	DeviceAuthID     string          `json:"device_auth_id"`
-	UserCode         string          `json:"user_code"`
-	VerificationURI  string          `json:"verification_uri"`
-	Interval         json.RawMessage `json:"interval"`
-	ExpiresInSeconds json.RawMessage `json:"expires_in"`
+	DeviceAuthID    string          `json:"device_auth_id"`
+	UserCode        string          `json:"user_code"`
+	VerificationURI string          `json:"verification_uri"`
+	Interval        json.RawMessage `json:"interval"`
+	ExpiresAt       string          `json:"expires_at"`
 
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description"`
-	Status           string `json:"status"`
+	Error            oauthErrorValue `json:"error"`
+	ErrorDescription string          `json:"error_description"`
+	Status           string          `json:"status"`
 }
 
 type devicePollResponse struct {
 	AuthorizationCode string `json:"authorization_code"`
 	CodeVerifier      string `json:"code_verifier"`
 
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description"`
-	Status           string `json:"status"`
+	Error            oauthErrorValue `json:"error"`
+	ErrorDescription string          `json:"error_description"`
+	Status           string          `json:"status"`
+}
+
+type oauthErrorValue struct {
+	Code    string
+	Message string
+}
+
+func (e *oauthErrorValue) UnmarshalJSON(raw []byte) error {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return nil
+	}
+
+	var code string
+	if err := json.Unmarshal(raw, &code); err == nil {
+		e.Code = code
+		return nil
+	}
+
+	var payload struct {
+		Code             string `json:"code"`
+		Message          string `json:"message"`
+		ErrorDescription string `json:"error_description"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return err
+	}
+	e.Code = payload.Code
+	e.Message = firstNonEmpty(payload.Message, payload.ErrorDescription)
+	return nil
 }
 
 func (p *openAIProvider) ExchangeCode(ctx context.Context, code, verifier string) (Tokens, error) {
@@ -233,7 +263,7 @@ func (p *openAIProvider) PollDeviceCode(ctx context.Context, deviceAuthID, userC
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", payload.AuthorizationCode)
-	form.Set("redirect_uri", openAIRedirectURI)
+	form.Set("redirect_uri", p.deviceRedirectURI())
 	form.Set("client_id", openAIClientID)
 	form.Set("code_verifier", payload.CodeVerifier)
 	return p.exchangeTokens(ctx, "authorization_code", form, "")
@@ -355,15 +385,9 @@ func (p *openAIProvider) deviceCodeFromResponse(payload deviceCodeResponse) (Dev
 		return DeviceCode{}, errors.New("interval must be non-negative")
 	}
 
-	expiresIn, present, err := parseFlexibleSeconds(payload.ExpiresInSeconds)
+	expiresIn, err := p.deviceCodeTTL(payload.ExpiresAt)
 	if err != nil {
-		return DeviceCode{}, fmt.Errorf("invalid expires_in: %w", err)
-	}
-	if !present {
-		return DeviceCode{}, errors.New("missing expires_in")
-	}
-	if expiresIn <= 0 {
-		return DeviceCode{}, errors.New("expires_in must be positive")
+		return DeviceCode{}, err
 	}
 	verificationURL := payload.VerificationURI
 	if verificationURL == "" {
@@ -382,6 +406,22 @@ func (p *openAIProvider) deviceCodeFromResponse(payload deviceCodeResponse) (Dev
 	}, nil
 }
 
+func (p *openAIProvider) deviceCodeTTL(rawExpiresAt string) (time.Duration, error) {
+	rawExpiresAt = strings.TrimSpace(rawExpiresAt)
+	if rawExpiresAt == "" {
+		return 0, errors.New("missing expires_at")
+	}
+	expiresAt, err := time.Parse(time.RFC3339Nano, rawExpiresAt)
+	if err != nil {
+		return 0, fmt.Errorf("invalid expires_at: %w", err)
+	}
+	expiresIn := expiresAt.Sub(p.nowOrDefault().UTC())
+	if expiresIn <= 0 {
+		return 0, errors.New("expires_at must be in the future")
+	}
+	return expiresIn, nil
+}
+
 func classifyDeviceCodeError(httpStatus int, payload deviceCodeResponse) *TokenExchangeError {
 	if httpStatus == http.StatusNotFound {
 		message := payload.ErrorDescription
@@ -394,10 +434,12 @@ func classifyDeviceCodeError(httpStatus int, payload deviceCodeResponse) *TokenE
 			httpStatus: httpStatus,
 		}
 	}
-	if payload.Error != "" || payload.ErrorDescription != "" {
+	if payload.Error.Code != "" || payload.Error.Message != "" || payload.ErrorDescription != "" {
+		code := payload.Error.Code
+		message := firstNonEmpty(payload.ErrorDescription, payload.Error.Message)
 		return &TokenExchangeError{
-			code:       defaultOAuthErrorCode(payload.Error, httpStatus),
-			message:    defaultOAuthErrorMessage(payload.ErrorDescription, payload.Error, httpStatus),
+			code:       defaultOAuthErrorCode(code, httpStatus),
+			message:    defaultOAuthErrorMessage(message, code, httpStatus),
 			httpStatus: httpStatus,
 		}
 	}
@@ -410,7 +452,7 @@ func classifyDeviceCodeError(httpStatus int, payload deviceCodeResponse) *TokenE
 
 func classifyDevicePollError(httpStatus int, payload devicePollResponse) *TokenExchangeError {
 	code := semanticDevicePollCode(payload)
-	message := payload.ErrorDescription
+	message := firstNonEmpty(payload.ErrorDescription, payload.Error.Message)
 	if message == "" {
 		message = strings.TrimSpace(payload.Status)
 	}
@@ -422,16 +464,18 @@ func classifyDevicePollError(httpStatus int, payload devicePollResponse) *TokenE
 }
 
 func classifyPendingDevicePoll(payload devicePollResponse) *TokenExchangeError {
+	errorCode := payload.Error.Code
+	errorMessage := firstNonEmpty(payload.ErrorDescription, payload.Error.Message)
 	switch {
-	case isPendingDeviceStatus(payload.Error), isPendingDeviceStatus(payload.Status):
+	case isPendingDeviceStatus(errorCode), isPendingDeviceStatus(payload.Status):
 		return &TokenExchangeError{
 			code:    "authorization_pending",
-			message: defaultDevicePollMessage(payload.ErrorDescription, payload.Error, payload.Status),
+			message: defaultDevicePollMessage(errorMessage, errorCode, payload.Status),
 		}
-	case strings.EqualFold(strings.TrimSpace(payload.Error), "slow_down"), strings.EqualFold(strings.TrimSpace(payload.Status), "slow_down"):
+	case strings.EqualFold(strings.TrimSpace(errorCode), "slow_down"), strings.EqualFold(strings.TrimSpace(payload.Status), "slow_down"):
 		return &TokenExchangeError{
 			code:    "slow_down",
-			message: defaultDevicePollMessage(payload.ErrorDescription, payload.Error, payload.Status),
+			message: defaultDevicePollMessage(errorMessage, errorCode, payload.Status),
 		}
 	}
 	return nil
@@ -439,7 +483,7 @@ func classifyPendingDevicePoll(payload devicePollResponse) *TokenExchangeError {
 
 func isPendingDeviceStatus(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "pending", "authorization_pending":
+	case "pending", "authorization_pending", "deviceauth_authorization_unknown":
 		return true
 	default:
 		return false
@@ -447,7 +491,7 @@ func isPendingDeviceStatus(value string) bool {
 }
 
 func semanticDevicePollCode(payload devicePollResponse) string {
-	if code := strings.TrimSpace(payload.Error); code != "" {
+	if code := strings.TrimSpace(payload.Error.Code); code != "" {
 		return code
 	}
 	switch status := strings.TrimSpace(payload.Status); strings.ToLower(status) {
@@ -541,8 +585,8 @@ func (p *openAIProvider) tokensFromResponse(payload tokenExchangeResponse) (Toke
 }
 
 func classifyTokenExchangeError(httpStatus int, payload tokenExchangeResponse) *TokenExchangeError {
-	code := payload.Error
-	message := payload.ErrorDescription
+	code := payload.Error.Code
+	message := firstNonEmpty(payload.ErrorDescription, payload.Error.Message)
 	if code == "" {
 		code = "invalid_response"
 	}

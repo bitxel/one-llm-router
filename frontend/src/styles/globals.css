@@ -53,6 +53,7 @@
   --ok-soft:     rgba(108, 195, 93, 0.10);
   --ok-line:     #264B26;
   --warn:        #F2CC0C;
+  --warn-soft:   rgba(242, 204, 12, 0.10);
   --err:         #E02F44;
   --err-soft:    rgba(224, 47, 68, 0.10);
   --err-line:    rgba(224, 47, 68, 0.35);
@@ -92,6 +93,7 @@
   --ok-soft:     rgba(26, 127, 55, 0.08);
   --ok-line:     #B7E0C4;
   --warn:        #B88400;
+  --warn-soft:   rgba(184, 132, 0, 0.08);
   --err:         #B3261E;
   --err-soft:    rgba(179, 38, 30, 0.08);
   --err-line:    rgba(179, 38, 30, 0.35);
@@ -130,6 +132,7 @@
     --ok-soft:     rgba(26, 127, 55, 0.08);
     --ok-line:     #B7E0C4;
     --warn:        #B88400;
+    --warn-soft:   rgba(184, 132, 0, 0.08);
     --err:         #B3261E;
     --err-soft:    rgba(179, 38, 30, 0.08);
     --err-line:    rgba(179, 38, 30, 0.35);

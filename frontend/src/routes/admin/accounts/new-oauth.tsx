@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { ExternalLink, RotateCcw } from 'lucide-react'
+import { ExternalLink, Eye, EyeOff, RotateCcw, X } from 'lucide-react'
 import {
   type Dispatch,
   type MutableRefObject,
@@ -18,7 +18,6 @@ import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import {
   type BrowserStartEnvelope,
   type ManualCallbackCancelEnvelope,
@@ -85,6 +84,13 @@ interface InlineFeedback {
   detail?: string
 }
 
+interface CallbackSummary {
+  target: string
+  codeLabel: string
+  stateLabel: string
+  variant: 'neutral' | 'warning'
+}
+
 export function AdminAccountsNewOAuth() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -99,11 +105,13 @@ export function AdminAccountsNewOAuth() {
   const [isStarting, setIsStarting] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [showRawCallbackURL, setShowRawCallbackURL] = useState(false)
 
   const callbackForm = useForm<CallbackForm>({
     resolver: zodResolver(CallbackFormSchema),
     defaultValues: { callback_url: '' },
   })
+  const pastedCallbackURL = callbackForm.watch('callback_url')
 
   const browserPendingFlow = isPendingBrowserFlow(oauthFlow.flow) ? oauthFlow.flow : null
   const foreignPendingFlow =
@@ -175,7 +183,15 @@ export function AdminAccountsNewOAuth() {
 
   const currentError = oauthFlow.isError ? oauthFlow.error : screenError
   const isBusy = isStarting || isSubmitting || isCancelling
+  const hasCallbackURL = pastedCallbackURL.trim() !== ''
+  const callbackSummary = summarizeCallbackURL(pastedCallbackURL)
   const panelMeta = renderPanelMeta(activeBrowserFlow, pendingConflict, terminalError)
+
+  useEffect(() => {
+    if (!hasCallbackURL && showRawCallbackURL) {
+      setShowRawCallbackURL(false)
+    }
+  }, [hasCallbackURL, showRawCallbackURL])
 
   const handleStartBrowser = useEffectEvent(async () => {
     setIsStarting(true)
@@ -194,6 +210,7 @@ export function AdminAccountsNewOAuth() {
         listener_bound: started.listener_bound,
         expires_at: started.expires_at,
       })
+      setShowRawCallbackURL(false)
       callbackForm.reset()
       openAuthorizeTab(started.authorize_url)
       await oauthFlow.refetch()
@@ -267,6 +284,7 @@ export function AdminAccountsNewOAuth() {
           body: { callback_url: values.callback_url },
         }),
       )) as unknown as ManualCallbackResult
+      setShowRawCallbackURL(false)
       callbackForm.reset()
       if (result.status === 'success') {
         await navigateToAccount(result.account.id, navigate, queryClient, navigatedRef)
@@ -335,10 +353,10 @@ export function AdminAccountsNewOAuth() {
   return (
     <Canvas variant="narrow">
       <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
-      <h1 className="mb-3 max-w-[22ch]">
+      <h1 className="mb-2 max-w-[22ch]">
         {strings.titleLead} <strong>{strings.titleStrong}</strong>
       </h1>
-      <p className="mb-7 max-w-[64ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
+      <p className="mb-5 max-w-[58ch] text-[14px] leading-[1.6] text-[var(--text-dim)]">
         {strings.intro}
       </p>
 
@@ -358,22 +376,19 @@ export function AdminAccountsNewOAuth() {
         }
         meta={panelMeta}
       >
-        <Field label={strings.status.browserMethod} hint={strings.status.browserMethodDetail}>
-          <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-[var(--text-dim)]">
-            <Badge variant="outline">{strings.status.browserMethod}</Badge>
-            {activeBrowserFlow ? (
-              <Badge
-                data-testid={
-                  activeBrowserFlow.listener_bound ? undefined : 'oauth-paste-only-badge'
-                }
-                variant={activeBrowserFlow.listener_bound ? 'success' : 'warning'}
-              >
-                {activeBrowserFlow.listener_bound
-                  ? strings.badges.loopbackReady
-                  : strings.badges.pasteOnly}
-              </Badge>
-            ) : null}
-          </div>
+        <Field
+          label={activeBrowserFlow ? strings.fields.flowStatus.label : strings.status.browserMethod}
+          hint={
+            activeBrowserFlow ? strings.fields.flowStatus.hint : strings.status.browserMethodDetail
+          }
+        >
+          {activeBrowserFlow ? (
+            <FlowStatusStrip flow={activeBrowserFlow} />
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-[var(--text-dim)]">
+              <Badge variant="outline">{strings.status.browserMethod}</Badge>
+            </div>
+          )}
         </Field>
 
         {pendingConflict && !activeBrowserFlow ? (
@@ -429,7 +444,9 @@ export function AdminAccountsNewOAuth() {
             <Field label={strings.fields.flow.label} hint={strings.fields.flow.hint}>
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px] text-[var(--text-dim)]">
-                  <code>{activeBrowserFlow.flow_id}</code>
+                  <code title={activeBrowserFlow.flow_id}>
+                    {formatFlowID(activeBrowserFlow.flow_id)}
+                  </code>
                   <Badge variant="outline">{strings.badges.pending}</Badge>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -461,20 +478,25 @@ export function AdminAccountsNewOAuth() {
             </Field>
 
             <form onSubmit={callbackForm.handleSubmit(handleManualCallbackSubmit)}>
-              <Field label={strings.fields.callback.label} hint={strings.fields.callback.hint}>
+              <Field
+                htmlFor={callbackFieldId}
+                label={strings.fields.callback.label}
+                hint={strings.fields.callback.hint}
+              >
                 <div className="space-y-3">
-                  <Label htmlFor={callbackFieldId} className="sr-only">
-                    {strings.fields.callback.label}
-                  </Label>
-                  <textarea
+                  <input
                     id={callbackFieldId}
                     data-testid="oauth-callback-input"
                     aria-label={strings.fields.callback.label}
-                    className="min-h-28 w-full border border-[var(--line-3)] bg-[var(--panel-2)] px-3 py-2 text-[12.5px] leading-[1.6] text-[var(--text)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--accent)] focus-visible:[box-shadow:var(--focus)]"
+                    type={showRawCallbackURL ? 'text' : 'password'}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="h-11 w-full border border-[var(--line-3)] bg-[var(--panel-2)] px-3 py-2 font-mono text-[12.5px] leading-[1.6] text-[var(--text)] outline-none transition-colors placeholder:font-sans placeholder:text-[var(--text-faint)] focus:border-[var(--accent)] focus-visible:[box-shadow:var(--focus)]"
                     style={{ borderRadius: 2 }}
                     placeholder={strings.fields.callback.placeholder}
                     {...callbackForm.register('callback_url')}
                   />
+                  <CallbackURLSummary summary={callbackSummary} />
                   {callbackForm.formState.errors.callback_url ? (
                     <p className="text-[11.5px] text-[var(--err)]">
                       {callbackForm.formState.errors.callback_url.message}
@@ -492,9 +514,32 @@ export function AdminAccountsNewOAuth() {
                       ) : null}
                     </div>
                   ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="submit" disabled={isBusy}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="submit" disabled={isBusy || !hasCallbackURL}>
                       {strings.actions.submitCallback}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!hasCallbackURL}
+                      onClick={() => setShowRawCallbackURL((current) => !current)}
+                    >
+                      {showRawCallbackURL ? <EyeOff /> : <Eye />}
+                      {showRawCallbackURL
+                        ? strings.actions.hideRawCallback
+                        : strings.actions.showRawCallback}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={isBusy || !hasCallbackURL}
+                      onClick={() => {
+                        callbackForm.reset()
+                        setInlineFeedback(null)
+                      }}
+                    >
+                      <X />
+                      {strings.actions.clearCallback}
                     </Button>
                   </div>
                 </div>
@@ -549,6 +594,78 @@ function isPendingBrowserFlow(flow: OAuthFlowActive | null): flow is BrowserPend
   return !!flow && flow.status === 'pending' && flow.method === 'browser'
 }
 
+function FlowStatusStrip({ flow }: { flow: StartedBrowserFlow }) {
+  return (
+    <div
+      data-testid="oauth-flow-status"
+      className="grid gap-px overflow-hidden border border-[var(--line)] bg-[var(--line)] sm:grid-cols-3"
+      style={{ borderRadius: 2 }}
+    >
+      <FlowStatusCell label={strings.status.pending} value={strings.badges.pending} />
+      <FlowStatusCell
+        label={strings.status.listener}
+        value={flow.listener_bound ? strings.badges.loopbackReady : strings.badges.pasteOnly}
+        valueTestId={flow.listener_bound ? undefined : 'oauth-paste-only-badge'}
+        valueVariant={flow.listener_bound ? 'success' : 'warning'}
+      />
+      <FlowStatusCell label={strings.status.expires} value={formatFlowExpiry(flow.expires_at)} />
+    </div>
+  )
+}
+
+function FlowStatusCell({
+  label,
+  value,
+  valueTestId,
+  valueVariant = 'outline',
+}: {
+  label: string
+  value: string
+  valueTestId?: string
+  valueVariant?: 'outline' | 'success' | 'warning'
+}) {
+  return (
+    <div className="min-w-0 bg-[var(--panel-hi)] px-3 py-2">
+      <div className="mb-1 text-[10.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        {label}
+      </div>
+      <Badge data-testid={valueTestId} variant={valueVariant}>
+        {value}
+      </Badge>
+    </div>
+  )
+}
+
+function CallbackURLSummary({ summary }: { summary: CallbackSummary | null }) {
+  if (!summary) {
+    return (
+      <div
+        data-testid="oauth-callback-summary"
+        className="border border-[var(--line)] bg-[var(--panel-hi)] px-3 py-2 text-[11.5px] text-[var(--text-muted)]"
+        style={{ borderRadius: 2 }}
+      >
+        {strings.callbackSummary.empty}
+      </div>
+    )
+  }
+
+  const codeBadgeVariant = summary.variant === 'warning' ? 'warning' : 'outline'
+  const stateBadgeVariant =
+    summary.stateLabel === strings.callbackSummary.statePresent ? 'outline' : 'warning'
+  return (
+    <div
+      data-testid="oauth-callback-summary"
+      className="flex min-w-0 flex-wrap items-center gap-2 border border-[var(--line)] bg-[var(--panel-hi)] px-3 py-2 text-[11.5px]"
+      style={{ borderRadius: 2 }}
+    >
+      <span className="font-medium text-[var(--text-dim)]">{strings.callbackSummary.title}</span>
+      <code className="min-w-0 max-w-full truncate text-[var(--text)]">{summary.target}</code>
+      <Badge variant={codeBadgeVariant}>{summary.codeLabel}</Badge>
+      <Badge variant={stateBadgeVariant}>{summary.stateLabel}</Badge>
+    </div>
+  )
+}
+
 function renderPanelMeta(
   activeBrowserFlow: StartedBrowserFlow | null,
   pendingConflict: PendingConflict | null,
@@ -561,11 +678,7 @@ function renderPanelMeta(
     return <Badge variant="danger">{strings.badges.failed}</Badge>
   }
   if (activeBrowserFlow) {
-    return (
-      <Badge variant={activeBrowserFlow.listener_bound ? 'success' : 'warning'}>
-        {activeBrowserFlow.listener_bound ? strings.badges.loopbackReady : strings.badges.pasteOnly}
-      </Badge>
-    )
+    return <Badge variant="outline">{strings.badges.pending}</Badge>
   }
   return strings.panel.ready
 }
@@ -686,4 +799,56 @@ function joinParts(...parts: Array<string | undefined>) {
     (part): part is string => typeof part === 'string' && part.length > 0,
   )
   return nonEmpty.length > 0 ? nonEmpty.join(' — ') : undefined
+}
+
+function summarizeCallbackURL(raw: string): CallbackSummary | null {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return null
+  }
+  try {
+    const parsed = new URL(trimmed)
+    const hasCode = parsed.searchParams.has('code')
+    const hasError = parsed.searchParams.has('error')
+    const hasState = parsed.searchParams.has('state')
+    return {
+      target: `${parsed.host}${parsed.pathname}`,
+      codeLabel: hasCode
+        ? strings.callbackSummary.codePresent
+        : hasError
+          ? strings.callbackSummary.errorPresent
+          : strings.callbackSummary.codeMissing,
+      stateLabel: hasState
+        ? strings.callbackSummary.statePresent
+        : strings.callbackSummary.stateMissing,
+      variant: hasCode || hasError ? 'neutral' : 'warning',
+    }
+  } catch {
+    return {
+      target: strings.callbackSummary.invalid,
+      codeLabel: strings.callbackSummary.codeMissing,
+      stateLabel: strings.callbackSummary.stateMissing,
+      variant: 'warning',
+    }
+  }
+}
+
+function formatFlowExpiry(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  const hour = String(date.getUTCHours()).padStart(2, '0')
+  const minute = String(date.getUTCMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hour}:${minute} UTC`
+}
+
+function formatFlowID(flowID: string): string {
+  if (flowID.length <= 18) {
+    return flowID
+  }
+  return `${flowID.slice(0, 9)}...${flowID.slice(-6)}`
 }
