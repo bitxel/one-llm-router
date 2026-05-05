@@ -13,9 +13,7 @@ export const strings = {
     ready: 'ready',
   },
   badges: {
-    loopbackReady: 'Loopback listener active',
-    pasteOnly: 'Paste-only mode — loopback unavailable',
-    pending: 'pending',
+    pasteOnly: 'Paste-only mode — listener unavailable',
     failed: 'error',
   },
   fields: {
@@ -34,30 +32,25 @@ export const strings = {
     },
     flowStatus: {
       label: 'Flow status',
-      hint: 'Loopback and manual paste are both accepted for this browser flow.',
+      hint: 'Automatic callback and manual paste are both accepted for this browser flow.',
     },
   },
   actions: {
     start: 'Start browser sign-in',
-    openAgain: 'Open sign-in tab again',
+    openAgain: 'Open sign-in tab',
+    openPending: 'Open in browser',
     submitCallback: 'Submit callback URL',
     cancelPending: 'Cancel flow',
     startAgain: 'Start again',
-    showRawCallback: 'Show raw URL',
-    hideRawCallback: 'Hide raw URL',
-    clearCallback: 'Clear pasted URL',
   },
   status: {
     browserMethod: 'Browser OAuth',
     browserMethodDetail:
       'The router opens one sign-in flow and accepts whichever callback rail finishes first.',
-    pending: 'Pending',
-    listener: 'Listener',
-    expires: 'Expires',
+    expiresAt: 'Expires at',
   },
   callbackSummary: {
     title: 'Callback summary',
-    empty: 'No callback URL pasted.',
     invalid: 'Unparseable URL',
     codePresent: 'code present',
     errorPresent: 'error present',

@@ -93,6 +93,11 @@ const successSnapshot: OAuthFlowSnapshot = {
 
 let currentFlowResult: UseOAuthFlowResult
 let refetchMock: ReturnType<typeof vi.fn>
+let openedTabs: Array<{
+  location: { href: string }
+  opener: unknown
+  close: ReturnType<typeof vi.fn>
+}>
 
 function setFlowResult(next: Partial<UseOAuthFlowResult>) {
   currentFlowResult = {
@@ -170,6 +175,7 @@ async function renderWithRouter() {
 }
 
 beforeEach(() => {
+  openedTabs = []
   refetchMock = vi.fn().mockResolvedValue({ data: idleSnapshot } as never)
   setFlowResult({})
   useOAuthFlowMock.mockImplementation(() => currentFlowResult)
@@ -177,10 +183,47 @@ beforeEach(() => {
   oauthBrowserManualCallbackMock.mockResolvedValue({} as never)
   oauthCancelMock.mockResolvedValue({} as never)
   callAdminMock.mockReset()
-  vi.spyOn(window, 'open').mockReturnValue({} as Window)
+  vi.spyOn(window, 'open').mockImplementation((url) => {
+    const tab = {
+      location: { href: typeof url === 'string' ? url : '' },
+      opener: window,
+      close: vi.fn(),
+    }
+    openedTabs.push(tab)
+    return tab as unknown as Window
+  })
 })
 
 describe('AdminAccountsNewOAuth', () => {
+  it('renders the large-title start screen with one intro and one action', async () => {
+    await renderWithRouter()
+
+    const intro =
+      'Open a ChatGPT sign-in tab. If the browser cannot return to this router, paste the localhost callback URL below.'
+    expect(screen.getByRole('heading', { name: /add chatgpt oauth account/i })).toBeInTheDocument()
+    expect(screen.getByText('Browser OAuth')).toBeInTheDocument()
+    expect(screen.getAllByText(intro)).toHaveLength(1)
+    expect(screen.getByText(intro)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', {
+        name: /browser oauth/i,
+        level: 3,
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', {
+        name: /flow status/i,
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', {
+        name: /pending flow/i,
+      }),
+    ).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.getByTestId('oauth-start-button')).toHaveTextContent('Start browser sign-in')
+  })
+
   it('starts the browser flow, keeps the paste callback input mounted, and navigates on poll success', async () => {
     callAdminMock.mockResolvedValueOnce({
       flow_id: browserStartFlowID,
@@ -197,14 +240,16 @@ describe('AdminAccountsNewOAuth', () => {
 
     await user.click(screen.getByTestId('oauth-start-button'))
 
-    expect(window.open).toHaveBeenCalledWith(
-      'https://auth.openai.com/oauth/authorize?state=s_abc',
-      '_blank',
-      'noopener,noreferrer',
-    )
+    expect(window.open).toHaveBeenCalledWith('about:blank', '_blank')
+    expect(openedTabs[0]?.opener).toBeNull()
+    expect(openedTabs[0]?.location.href).toBe('https://auth.openai.com/oauth/authorize?state=s_abc')
     expect(refetchMock).toHaveBeenCalledTimes(1)
     expect(await screen.findByLabelText('Paste callback URL')).toBeInTheDocument()
-    expect(screen.getByTestId('oauth-flow-status')).toHaveTextContent('2026-04-21 12:05 UTC')
+    expect(screen.getByTestId('oauth-flow-status')).toHaveTextContent(
+      'Expires at Apr 21, 2026, 12:05 UTC',
+    )
+    expect(screen.getByTestId('oauth-flow-status')).not.toHaveTextContent('pending')
+    expect(screen.getByTestId('oauth-flow-status')).not.toHaveTextContent('Listener active')
 
     setFlowResult({
       status: 'success',
@@ -290,7 +335,7 @@ describe('AdminAccountsNewOAuth', () => {
     expect(input).toHaveValue('http://localhost:1455/auth/callback?error=server_error&state=ok')
   })
 
-  it('conceals the pasted callback URL by default and shows only a safe summary', async () => {
+  it('conceals the pasted callback URL and shows only a safe summary', async () => {
     setFlowResult({
       status: 'pending',
       flow: pendingBrowserSnapshot,
@@ -314,11 +359,8 @@ describe('AdminAccountsNewOAuth', () => {
     expect(summary).toHaveTextContent('state present')
     expect(summary).not.toHaveTextContent('sensitive-code')
     expect(summary).not.toHaveTextContent('sensitive-state')
-
-    await user.click(screen.getByRole('button', { name: 'Show raw URL' }))
-    expect(input).toHaveAttribute('type', 'text')
-    await user.click(screen.getByRole('button', { name: 'Hide raw URL' }))
     expect(input).toHaveAttribute('type', 'password')
+    expect(screen.queryByRole('button', { name: 'Show raw URL' })).not.toBeInTheDocument()
   })
 
   it('renders the paste-only badge when the loopback listener is unavailable', async () => {
@@ -330,7 +372,17 @@ describe('AdminAccountsNewOAuth', () => {
       expires_at: '2026-04-21T12:05:00Z',
       method: 'browser',
     } as never)
-    refetchMock.mockResolvedValue({ data: idleSnapshot } as never)
+    refetchMock.mockResolvedValue({
+      data: {
+        status: 'pending',
+        method: 'device',
+        flow_id: 'fl_conflict_1234567890',
+        user_code: 'ABCD-1234',
+        verification_url: 'https://auth.openai.com/codex/device',
+        expires_at: '2026-04-21T12:05:00Z',
+        created_at: '2026-04-21T12:00:00Z',
+      },
+    } as never)
 
     await renderWithRouter()
     const user = userEvent.setup()
@@ -409,6 +461,7 @@ describe('AdminAccountsNewOAuth', () => {
           data: {
             method: 'device',
             flow_id: 'fl_conflict_1234567890',
+            verification_url: 'https://auth.openai.com/codex/device',
             expires_at: '2026-04-21T12:05:00Z',
             created_at: '2026-04-21T12:00:00Z',
           },
@@ -435,6 +488,15 @@ describe('AdminAccountsNewOAuth', () => {
     expect(await screen.findByTestId('oauth-conflict-banner')).toHaveTextContent(
       'A flow is already pending',
     )
+
+    await user.click(screen.getByTestId('oauth-open-pending'))
+    await waitFor(() => {
+      expect(window.open).toHaveBeenCalledWith(
+        'https://auth.openai.com/codex/device',
+        '_blank',
+        'noopener,noreferrer',
+      )
+    })
 
     await user.click(screen.getByTestId('oauth-cancel-pending'))
 

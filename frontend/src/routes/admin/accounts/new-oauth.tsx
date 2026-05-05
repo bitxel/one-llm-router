@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { ExternalLink, Eye, EyeOff, RotateCcw, X } from 'lucide-react'
+import { ExternalLink, RotateCcw } from 'lucide-react'
 import {
   type Dispatch,
   type MutableRefObject,
@@ -14,9 +14,8 @@ import {
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
+import { Canvas, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   type BrowserStartEnvelope,
@@ -77,11 +76,17 @@ interface PendingConflict {
   method: 'browser' | 'device'
   expires_at: string
   created_at: string
+  open_url?: string
 }
 
 interface InlineFeedback {
   title: string
   detail?: string
+}
+
+interface ReservedAuthorizeTab {
+  tab: Window
+  didNavigate: boolean
 }
 
 interface CallbackSummary {
@@ -105,7 +110,6 @@ export function AdminAccountsNewOAuth() {
   const [isStarting, setIsStarting] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
-  const [showRawCallbackURL, setShowRawCallbackURL] = useState(false)
 
   const callbackForm = useForm<CallbackForm>({
     resolver: zodResolver(CallbackFormSchema),
@@ -114,16 +118,8 @@ export function AdminAccountsNewOAuth() {
   const pastedCallbackURL = callbackForm.watch('callback_url')
 
   const browserPendingFlow = isPendingBrowserFlow(oauthFlow.flow) ? oauthFlow.flow : null
-  const foreignPendingFlow =
-    oauthFlow.flow && oauthFlow.flow.status === 'pending' && oauthFlow.flow.method !== 'browser'
-      ? {
-          flow_id: oauthFlow.flow.flow_id,
-          method: oauthFlow.flow.method,
-          expires_at: oauthFlow.flow.expires_at,
-          created_at: oauthFlow.flow.created_at,
-        }
-      : null
-  const pendingConflict = conflictFlow ?? foreignPendingFlow
+  const foreignPendingFlow = readForeignPendingFlow(oauthFlow.flow)
+  const pendingConflict = mergePendingConflict(conflictFlow, foreignPendingFlow)
   const activeBrowserFlow = browserPendingFlow ?? startedFlow
   const terminalError = oauthFlow.flow?.status === 'error' ? oauthFlow.flow.error : null
 
@@ -185,15 +181,9 @@ export function AdminAccountsNewOAuth() {
   const isBusy = isStarting || isSubmitting || isCancelling
   const hasCallbackURL = pastedCallbackURL.trim() !== ''
   const callbackSummary = summarizeCallbackURL(pastedCallbackURL)
-  const panelMeta = renderPanelMeta(activeBrowserFlow, pendingConflict, terminalError)
+  const isStartScreen = !currentError && !activeBrowserFlow && !pendingConflict && !terminalError
 
-  useEffect(() => {
-    if (!hasCallbackURL && showRawCallbackURL) {
-      setShowRawCallbackURL(false)
-    }
-  }, [hasCallbackURL, showRawCallbackURL])
-
-  const handleStartBrowser = useEffectEvent(async () => {
+  const handleStartBrowser = useEffectEvent(async (reservedTab?: ReservedAuthorizeTab | null) => {
     setIsStarting(true)
     setScreenError(null)
     setInlineFeedback(null)
@@ -210,11 +200,11 @@ export function AdminAccountsNewOAuth() {
         listener_bound: started.listener_bound,
         expires_at: started.expires_at,
       })
-      setShowRawCallbackURL(false)
       callbackForm.reset()
-      openAuthorizeTab(started.authorize_url)
+      openAuthorizeTab(started.authorize_url, reservedTab)
       await oauthFlow.refetch()
     } catch (err) {
+      closeUnusedAuthorizeTab(reservedTab)
       if (err instanceof RouterApiError && err.code === Err003OAuthFlowInProgress) {
         setStartedFlow(null)
         setConflictFlow(readPendingConflict(err))
@@ -252,7 +242,7 @@ export function AdminAccountsNewOAuth() {
         authorizeUrlRef,
       })
       if (retryStart) {
-        await handleStartBrowser()
+        await handleStartBrowser(null)
       }
     } catch (err) {
       if (err instanceof RouterApiError && err.code === Err003FlowIDMismatch) {
@@ -274,6 +264,25 @@ export function AdminAccountsNewOAuth() {
     }
   }
 
+  async function handleOpenPendingFlow() {
+    if (!pendingConflict) {
+      return
+    }
+    const knownURL = pendingConflict.open_url
+    if (knownURL) {
+      openAuthorizeTab(knownURL)
+      return
+    }
+    const reservedTab = reserveAuthorizeTab()
+    const result = await oauthFlow.refetch()
+    const openURL = pendingFlowOpenURL(result.data)
+    if (openURL) {
+      openAuthorizeTab(openURL, reservedTab)
+    } else {
+      closeUnusedAuthorizeTab(reservedTab)
+    }
+  }
+
   async function handleManualCallbackSubmit(values: CallbackForm) {
     setIsSubmitting(true)
     setScreenError(null)
@@ -284,7 +293,6 @@ export function AdminAccountsNewOAuth() {
           body: { callback_url: values.callback_url },
         }),
       )) as unknown as ManualCallbackResult
-      setShowRawCallbackURL(false)
       callbackForm.reset()
       if (result.status === 'success') {
         await navigateToAccount(result.account.id, navigate, queryClient, navigatedRef)
@@ -360,232 +368,171 @@ export function AdminAccountsNewOAuth() {
         {strings.intro}
       </p>
 
-      {currentError ? (
-        <div className="mb-4">
-          <ErrorBanner error={currentError} title={strings.err.default} />
-        </div>
-      ) : null}
-
-      <PanelCard
-        title={
-          pendingConflict
-            ? strings.panel.conflict
-            : terminalError
-              ? strings.panel.failed
-              : strings.panel.idle
-        }
-        meta={panelMeta}
-      >
-        <Field
-          label={activeBrowserFlow ? strings.fields.flowStatus.label : strings.status.browserMethod}
-          hint={
-            activeBrowserFlow ? strings.fields.flowStatus.hint : strings.status.browserMethodDetail
-          }
-        >
-          {activeBrowserFlow ? (
-            <FlowStatusStrip flow={activeBrowserFlow} />
-          ) : (
-            <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-[var(--text-dim)]">
-              <Badge variant="outline">{strings.status.browserMethod}</Badge>
-            </div>
-          )}
-        </Field>
+      <div className="space-y-4">
+        {currentError ? <ErrorBanner error={currentError} title={strings.err.default} /> : null}
 
         {pendingConflict && !activeBrowserFlow ? (
-          <Field label={strings.fields.flow.label} hint={strings.conflict.detail}>
-            <div
-              data-testid="oauth-conflict-banner"
-              className="space-y-3 border border-[var(--warn)] bg-[var(--warn-soft)] px-4 py-3 text-[12.5px] leading-[1.6] text-[var(--warn)]"
-              style={{ borderRadius: 2 }}
-            >
-              <div>{strings.err.oauth_flow_in_progress}</div>
-              <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px]">
-                <span>{strings.conflict.methodPrefix}</span>
-                <code>{pendingConflict.method}</code>
-                <span>{strings.conflict.flowPrefix}</span>
-                <code>{pendingConflict.flow_id}</code>
-              </div>
-              <div className="flex flex-wrap gap-2">
+          <div
+            data-testid="oauth-conflict-banner"
+            className="space-y-3 text-[12.5px] leading-[1.6] text-[var(--warn)]"
+          >
+            <div>{strings.err.oauth_flow_in_progress}</div>
+            <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px]">
+              <span>{strings.conflict.methodPrefix}</span>
+              <code>{pendingConflict.method}</code>
+              <span>{strings.conflict.flowPrefix}</span>
+              <code>{pendingConflict.flow_id}</code>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {pendingConflict.method === 'device' ? (
                 <Button
                   type="button"
                   variant="secondary"
-                  data-testid="oauth-cancel-pending"
-                  disabled={isBusy}
-                  onClick={() => void handleCancelPending(true)}
+                  data-testid="oauth-open-pending"
+                  onClick={() => void handleOpenPendingFlow()}
                 >
-                  {strings.actions.cancelPending}
+                  <ExternalLink />
+                  {strings.actions.openPending}
                 </Button>
-              </div>
-            </div>
-          </Field>
-        ) : null}
-
-        {!activeBrowserFlow && !pendingConflict && !terminalError ? (
-          <Field
-            label={strings.fields.browserActions.label}
-            hint={strings.fields.browserActions.hint}
-          >
-            <div className="flex flex-wrap gap-2">
+              ) : null}
               <Button
                 type="button"
-                data-testid="oauth-start-button"
+                variant="secondary"
+                data-testid="oauth-cancel-pending"
                 disabled={isBusy}
-                onClick={() => void handleStartBrowser()}
+                onClick={() => void handleCancelPending(true)}
               >
-                <ExternalLink />
-                {strings.actions.start}
+                {strings.actions.cancelPending}
               </Button>
             </div>
-          </Field>
+          </div>
+        ) : null}
+
+        {isStartScreen ? (
+          <Button
+            type="button"
+            data-testid="oauth-start-button"
+            disabled={isBusy}
+            onClick={() => void handleStartBrowser(reserveAuthorizeTab())}
+          >
+            <ExternalLink />
+            {strings.actions.start}
+          </Button>
         ) : null}
 
         {activeBrowserFlow ? (
           <>
-            <Field label={strings.fields.flow.label} hint={strings.fields.flow.hint}>
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px] text-[var(--text-dim)]">
-                  <code title={activeBrowserFlow.flow_id}>
-                    {formatFlowID(activeBrowserFlow.flow_id)}
-                  </code>
-                  <Badge variant="outline">{strings.badges.pending}</Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    data-testid="oauth-open-tab-again"
-                    disabled={isBusy || !authorizeUrlRef.current}
-                    onClick={() => {
-                      if (authorizeUrlRef.current) {
-                        openAuthorizeTab(authorizeUrlRef.current)
-                      }
-                    }}
-                  >
-                    <ExternalLink />
-                    {strings.actions.openAgain}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    data-testid="oauth-cancel-pending"
-                    disabled={isBusy}
-                    onClick={() => void handleCancelPending(false)}
-                  >
-                    {strings.actions.cancelPending}
-                  </Button>
-                </div>
-              </div>
-            </Field>
-
-            <form onSubmit={callbackForm.handleSubmit(handleManualCallbackSubmit)}>
-              <Field
-                htmlFor={callbackFieldId}
-                label={strings.fields.callback.label}
-                hint={strings.fields.callback.hint}
+            <FlowStatusStrip flow={activeBrowserFlow} />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                data-testid="oauth-open-tab-again"
+                disabled={isBusy || !authorizeUrlRef.current}
+                onClick={() => {
+                  if (authorizeUrlRef.current) {
+                    openAuthorizeTab(authorizeUrlRef.current)
+                  }
+                }}
               >
-                <div className="space-y-3">
-                  <input
-                    id={callbackFieldId}
-                    data-testid="oauth-callback-input"
-                    aria-label={strings.fields.callback.label}
-                    type={showRawCallbackURL ? 'text' : 'password'}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="h-11 w-full border border-[var(--line-3)] bg-[var(--panel-2)] px-3 py-2 font-mono text-[12.5px] leading-[1.6] text-[var(--text)] outline-none transition-colors placeholder:font-sans placeholder:text-[var(--text-faint)] focus:border-[var(--accent)] focus-visible:[box-shadow:var(--focus)]"
-                    style={{ borderRadius: 2 }}
-                    placeholder={strings.fields.callback.placeholder}
-                    {...callbackForm.register('callback_url')}
-                  />
-                  <CallbackURLSummary summary={callbackSummary} />
-                  {callbackForm.formState.errors.callback_url ? (
-                    <p className="text-[11.5px] text-[var(--err)]">
-                      {callbackForm.formState.errors.callback_url.message}
-                    </p>
+                <ExternalLink />
+                {strings.actions.openAgain}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="oauth-cancel-pending"
+                disabled={isBusy}
+                onClick={() => void handleCancelPending(false)}
+              >
+                {strings.actions.cancelPending}
+              </Button>
+            </div>
+
+            <form
+              className="space-y-3"
+              onSubmit={callbackForm.handleSubmit(handleManualCallbackSubmit)}
+            >
+              <label
+                htmlFor={callbackFieldId}
+                className="block text-[12.5px] font-medium text-[var(--text)]"
+              >
+                {strings.fields.callback.label}
+                <span className="mt-1 block text-[11.5px] font-normal leading-[1.5] text-[var(--text-muted)]">
+                  {strings.fields.callback.hint}
+                </span>
+              </label>
+              <input
+                id={callbackFieldId}
+                data-testid="oauth-callback-input"
+                aria-label={strings.fields.callback.label}
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                className="h-11 w-full border border-[var(--line-3)] bg-[var(--panel-2)] px-3 py-2 font-mono text-[12.5px] leading-[1.6] text-[var(--text)] outline-none transition-colors placeholder:font-sans placeholder:text-[var(--text-faint)] focus:border-[var(--accent)] focus-visible:[box-shadow:var(--focus)]"
+                style={{ borderRadius: 2 }}
+                placeholder={strings.fields.callback.placeholder}
+                {...callbackForm.register('callback_url')}
+              />
+              <CallbackURLSummary summary={callbackSummary} />
+              {callbackForm.formState.errors.callback_url ? (
+                <p className="text-[11.5px] text-[var(--err)]">
+                  {callbackForm.formState.errors.callback_url.message}
+                </p>
+              ) : null}
+              {inlineFeedback ? (
+                <div
+                  data-testid="oauth-inline-error"
+                  className="text-[12.5px] leading-[1.6] text-[var(--err)]"
+                >
+                  <div className="font-medium">{inlineFeedback.title}</div>
+                  {inlineFeedback.detail ? (
+                    <div className="mt-1 font-mono text-[11.5px]">{inlineFeedback.detail}</div>
                   ) : null}
-                  {inlineFeedback ? (
-                    <div
-                      data-testid="oauth-inline-error"
-                      className="border border-[var(--err)] bg-[var(--err-soft)] px-4 py-3 text-[12.5px] leading-[1.6] text-[var(--err)]"
-                      style={{ borderRadius: 2 }}
-                    >
-                      <div className="font-medium">{inlineFeedback.title}</div>
-                      {inlineFeedback.detail ? (
-                        <div className="mt-1 font-mono text-[11.5px]">{inlineFeedback.detail}</div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button type="submit" disabled={isBusy || !hasCallbackURL}>
-                      {strings.actions.submitCallback}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={!hasCallbackURL}
-                      onClick={() => setShowRawCallbackURL((current) => !current)}
-                    >
-                      {showRawCallbackURL ? <EyeOff /> : <Eye />}
-                      {showRawCallbackURL
-                        ? strings.actions.hideRawCallback
-                        : strings.actions.showRawCallback}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={isBusy || !hasCallbackURL}
-                      onClick={() => {
-                        callbackForm.reset()
-                        setInlineFeedback(null)
-                      }}
-                    >
-                      <X />
-                      {strings.actions.clearCallback}
-                    </Button>
-                  </div>
                 </div>
-              </Field>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="submit" disabled={isBusy || !hasCallbackURL}>
+                  {strings.actions.submitCallback}
+                </Button>
+              </div>
             </form>
           </>
         ) : null}
 
         {terminalError && !activeBrowserFlow ? (
-          <Field label={strings.panel.failed} hint={strings.terminal.restartHint}>
-            <div
-              data-testid="oauth-terminal-error"
-              className="space-y-3 border border-[var(--err)] bg-[var(--err-soft)] px-4 py-3 text-[12.5px] leading-[1.6] text-[var(--err)]"
-              style={{ borderRadius: 2 }}
-            >
-              <div className="font-medium">
-                {terminalError.message || strings.terminal.defaultTitle}
-              </div>
-              <div className="font-mono text-[11.5px]">
-                {terminalError.code || strings.terminal.defaultDetail}
-              </div>
-              <div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={isBusy}
-                  onClick={() => {
-                    resetToStart({
-                      callbackForm,
-                      queryClient,
-                      setConflictFlow,
-                      setInlineFeedback,
-                      setScreenError,
-                      setStartedFlow,
-                      authorizeUrlRef,
-                    })
-                  }}
-                >
-                  <RotateCcw />
-                  {strings.actions.startAgain}
-                </Button>
-              </div>
+          <div
+            data-testid="oauth-terminal-error"
+            className="space-y-3 text-[12.5px] leading-[1.6] text-[var(--err)]"
+          >
+            <div className="font-medium">
+              {terminalError.message || strings.terminal.defaultTitle}
             </div>
-          </Field>
+            <div className="font-mono text-[11.5px]">
+              {terminalError.code || strings.terminal.defaultDetail}
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isBusy}
+              onClick={() => {
+                resetToStart({
+                  callbackForm,
+                  queryClient,
+                  setConflictFlow,
+                  setInlineFeedback,
+                  setScreenError,
+                  setStartedFlow,
+                  authorizeUrlRef,
+                })
+              }}
+            >
+              <RotateCcw />
+              {strings.actions.startAgain}
+            </Button>
+          </div>
         ) : null}
-      </PanelCard>
+      </div>
     </Canvas>
   )
 }
@@ -594,93 +541,86 @@ function isPendingBrowserFlow(flow: OAuthFlowActive | null): flow is BrowserPend
   return !!flow && flow.status === 'pending' && flow.method === 'browser'
 }
 
+function readForeignPendingFlow(flow: OAuthFlowActive | null): PendingConflict | null {
+  if (!flow || flow.status !== 'pending' || flow.method === 'browser') {
+    return null
+  }
+  return {
+    flow_id: flow.flow_id,
+    method: flow.method,
+    expires_at: flow.expires_at,
+    created_at: flow.created_at,
+    open_url: pendingFlowOpenURL(flow),
+  }
+}
+
+function mergePendingConflict(
+  conflictFlow: PendingConflict | null,
+  foreignPendingFlow: PendingConflict | null,
+): PendingConflict | null {
+  if (!conflictFlow) {
+    return foreignPendingFlow
+  }
+  if (!foreignPendingFlow || foreignPendingFlow.flow_id !== conflictFlow.flow_id) {
+    return conflictFlow
+  }
+  return {
+    ...conflictFlow,
+    open_url: conflictFlow.open_url ?? foreignPendingFlow.open_url,
+  }
+}
+
+function pendingFlowOpenURL(flow: OAuthFlowSnapshot | OAuthFlowActive | null | undefined) {
+  if (!flow || flow.status !== 'pending' || flow.method !== 'device') {
+    return undefined
+  }
+  return flow.verification_url
+}
+
 function FlowStatusStrip({ flow }: { flow: StartedBrowserFlow }) {
   return (
     <div
       data-testid="oauth-flow-status"
-      className="grid gap-px overflow-hidden border border-[var(--line)] bg-[var(--line)] sm:grid-cols-3"
-      style={{ borderRadius: 2 }}
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11.5px] text-[var(--text-muted)]"
     >
-      <FlowStatusCell label={strings.status.pending} value={strings.badges.pending} />
-      <FlowStatusCell
-        label={strings.status.listener}
-        value={flow.listener_bound ? strings.badges.loopbackReady : strings.badges.pasteOnly}
-        valueTestId={flow.listener_bound ? undefined : 'oauth-paste-only-badge'}
-        valueVariant={flow.listener_bound ? 'success' : 'warning'}
-      />
-      <FlowStatusCell label={strings.status.expires} value={formatFlowExpiry(flow.expires_at)} />
-    </div>
-  )
-}
-
-function FlowStatusCell({
-  label,
-  value,
-  valueTestId,
-  valueVariant = 'outline',
-}: {
-  label: string
-  value: string
-  valueTestId?: string
-  valueVariant?: 'outline' | 'success' | 'warning'
-}) {
-  return (
-    <div className="min-w-0 bg-[var(--panel-hi)] px-3 py-2">
-      <div className="mb-1 text-[10.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        {label}
-      </div>
-      <Badge data-testid={valueTestId} variant={valueVariant}>
-        {value}
-      </Badge>
+      {!flow.listener_bound ? (
+        <span data-testid="oauth-paste-only-badge" className="text-[var(--warn)]">
+          {strings.badges.pasteOnly}
+        </span>
+      ) : null}
+      <span>{formatFlowExpiry(flow.expires_at)}</span>
     </div>
   )
 }
 
 function CallbackURLSummary({ summary }: { summary: CallbackSummary | null }) {
   if (!summary) {
-    return (
-      <div
-        data-testid="oauth-callback-summary"
-        className="border border-[var(--line)] bg-[var(--panel-hi)] px-3 py-2 text-[11.5px] text-[var(--text-muted)]"
-        style={{ borderRadius: 2 }}
-      >
-        {strings.callbackSummary.empty}
-      </div>
-    )
+    return null
   }
 
-  const codeBadgeVariant = summary.variant === 'warning' ? 'warning' : 'outline'
-  const stateBadgeVariant =
-    summary.stateLabel === strings.callbackSummary.statePresent ? 'outline' : 'warning'
+  const codeClassName =
+    summary.variant === 'warning'
+      ? 'border-[color-mix(in_oklch,var(--warn)_45%,transparent)] text-[var(--warn)]'
+      : 'border-[var(--line-2)] text-[var(--text-muted)]'
+  const stateClassName =
+    summary.stateLabel === strings.callbackSummary.statePresent
+      ? 'border-[var(--line-2)] text-[var(--text-muted)]'
+      : 'border-[color-mix(in_oklch,var(--warn)_45%,transparent)] text-[var(--warn)]'
   return (
     <div
       data-testid="oauth-callback-summary"
-      className="flex min-w-0 flex-wrap items-center gap-2 border border-[var(--line)] bg-[var(--panel-hi)] px-3 py-2 text-[11.5px]"
-      style={{ borderRadius: 2 }}
+      className="flex min-w-0 flex-wrap items-center gap-2 text-[11.5px]"
     >
       <span className="font-medium text-[var(--text-dim)]">{strings.callbackSummary.title}</span>
       <code className="min-w-0 max-w-full truncate text-[var(--text)]">{summary.target}</code>
-      <Badge variant={codeBadgeVariant}>{summary.codeLabel}</Badge>
-      <Badge variant={stateBadgeVariant}>{summary.stateLabel}</Badge>
+      <span className={`border px-[6px] py-[1px] font-mono uppercase ${codeClassName}`}>
+        {summary.codeLabel}
+      </span>
+      <span className={`border px-[6px] py-[1px] font-mono uppercase ${stateClassName}`}>
+        {summary.stateLabel}
+      </span>
     </div>
   )
-}
-
-function renderPanelMeta(
-  activeBrowserFlow: StartedBrowserFlow | null,
-  pendingConflict: PendingConflict | null,
-  terminalError: { code: string; message: string } | null,
-) {
-  if (pendingConflict) {
-    return <Badge variant="warning">{strings.badges.pending}</Badge>
-  }
-  if (terminalError) {
-    return <Badge variant="danger">{strings.badges.failed}</Badge>
-  }
-  if (activeBrowserFlow) {
-    return <Badge variant="outline">{strings.badges.pending}</Badge>
-  }
-  return strings.panel.ready
 }
 
 async function navigateToAccount(
@@ -701,11 +641,33 @@ async function navigateToAccount(
   })
 }
 
-function openAuthorizeTab(authorizeUrl: string) {
+function reserveAuthorizeTab(): ReservedAuthorizeTab | null {
+  const tab = window.open('about:blank', '_blank')
+  if (tab === null) {
+    toast.error(strings.toasts.popupBlocked)
+    return null
+  }
+  tab.opener = null
+  return { tab, didNavigate: false }
+}
+
+function openAuthorizeTab(authorizeUrl: string, reservedTab?: ReservedAuthorizeTab | null) {
+  if (reservedTab) {
+    reservedTab.tab.location.href = authorizeUrl
+    reservedTab.didNavigate = true
+    return
+  }
   const popup = window.open(authorizeUrl, '_blank', 'noopener,noreferrer')
   if (popup === null) {
     toast.error(strings.toasts.popupBlocked)
   }
+}
+
+function closeUnusedAuthorizeTab(reservedTab?: ReservedAuthorizeTab | null) {
+  if (!reservedTab || reservedTab.didNavigate) {
+    return
+  }
+  reservedTab.tab.close()
 }
 
 function resetToStart(args: {
@@ -731,6 +693,7 @@ function readPendingConflict(err: RouterApiError): PendingConflict | null {
   const flowId = typeof data.flow_id === 'string' ? data.flow_id : ''
   const expiresAt = typeof data.expires_at === 'string' ? data.expires_at : ''
   const createdAt = typeof data.created_at === 'string' ? data.created_at : ''
+  const openURL = typeof data.verification_url === 'string' ? data.verification_url : undefined
   const method = data.method === 'device' ? 'device' : data.method === 'browser' ? 'browser' : null
   if (!flowId || !expiresAt || !createdAt || !method) {
     return null
@@ -740,6 +703,7 @@ function readPendingConflict(err: RouterApiError): PendingConflict | null {
     expires_at: expiresAt,
     created_at: createdAt,
     method,
+    open_url: openURL,
   }
 }
 
@@ -836,19 +800,26 @@ function summarizeCallbackURL(raw: string): CallbackSummary | null {
 function formatFlowExpiry(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    return value
+    return `${strings.status.expiresAt} ${value}`
   }
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
   const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(date.getUTCDate()).padStart(2, '0')
+  const month = months[date.getUTCMonth()]
+  const day = date.getUTCDate()
   const hour = String(date.getUTCHours()).padStart(2, '0')
   const minute = String(date.getUTCMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hour}:${minute} UTC`
-}
-
-function formatFlowID(flowID: string): string {
-  if (flowID.length <= 18) {
-    return flowID
-  }
-  return `${flowID.slice(0, 9)}...${flowID.slice(-6)}`
+  return `${strings.status.expiresAt} ${month} ${day}, ${year}, ${hour}:${minute} UTC`
 }
