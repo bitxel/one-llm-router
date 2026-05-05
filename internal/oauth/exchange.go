@@ -3,15 +3,21 @@ package oauth
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/user/one-llm-router/internal/core"
+	"github.com/user/one-llm-router/internal/requestid"
 )
 
 const (
@@ -99,7 +105,7 @@ func (p *openAIProvider) ExchangeCode(ctx context.Context, code, verifier string
 	form.Set("code_verifier", verifier)
 	form.Set("redirect_uri", p.redirectURIOrDefault())
 	form.Set("client_id", openAIClientID)
-	return p.exchangeTokens(ctx, "authorization_code", form)
+	return p.exchangeTokens(ctx, "authorization_code", form, "")
 }
 
 func (p *openAIProvider) Refresh(ctx context.Context, refreshToken []byte) (Tokens, error) {
@@ -111,7 +117,7 @@ func (p *openAIProvider) Refresh(ctx context.Context, refreshToken []byte) (Toke
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", string(refreshToken))
 	form.Set("client_id", openAIClientID)
-	return p.exchangeTokens(ctx, "refresh_token", form)
+	return p.exchangeTokens(ctx, "refresh_token", form, oauthTokenDebugFingerprint(refreshToken))
 }
 
 func (p *openAIProvider) RequestDeviceCode(ctx context.Context) (DeviceCode, error) {
@@ -230,10 +236,10 @@ func (p *openAIProvider) PollDeviceCode(ctx context.Context, deviceAuthID, userC
 	form.Set("redirect_uri", openAIRedirectURI)
 	form.Set("client_id", openAIClientID)
 	form.Set("code_verifier", payload.CodeVerifier)
-	return p.exchangeTokens(ctx, "authorization_code", form)
+	return p.exchangeTokens(ctx, "authorization_code", form, "")
 }
 
-func (p *openAIProvider) exchangeTokens(ctx context.Context, grantType string, form url.Values) (Tokens, error) {
+func (p *openAIProvider) exchangeTokens(ctx context.Context, grantType string, form url.Values, refreshTokenFingerprint string) (Tokens, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tokenEndpoint(), strings.NewReader(form.Encode()))
 	if err != nil {
 		return Tokens{}, fmt.Errorf("oauth.exchangeTokens: create request: %w", err)
@@ -259,6 +265,7 @@ func (p *openAIProvider) exchangeTokens(ctx context.Context, grantType string, f
 		}
 		return Tokens{}, exchangeErr
 	}
+	p.logTokenExchangeDebug(ctx, grantType, refreshTokenFingerprint, resp, body)
 
 	payload, err := decodeTokenExchangeResponse(body)
 	if err != nil {
@@ -555,6 +562,38 @@ func decodeTokenExchangeResponse(body []byte) (tokenExchangeResponse, error) {
 		return tokenExchangeResponse{}, fmt.Errorf("decode upstream oauth JSON: %w", err)
 	}
 	return payload, nil
+}
+
+func (p *openAIProvider) logTokenExchangeDebug(ctx context.Context, grantType, refreshTokenFingerprint string, resp *http.Response, body []byte) {
+	logger := p.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	if !logger.Enabled(ctx, slog.LevelDebug) {
+		return
+	}
+
+	attrs := []any{
+		"component", "oauth",
+		"request_id", requestid.FromContext(ctx),
+		"grant_type", grantType,
+		"http_status", resp.StatusCode,
+		"response_content_type", resp.Header.Get("Content-Type"),
+		"response_body_bytes", len(body),
+		"response_body", core.RedactCapturedBody(body),
+	}
+	if refreshTokenFingerprint != "" {
+		attrs = append(attrs, "refresh_token_fingerprint", refreshTokenFingerprint)
+	}
+	logger.Debug("oauth_token_exchange_debug", attrs...)
+}
+
+func oauthTokenDebugFingerprint(token []byte) string {
+	if len(token) == 0 {
+		return ""
+	}
+	sum := sha256.Sum256(token)
+	return fmt.Sprintf("sha256:%s len:%d", hex.EncodeToString(sum[:8]), len(token))
 }
 
 func readLimitedResponseBody(r io.Reader) ([]byte, error) {

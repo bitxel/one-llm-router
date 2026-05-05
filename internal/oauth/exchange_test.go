@@ -181,6 +181,41 @@ func TestExchange(t *testing.T) {
 		}
 	})
 
+	t.Run("debug log includes redacted oauth response body", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-secret","id_token":"id-secret","expires_in":120}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		var logs bytes.Buffer
+		provider := newTestOpenAIProvider(srv.URL + "/oauth/token")
+		provider.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		_, err := provider.Refresh(context.Background(), []byte("refresh-secret"))
+		if !assert.Error(t, err) {
+			return
+		}
+
+		var exchangeErr *TokenExchangeError
+		if assert.True(t, errors.As(err, &exchangeErr)) {
+			assert.Equal(t, "invalid_response", exchangeErr.Code())
+			assert.Equal(t, http.StatusOK, exchangeErr.HTTPStatus())
+			assert.Equal(t, "missing refresh_token", exchangeErr.Message())
+		}
+
+		logText := logs.String()
+		assert.Contains(t, logText, "oauth_token_exchange_debug")
+		assert.Contains(t, logText, "grant_type=refresh_token")
+		assert.Contains(t, logText, "http_status=200")
+		assert.Contains(t, logText, "response_content_type=application/json")
+		assert.Contains(t, logText, "access_token")
+		assert.Contains(t, logText, "[redacted]")
+		assert.Contains(t, logText, oauthTokenDebugFingerprint([]byte("refresh-secret")))
+		assert.NotContains(t, logText, "access-secret")
+		assert.NotContains(t, logText, "id-secret")
+		assert.NotContains(t, logText, "refresh-secret")
+	})
+
 	t.Run("response body over 64kb becomes invalid_response", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
