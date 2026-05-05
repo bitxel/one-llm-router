@@ -89,7 +89,7 @@ export function AdminAccountsNewAPIKey() {
   }
 
   return (
-    <Canvas variant="wide">
+    <Canvas variant="narrow">
       <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
       <div className="mb-8 max-w-[70ch]">
         <h1 className="mb-3 max-w-[18ch] text-balance">

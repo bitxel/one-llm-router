@@ -82,8 +82,6 @@ export const strings = {
   conflict: {
     detail:
       'Only one OAuth flow may be active per router instance. Cancel the pending flow before starting a new browser sign-in.',
-    methodPrefix: 'method',
-    flowPrefix: 'flow',
   },
   terminal: {
     defaultTitle: 'The flow ended with an error.',

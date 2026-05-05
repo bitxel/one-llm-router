@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 
 import { Canvas, Stripe } from '@/components/neo'
-import { Badge } from '@/components/ui/badge'
 import { ACCOUNT_AUTH_METHODS, type AccountAuthMethod } from '@/lib/account-auth-methods'
 
 import { strings } from './new-account-picker.strings'
@@ -17,7 +16,6 @@ import { strings } from './new-account-picker.strings'
 interface AccountMethodCard {
   authMethod: AccountAuthMethod
   title: string
-  badge: string
   detail: string
   to:
     | '/admin/accounts/new-apikey'
@@ -48,10 +46,16 @@ const detailByMethod = {
   oauth_import: strings.cards.oauthImport.detail,
 } as const satisfies Record<AccountAuthMethod, string>
 
+const titleByMethod = {
+  api_key: strings.cards.apiKey.title,
+  oauth_browser: strings.cards.oauthBrowser.title,
+  oauth_device: strings.cards.oauthDevice.title,
+  oauth_import: strings.cards.oauthImport.title,
+} as const satisfies Record<AccountAuthMethod, string>
+
 const accountMethodCards: readonly AccountMethodCard[] = ACCOUNT_AUTH_METHODS.map((method) => ({
   authMethod: method.id,
-  title: method.title,
-  badge: method.badge,
+  title: titleByMethod[method.id],
   detail: detailByMethod[method.id],
   to: routeByMethod[method.id],
   icon: iconByMethod[method.id],
@@ -68,10 +72,10 @@ export function AdminAccountsNewAccountPicker() {
     <Canvas variant="wide">
       <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
       <div className="mb-8 max-w-[70ch]">
-        <h1 className="mb-3 max-w-[20ch] text-balance">
+        <h1 className="mb-3 max-w-[18ch] text-balance">
           {strings.titleLead} <strong>{strings.titleStrong}</strong>
         </h1>
-        <p className="max-w-[62ch] text-[14px] leading-[1.7] text-[var(--text-dim)]">
+        <p className="max-w-none whitespace-nowrap text-[14px] leading-[1.7] text-[var(--text-dim)]">
           {strings.intro}
         </p>
       </div>
@@ -89,40 +93,33 @@ export function AdminAccountsNewAccountPicker() {
               onClick={() => {
                 openRoute(card)
               }}
-              className="group flex h-full min-h-[220px] cursor-pointer flex-col overflow-hidden border border-[var(--line)] bg-[var(--panel)] text-left transition-[border-color,background-color,transform] duration-150 focus-visible:outline-none focus-visible:[box-shadow:var(--focus)]"
+              className="group flex h-full min-h-[190px] cursor-pointer flex-col overflow-hidden border border-[var(--line)] bg-[var(--panel)] text-left transition-[border-color,background-color,transform] duration-150 hover:border-[var(--accent)] hover:bg-[var(--panel-hi)] focus-visible:outline-none focus-visible:[box-shadow:var(--focus)]"
               style={{ borderRadius: 2 }}
             >
-              <div
-                className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3"
-                style={{
-                  background: 'var(--panel-head)',
-                }}
-              >
-                <div className="flex items-center gap-3">
+              <span className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+                <span className="flex min-w-0 items-center gap-3">
                   <span
-                    className="flex h-9 w-9 items-center justify-center"
-                    style={{ color: 'var(--accent)' }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center border border-[var(--line-2)] bg-[var(--panel-2)]"
+                    style={{ color: 'var(--accent)', borderRadius: 2 }}
                   >
                     <Icon className="h-[16px] w-[16px]" />
                   </span>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[15px] font-medium text-[var(--text)]">{card.title}</span>
-                    <Badge variant="outline">{card.badge}</Badge>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant="accent">{strings.availability.available}</Badge>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
-                </div>
-              </div>
-              <div className="flex flex-1 flex-col justify-between gap-6 px-4 py-4">
-                <p className="max-w-[44ch] text-[13px] leading-[1.65] text-[var(--text-dim)]">
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-medium text-[var(--text)]">
+                      {card.title}
+                    </span>
+                  </span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+              </span>
+              <span className="flex flex-1 flex-col justify-between gap-5 px-4 py-4">
+                <span className="block max-w-[46ch] text-[13px] leading-[1.6] text-[var(--text-dim)]">
                   {card.detail}
-                </p>
+                </span>
                 <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--accent)]">
                   {strings.action.available}
                 </span>
-              </div>
+              </span>
             </button>
           )
         })}

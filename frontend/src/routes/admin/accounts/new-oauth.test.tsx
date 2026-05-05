@@ -90,6 +90,15 @@ const successSnapshot: OAuthFlowSnapshot = {
     status: 'active',
   },
 }
+const expiredDeviceSnapshot: OAuthFlowSnapshot = {
+  status: 'error',
+  method: 'device',
+  flow_id: 'fl_device_expired_1234567890',
+  error: {
+    code: 'expired_token',
+    message: 'Device code expired',
+  },
+}
 
 let currentFlowResult: UseOAuthFlowResult
 let refetchMock: ReturnType<typeof vi.fn>
@@ -452,32 +461,37 @@ describe('AdminAccountsNewOAuth', () => {
     expect(screen.queryByLabelText('Paste callback URL')).not.toBeInTheDocument()
   })
 
-  it('shows the conflict banner and cancels the pending flow before retrying start', async () => {
-    callAdminMock
-      .mockRejectedValueOnce(
-        new RouterApiError({
-          code: Err003OAuthFlowInProgress,
-          msg: 'oauth_flow_in_progress',
-          data: {
-            method: 'device',
-            flow_id: 'fl_conflict_1234567890',
-            verification_url: 'https://auth.openai.com/codex/device',
-            expires_at: '2026-04-21T12:05:00Z',
-            created_at: '2026-04-21T12:00:00Z',
-          },
-          requestId: 'req-conflict',
-          status: 200,
-        }),
-      )
-      .mockResolvedValueOnce({ status: 'idle' } as never)
-      .mockResolvedValueOnce({
-        flow_id: 'fl_browser_start_1234567890',
-        authorize_url: 'https://auth.openai.com/oauth/authorize?state=s_abc',
-        callback_url: 'http://localhost:1455/auth/callback',
-        listener_bound: true,
-        expires_at: '2026-04-21T12:05:00Z',
-        method: 'browser',
-      } as never)
+  it('does not show an expired device-code terminal error on the browser sign-in screen', async () => {
+    setFlowResult({
+      status: 'error',
+      flow: expiredDeviceSnapshot,
+      isPolling: false,
+    })
+
+    await renderWithRouter()
+
+    expect(screen.getByTestId('oauth-start-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('oauth-terminal-error')).not.toBeInTheDocument()
+    expect(screen.queryByText('Device code expired')).not.toBeInTheDocument()
+    expect(screen.queryByText('expired_token')).not.toBeInTheDocument()
+  })
+
+  it('opens a pending device flow without exposing conflict details or cancellation', async () => {
+    callAdminMock.mockRejectedValueOnce(
+      new RouterApiError({
+        code: Err003OAuthFlowInProgress,
+        msg: 'oauth_flow_in_progress',
+        data: {
+          method: 'device',
+          flow_id: 'fl_conflict_1234567890',
+          verification_url: 'https://auth.openai.com/codex/device',
+          expires_at: '2026-04-21T12:05:00Z',
+          created_at: '2026-04-21T12:00:00Z',
+        },
+        requestId: 'req-conflict',
+        status: 200,
+      }),
+    )
     refetchMock.mockResolvedValue({ data: idleSnapshot } as never)
 
     await renderWithRouter()
@@ -485,9 +499,13 @@ describe('AdminAccountsNewOAuth', () => {
 
     await user.click(screen.getByTestId('oauth-start-button'))
 
-    expect(await screen.findByTestId('oauth-conflict-banner')).toHaveTextContent(
-      'A flow is already pending',
-    )
+    const conflict = await screen.findByTestId('oauth-conflict-banner')
+    expect(conflict).not.toHaveTextContent('A flow is already pending')
+    expect(conflict).not.toHaveTextContent('method')
+    expect(conflict).not.toHaveTextContent('device')
+    expect(conflict).not.toHaveTextContent('flow')
+    expect(conflict).not.toHaveTextContent('fl_conflict_1234567890')
+    expect(screen.queryByRole('button', { name: 'Cancel flow' })).not.toBeInTheDocument()
 
     await user.click(screen.getByTestId('oauth-open-pending'))
     await waitFor(() => {
@@ -497,10 +515,6 @@ describe('AdminAccountsNewOAuth', () => {
         'noopener,noreferrer',
       )
     })
-
-    await user.click(screen.getByTestId('oauth-cancel-pending'))
-
-    expect(callAdminMock).toHaveBeenCalledTimes(3)
-    expect(await screen.findByLabelText('Paste callback URL')).toBeInTheDocument()
+    expect(callAdminMock).toHaveBeenCalledTimes(1)
   })
 })

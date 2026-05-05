@@ -121,7 +121,8 @@ export function AdminAccountsNewOAuth() {
   const foreignPendingFlow = readForeignPendingFlow(oauthFlow.flow)
   const pendingConflict = mergePendingConflict(conflictFlow, foreignPendingFlow)
   const activeBrowserFlow = browserPendingFlow ?? startedFlow
-  const terminalError = oauthFlow.flow?.status === 'error' ? oauthFlow.flow.error : null
+  const terminalFlowError = oauthFlow.flow?.status === 'error' ? oauthFlow.flow.error : null
+  const terminalError = isRecoverableExpiredFlowError(terminalFlowError) ? null : terminalFlowError
 
   useEffect(() => {
     if (browserPendingFlow) {
@@ -150,8 +151,7 @@ export function AdminAccountsNewOAuth() {
       return
     }
     const code = oauthFlow.flow.error.code
-    if (code === 'flow_expired') {
-      toast.error(strings.toasts.flowExpired)
+    if (isRecoverableExpiredFlowError(oauthFlow.flow.error)) {
       resetToStart({
         callbackForm,
         queryClient,
@@ -372,39 +372,18 @@ export function AdminAccountsNewOAuth() {
         {currentError ? <ErrorBanner error={currentError} title={strings.err.default} /> : null}
 
         {pendingConflict && !activeBrowserFlow ? (
-          <div
-            data-testid="oauth-conflict-banner"
-            className="space-y-3 text-[12.5px] leading-[1.6] text-[var(--warn)]"
-          >
-            <div>{strings.err.oauth_flow_in_progress}</div>
-            <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px]">
-              <span>{strings.conflict.methodPrefix}</span>
-              <code>{pendingConflict.method}</code>
-              <span>{strings.conflict.flowPrefix}</span>
-              <code>{pendingConflict.flow_id}</code>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {pendingConflict.method === 'device' ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  data-testid="oauth-open-pending"
-                  onClick={() => void handleOpenPendingFlow()}
-                >
-                  <ExternalLink />
-                  {strings.actions.openPending}
-                </Button>
-              ) : null}
+          <div data-testid="oauth-conflict-banner" className="flex flex-wrap gap-2">
+            {pendingConflict.method === 'device' ? (
               <Button
                 type="button"
                 variant="secondary"
-                data-testid="oauth-cancel-pending"
-                disabled={isBusy}
-                onClick={() => void handleCancelPending(true)}
+                data-testid="oauth-open-pending"
+                onClick={() => void handleOpenPendingFlow()}
               >
-                {strings.actions.cancelPending}
+                <ExternalLink />
+                {strings.actions.openPending}
               </Button>
-            </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -575,6 +554,10 @@ function pendingFlowOpenURL(flow: OAuthFlowSnapshot | OAuthFlowActive | null | u
     return undefined
   }
   return flow.verification_url
+}
+
+function isRecoverableExpiredFlowError(error: { code: string } | null): boolean {
+  return error?.code === 'expired_token' || error?.code === 'flow_expired'
 }
 
 function FlowStatusStrip({ flow }: { flow: StartedBrowserFlow }) {

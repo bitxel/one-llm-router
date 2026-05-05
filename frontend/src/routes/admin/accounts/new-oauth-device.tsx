@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { type DeviceStartEnvelope, oauthCancel, oauthDeviceStart } from '@/generated/openapi'
 import {
@@ -19,7 +18,12 @@ import {
   Err003OAuthUpstreamError,
   PlatformUnknown,
 } from '@/lib/errcode'
-import { type OAuthFlowPending, oauthFlowQueryKey, useOAuthFlow } from '@/lib/oauth-flow'
+import {
+  type OAuthFlowPending,
+  type OAuthFlowSnapshot,
+  oauthFlowQueryKey,
+  useOAuthFlow,
+} from '@/lib/oauth-flow'
 import { callAdmin } from '@/lib/router-api'
 import { RouterApiError } from '@/lib/router-api-error'
 import { strings } from './new-oauth-device.strings'
@@ -59,6 +63,7 @@ export function AdminAccountsNewOAuthDevice() {
   })
   const observedDeviceFlowIDRef = useRef<string | null>(null)
   const autoStartAttemptedRef = useRef(false)
+  const recoveredExpiredFlowIDRef = useRef<string | null>(null)
   const [startedFlow, setStartedFlow] = useState<StartedDeviceFlow | null>(null)
   const [conflictFlow, setConflictFlow] = useState<PendingConflict | null>(null)
   const [screenError, setScreenError] = useState<unknown>(null)
@@ -91,7 +96,9 @@ export function AdminAccountsNewOAuthDevice() {
       }
     : startedFlow
 
-  const terminalError = oauthFlow.flow?.status === 'error' ? oauthFlow.flow.error : null
+  const terminalFlowError = oauthFlow.flow?.status === 'error' ? oauthFlow.flow.error : null
+  const isRecoveringExpiredFlow = isRecoverableExpiredFlowError(terminalFlowError)
+  const terminalError = isRecoveringExpiredFlow ? null : terminalFlowError
   const terminalStatusLabel = useMemo(
     () => renderTerminalStatus(terminalError?.code),
     [terminalError?.code],
@@ -167,10 +174,16 @@ export function AdminAccountsNewOAuthDevice() {
       await oauthFlow.refetch()
     } catch (err) {
       if (err instanceof RouterApiError && err.code === Err003OAuthFlowInProgress) {
+        setScreenError(null)
+        const result = await oauthFlow.refetch()
+        const pendingDeviceFlow = readStartedDeviceFlow(result.data, startedFlow?.interval_seconds)
+        if (pendingDeviceFlow) {
+          setStartedFlow(pendingDeviceFlow)
+          setConflictFlow(null)
+          return
+        }
         setStartedFlow(null)
         setConflictFlow(readPendingConflict(err))
-        setScreenError(null)
-        void oauthFlow.refetch()
         return
       }
       if (err instanceof RouterApiError && err.code === Err003DeviceAuthUnavailable) {
@@ -195,8 +208,23 @@ export function AdminAccountsNewOAuthDevice() {
       return
     }
     autoStartAttemptedRef.current = true
+    if (isRecoverableExpiredActiveFlow(oauthFlow.flow)) {
+      return
+    }
     void startDeviceFlow()
-  }, [])
+  }, [oauthFlow.flow])
+
+  useEffect(() => {
+    if (!isRecoverableExpiredActiveFlow(oauthFlow.flow)) {
+      return
+    }
+    if (recoveredExpiredFlowIDRef.current === oauthFlow.flow.flow_id) {
+      return
+    }
+    recoveredExpiredFlowIDRef.current = oauthFlow.flow.flow_id
+    resetToStart(queryClient, setConflictFlow, setScreenError, setStartedFlow)
+    void startDeviceFlow()
+  }, [oauthFlow.flow, queryClient])
 
   async function handleCancelPending() {
     const flowId = pendingConflict?.flow_id ?? activeDeviceFlow?.flow_id
@@ -266,17 +294,19 @@ export function AdminAccountsNewOAuthDevice() {
       : oauthFlow.status === 'pending'
         ? strings.status.pending
         : oauthFlow.status === 'error'
-          ? terminalStatusLabel.label
+          ? isRecoveringExpiredFlow
+            ? strings.status.starting
+            : terminalStatusLabel.label
           : strings.status.starting
 
   return (
-    <Canvas variant="wide">
+    <Canvas variant="narrow">
       <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
-      <div className="mb-8 max-w-[70ch]">
-        <h1 className="mb-3 max-w-[22ch] text-balance">
+      <div className="mb-5">
+        <h1 className="mb-2 max-w-none whitespace-nowrap">
           {strings.titleLead} <strong>{strings.titleStrong}</strong>
         </h1>
-        <p className="max-w-[66ch] text-[14px] leading-[1.7] text-[var(--text-dim)]">
+        <p className="max-w-[58ch] text-[14px] leading-[1.6] text-[var(--text-dim)]">
           {strings.intro}
         </p>
       </div>
@@ -350,128 +380,111 @@ export function AdminAccountsNewOAuthDevice() {
         </PanelCard>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div>
-          <PanelCard
-            title={
-              activeDeviceFlow
-                ? strings.panel.pending
-                : terminalError
-                  ? strings.panel.failed
-                  : strings.panel.code
-            }
-            meta={renderPanelMeta(activeDeviceFlow, terminalError)}
-            data-testid="device-flow-panel"
-          >
-            {activeDeviceFlow ? (
-              <>
-                <Field label={strings.fields.userCode.label} hint={strings.fields.userCode.hint}>
-                  <div className="flex flex-wrap items-start gap-3">
-                    <output
-                      data-testid="device-user-code"
-                      aria-label={strings.labels.userCode}
-                      className="min-w-[180px] border border-[var(--line-2)] bg-[var(--panel-2)] px-4 py-3 font-mono text-[20px] tracking-[0.18em] text-[var(--text)]"
-                      style={{ borderRadius: 2 }}
-                    >
-                      {activeDeviceFlow.user_code}
-                    </output>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      aria-label={strings.labels.copyCode}
-                      onClick={() => handleCopy('code', activeDeviceFlow.user_code)}
-                    >
-                      <Copy />
-                      {copyState.code ? strings.actions.copied : strings.actions.copyCode}
-                    </Button>
-                  </div>
-                </Field>
-
-                <Field
-                  label={strings.fields.verificationURL.label}
-                  hint={strings.fields.verificationURL.hint}
-                >
-                  <div className="flex flex-wrap items-start gap-3">
+      <div>
+        <PanelCard
+          title={
+            activeDeviceFlow
+              ? strings.panel.pending
+              : terminalError
+                ? strings.panel.failed
+                : strings.panel.code
+          }
+          meta={<span data-testid="device-status-pill">{statusLabel}</span>}
+          metaMuted={oauthFlow.status !== 'pending'}
+          data-testid="device-flow-panel"
+        >
+          {activeDeviceFlow ? (
+            <div className="space-y-7">
+              <Field
+                label={strings.fields.verificationURL.label}
+                hint={strings.fields.verificationURL.hint}
+              >
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button asChild>
                     <a
                       data-testid="device-verification-url"
                       href={activeDeviceFlow.verification_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-[13px] leading-[1.6] text-[var(--accent)] underline-offset-4 hover:underline"
                     >
-                      <span className="break-all">{activeDeviceFlow.verification_url}</span>
-                      <ExternalLink className="h-4 w-4" />
+                      <ExternalLink />
+                      {strings.actions.openVerification}
                     </a>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      aria-label={strings.labels.copyURL}
-                      onClick={() => handleCopy('url', activeDeviceFlow.verification_url)}
-                    >
-                      <Copy />
-                      {copyState.url ? strings.actions.copied : strings.actions.copyURL}
-                    </Button>
-                  </div>
-                </Field>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={strings.labels.copyURL}
+                    onClick={() => handleCopy('url', activeDeviceFlow.verification_url)}
+                  >
+                    <Copy />
+                    {copyState.url ? strings.actions.copied : strings.actions.copyURL}
+                  </Button>
+                </div>
+              </Field>
 
-                <Field label={strings.fields.countdown.label} hint={strings.fields.countdown.hint}>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div
-                      data-testid="device-countdown"
-                      className="border border-[var(--line-2)] bg-[var(--panel-2)] px-3 py-2 font-mono text-[13px] text-[var(--text)]"
-                      style={{ borderRadius: 2 }}
-                    >
-                      {countdownLabel}
-                    </div>
-                    <Badge variant="outline">
-                      {`${strings.fields.countdown.intervalBadge} ${activeDeviceFlow.interval_seconds}s`}
-                    </Badge>
+              <Field label={strings.fields.userCode.label} hint={strings.fields.userCode.hint}>
+                <div className="flex flex-wrap items-start gap-3">
+                  <output
+                    data-testid="device-user-code"
+                    aria-label={strings.labels.userCode}
+                    className="min-w-[240px] border border-[var(--line-2)] bg-[var(--panel-2)] px-5 py-4 text-center font-mono text-[26px] tracking-[0.2em] text-[var(--text)]"
+                    style={{ borderRadius: 2 }}
+                  >
+                    {activeDeviceFlow.user_code}
+                  </output>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={strings.labels.copyCode}
+                    onClick={() => handleCopy('code', activeDeviceFlow.user_code)}
+                  >
+                    <Copy />
+                    {copyState.code ? strings.actions.copied : strings.actions.copyCode}
+                  </Button>
+                </div>
+              </Field>
+
+              <div className="grid gap-3 border-t border-[var(--line)] pt-5 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-center">
+                <div className="text-[12.5px] font-medium text-[var(--text)]">
+                  {strings.fields.countdown.label}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div
+                    data-testid="device-countdown"
+                    className="font-mono text-[13px] text-[var(--text)]"
+                  >
+                    {countdownLabel}
                   </div>
-                </Field>
-              </>
-            ) : (
-              <div className="text-[13px] leading-[1.65] text-[var(--text-dim)]">
-                {terminalError ? terminalStatusLabel.detail : strings.intro}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRestart}
+                    disabled={isBusy}
+                    data-testid="device-restart-button"
+                  >
+                    <RotateCcw />
+                    {strings.actions.restart}
+                  </Button>
+                </div>
               </div>
-            )}
-          </PanelCard>
-        </div>
-
-        <div>
-          <PanelCard
-            title={strings.panel.status}
-            meta={<span data-testid="device-status-pill">{statusLabel}</span>}
-            metaMuted={oauthFlow.status !== 'pending'}
-          >
-            <div className="space-y-4 text-[13px] leading-[1.65] text-[var(--text-dim)]">
-              <div>{renderStatusDetail(oauthFlow.status, terminalStatusLabel.detail)}</div>
-              {activeDeviceFlow && oauthFlow.status === 'pending' ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleRestart}
-                  disabled={isBusy}
-                  data-testid="device-restart-button"
-                >
-                  <RotateCcw />
-                  {strings.actions.restart}
-                </Button>
-              ) : null}
-              {!activeDeviceFlow || terminalError ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleRestart}
-                  disabled={isBusy}
-                  data-testid="device-restart-button"
-                >
-                  <RotateCcw />
-                  {strings.actions.restart}
-                </Button>
-              ) : null}
             </div>
-          </PanelCard>
-        </div>
+          ) : (
+            <div className="space-y-4 text-[13px] leading-[1.65] text-[var(--text-dim)]">
+              <div>{terminalError ? terminalStatusLabel.detail : strings.intro}</div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleRestart}
+                disabled={isBusy}
+                data-testid="device-restart-button"
+              >
+                <RotateCcw />
+                {strings.actions.restart}
+              </Button>
+            </div>
+          )}
+        </PanelCard>
       </div>
     </Canvas>
   )
@@ -483,25 +496,42 @@ function isPendingDeviceFlow(
   return Boolean(flow && flow.status === 'pending' && flow.method === 'device')
 }
 
+function readStartedDeviceFlow(flow: OAuthFlowSnapshot | undefined, intervalSeconds = 5) {
+  if (!flow || flow.status !== 'pending' || flow.method !== 'device') {
+    return null
+  }
+  return {
+    flow_id: flow.flow_id,
+    user_code: flow.user_code,
+    verification_url: flow.verification_url,
+    interval_seconds: intervalSeconds,
+    expires_at: flow.expires_at,
+  }
+}
+
 function formatCountdown(expiresAt: string): string {
   const remainingMs = Date.parse(expiresAt) - Date.now()
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
     return strings.countdownAwaitingServer
   }
-  return `${Math.ceil(remainingMs / 1000)}s`
+  const totalSeconds = Math.ceil(remainingMs / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`
 }
 
-function renderPanelMeta(
-  activeDeviceFlow: StartedDeviceFlow | null,
-  terminalError: { code: string; message: string } | null,
-) {
-  if (activeDeviceFlow) {
-    return strings.panel.metaPending
-  }
-  if (terminalError) {
-    return terminalError.code
-  }
-  return strings.panel.metaStarting
+function isRecoverableExpiredActiveFlow(
+  flow: ReturnType<typeof useOAuthFlow>['flow'],
+): flow is Extract<ReturnType<typeof useOAuthFlow>['flow'], { status: 'error' }> {
+  return Boolean(
+    flow &&
+      flow.status === 'error' &&
+      (flow.error.code === 'expired_token' || flow.error.code === 'flow_expired'),
+  )
+}
+
+function isRecoverableExpiredFlowError(error: { code: string } | null): boolean {
+  return error?.code === 'expired_token' || error?.code === 'flow_expired'
 }
 
 function renderTerminalStatus(code?: string) {
@@ -527,22 +557,6 @@ function renderTerminalStatus(code?: string) {
     label: strings.status.failed,
     detail: strings.err.default,
   }
-}
-
-function renderStatusDetail(
-  status: ReturnType<typeof useOAuthFlow>['status'],
-  terminalDetail: string,
-) {
-  if (status === 'pending') {
-    return strings.status.pending
-  }
-  if (status === 'success') {
-    return strings.status.success
-  }
-  if (status === 'error') {
-    return terminalDetail
-  }
-  return strings.intro
 }
 
 function describeStartError(error: unknown): { title: string; detail: string } {

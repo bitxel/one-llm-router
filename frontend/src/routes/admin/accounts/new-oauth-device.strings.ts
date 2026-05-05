@@ -1,33 +1,29 @@
 export const strings = {
   eyebrow: 'Device OAuth',
   stripe: 'Accounts',
-  titleLead: 'Approve ChatGPT sign-in from',
-  titleStrong: 'another device.',
+  titleLead: 'Sign in with Codex',
+  titleStrong: 'Device Code',
   intro:
-    'Use this path when the router host cannot receive a localhost callback. The router shows a short code, you approve it in your own browser, and the account appears here when the background poller succeeds.',
+    'Use this when localhost callback is unavailable. Open the verification page, enter the device code, and this page will continue automatically after approval.',
   panel: {
     code: 'Device code',
-    status: 'Flow status',
-    pending: 'Awaiting approval',
+    pending: 'Device approval',
     blocked: 'Flow blocked',
     unavailable: 'Device flow unavailable',
     failed: 'Flow ended',
-    metaPending: 'pending',
-    metaStarting: 'starting',
   },
   fields: {
     userCode: {
       label: 'Device code',
-      hint: 'Enter this code in the verification page opened on your own laptop or browser session.',
+      hint: 'Enter this code on the verification page.',
     },
     verificationURL: {
-      label: 'Verification URL',
-      hint: 'Open the provider page in a new tab, then paste the device code shown here.',
+      label: 'Open verification page',
+      hint: 'Use the provider page to approve this router session.',
     },
     countdown: {
-      label: 'Countdown',
-      hint: 'Expires at the server-declared deadline. If this reaches zero before approval, restart the flow.',
-      intervalBadge: 'poll interval',
+      label: 'Expiry in',
+      hint: '',
     },
     flow: {
       label: 'Pending flow',
@@ -35,8 +31,9 @@ export const strings = {
     },
   },
   actions: {
-    copyCode: 'Copy device code',
-    copyURL: 'Copy verification URL',
+    openVerification: 'Open verification page',
+    copyCode: 'Copy code',
+    copyURL: 'Copy URL',
     copied: 'Copied',
     cancelPending: 'Cancel pending flow',
     restart: 'Restart device flow',
@@ -44,7 +41,7 @@ export const strings = {
   },
   status: {
     starting: 'Starting device flow…',
-    pending: 'Waiting for approval…',
+    pending: 'Waiting',
     success: 'Signed in — redirecting…',
     expired: 'Flow expired — please restart',
     cancelled: 'Cancelled',
@@ -69,8 +66,8 @@ export const strings = {
   },
   labels: {
     userCode: 'Device code',
-    copyCode: 'Copy device code',
-    copyURL: 'Copy verification URL',
+    copyCode: 'Copy code',
+    copyURL: 'Copy URL',
     conflictMethod: 'method',
     conflictFlow: 'flow',
     conflictExpires: 'expires',

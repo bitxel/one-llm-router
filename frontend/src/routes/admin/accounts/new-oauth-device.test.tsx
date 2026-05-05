@@ -10,7 +10,6 @@ import {
   useParams,
 } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { createContext, type ReactNode, useContext } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -227,13 +226,17 @@ describe('AdminAccountsNewOAuthDevice', () => {
     })
 
     expect(screen.getByTestId('device-user-code')).toHaveTextContent('ABCD-1234')
-    expect(screen.getByTestId('device-countdown')).toHaveTextContent('900s')
+    expect(screen.getByText('Expiry in')).toBeInTheDocument()
+    expect(screen.getByTestId('device-countdown')).toHaveTextContent('15m 00s')
+    expect(screen.queryByTestId('device-expires-at')).not.toBeInTheDocument()
     const verificationLink = screen.getByTestId('device-verification-url')
     expect(verificationLink).toHaveAttribute('href', 'https://auth.openai.com/codex/device')
     expect(verificationLink).toHaveAttribute('target', '_blank')
     expect(verificationLink).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(verificationLink).toHaveTextContent('Open verification page')
     expect(screen.getByTestId('device-user-code')).toHaveAttribute('aria-label', 'Device code')
-    expect(screen.getByRole('button', { name: 'Copy device code' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument()
+    expect(screen.queryByText(/poll interval/i)).not.toBeInTheDocument()
 
     vi.useRealTimers()
     setFlowResult({
@@ -279,52 +282,36 @@ describe('AdminAccountsNewOAuthDevice', () => {
     expect(screen.getByTestId('device-user-code')).toHaveTextContent('WXYZ-9876')
   })
 
-  it('shows the in-progress conflict panel, cancels the pending flow, and retries start', async () => {
-    callAdminMock
-      .mockRejectedValueOnce(
-        new RouterApiError({
-          code: Err003OAuthFlowInProgress,
-          msg: 'oauth_flow_in_progress',
-          data: {
-            method: 'device',
-            flow_id: 'fl_device_conflict_1234567890',
-            expires_at: '2026-04-15T10:15:00Z',
-            created_at: '2026-04-15T10:00:00Z',
-          },
-          requestId: 'req-conflict',
-          status: 200,
-        }),
-      )
-      .mockResolvedValueOnce({ status: 'idle' } as never)
-      .mockResolvedValueOnce({
-        flow_id: 'fl_device_restart_1234567890',
-        user_code: 'WXYZ-9876',
-        verification_url: 'https://auth.openai.com/codex/device',
-        interval_seconds: 5,
-        expires_at: '2026-04-15T10:25:00Z',
-        method: 'device',
-      } as never)
+  it('loads an existing pending device flow instead of showing a conflict panel', async () => {
+    callAdminMock.mockRejectedValueOnce(
+      new RouterApiError({
+        code: Err003OAuthFlowInProgress,
+        msg: 'oauth_flow_in_progress',
+        data: {
+          method: 'device',
+          flow_id: 'fl_device_conflict_1234567890',
+          expires_at: '2026-04-15T10:15:00Z',
+          created_at: '2026-04-15T10:00:00Z',
+        },
+        requestId: 'req-conflict',
+        status: 200,
+      }),
+    )
     refetchMock.mockResolvedValue({ data: pendingDeviceSnapshot } as never)
 
     await renderWithRouter()
-    const user = userEvent.setup()
-
-    expect(await screen.findByTestId('device-conflict-panel')).toHaveTextContent(
-      'A flow is already pending',
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Cancel pending flow' }))
     await act(async () => {
       await Promise.resolve()
     })
 
-    expect(oauthCancelMock).toHaveBeenCalledWith({
-      body: { flow_id: 'fl_device_conflict_1234567890' },
-    })
-    await waitFor(() => {
-      expect(oauthDeviceStartMock).toHaveBeenCalledTimes(2)
-    })
-    expect(await screen.findByTestId('device-user-code')).toHaveTextContent('WXYZ-9876')
+    expect(screen.queryByTestId('device-conflict-panel')).not.toBeInTheDocument()
+    expect(await screen.findByTestId('device-user-code')).toHaveTextContent('ABCD-1234')
+    expect(screen.getByTestId('device-verification-url')).toHaveAttribute(
+      'href',
+      'https://auth.openai.com/codex/device',
+    )
+    expect(oauthCancelMock).not.toHaveBeenCalled()
+    expect(oauthDeviceStartMock).toHaveBeenCalledTimes(1)
   })
 
   it('surfaces device_auth_unavailable with a browser-flow fallback link', async () => {
@@ -398,7 +385,7 @@ describe('AdminAccountsNewOAuthDevice', () => {
     })
   })
 
-  it('waits for the server to declare expiry before showing the expired terminal state', async () => {
+  it('starts a fresh device flow instead of showing an expired terminal state', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-15T10:14:58Z'))
     setFlowResult({
@@ -438,6 +425,8 @@ describe('AdminAccountsNewOAuthDevice', () => {
     })
     expect(screen.getByTestId('device-countdown')).toHaveTextContent('Awaiting server…')
 
+    const startCallsBeforeExpiry = oauthDeviceStartMock.mock.calls.length
+
     setFlowResult({
       status: 'error',
       flow: expiredSnapshot,
@@ -445,7 +434,14 @@ describe('AdminAccountsNewOAuthDevice', () => {
     })
     await view.rerenderRoute()
 
-    expect(screen.getByTestId('device-status-pill')).toHaveTextContent('Flow expired')
+    expect(screen.getByTestId('device-status-pill')).not.toHaveTextContent('Flow expired')
+    expect(screen.queryByText('Device code expired')).not.toBeInTheDocument()
+    expect(screen.queryByText('expired_token')).not.toBeInTheDocument()
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(oauthDeviceStartMock).toHaveBeenCalledTimes(startCallsBeforeExpiry + 1)
 
     const startCallsBeforeRestart = oauthDeviceStartMock.mock.calls.length
 
@@ -484,8 +480,8 @@ describe('AdminAccountsNewOAuthDevice', () => {
     const clipboard = vi.mocked(navigator.clipboard.writeText)
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Copy device code' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Copy verification URL' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Copy URL' }))
     })
 
     expect(clipboard).toHaveBeenNthCalledWith(1, 'ABCD-1234')
@@ -496,7 +492,7 @@ describe('AdminAccountsNewOAuthDevice', () => {
       vi.advanceTimersByTime(2_000)
     })
 
-    expect(screen.getByText('Copy device code')).toBeInTheDocument()
-    expect(screen.getByText('Copy verification URL')).toBeInTheDocument()
+    expect(screen.getByText('Copy code')).toBeInTheDocument()
+    expect(screen.getByText('Copy URL')).toBeInTheDocument()
   })
 })

@@ -67,6 +67,14 @@ async function renderWithRouter() {
 }
 
 describe('AdminAccountsNewAccountPicker', () => {
+  function getCard(authMethod: string) {
+    const card = document.querySelector(`[data-auth-method="${authMethod}"]`)
+    if (!(card instanceof HTMLButtonElement)) {
+      throw new Error(`missing auth method card: ${authMethod}`)
+    }
+    return card
+  }
+
   it('renders exactly four live auth-method cards in the required order', async () => {
     await renderWithRouter()
 
@@ -80,10 +88,10 @@ describe('AdminAccountsNewAccountPicker', () => {
     expect(screen.getByText(strings.cards.oauthBrowser.title)).toBeInTheDocument()
     expect(screen.getByText(strings.cards.oauthDevice.title)).toBeInTheDocument()
     expect(screen.getByText(strings.cards.oauthImport.title)).toBeInTheDocument()
-    expect(screen.getByText(strings.cards.apiKey.badge)).toBeInTheDocument()
-    expect(screen.getByText(strings.cards.oauthBrowser.badge)).toBeInTheDocument()
-    expect(screen.getByText(strings.cards.oauthDevice.badge)).toBeInTheDocument()
-    expect(screen.getByText(strings.cards.oauthImport.badge)).toBeInTheDocument()
+    expect(screen.queryByText('Paste an OpenAI API key')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sign in with ChatGPT in your browser')).not.toBeInTheDocument()
+    expect(screen.queryByText('Headless? Use a device code')).not.toBeInTheDocument()
+    expect(screen.queryByText('Upload your local ~/.codex/auth.json')).not.toBeInTheDocument()
     expect(cards.map((card) => card.getAttribute('data-available'))).toEqual(
       ACCOUNT_AUTH_METHOD_IDS.map(() => 'true'),
     )
@@ -106,7 +114,7 @@ describe('AdminAccountsNewAccountPicker', () => {
     await renderWithRouter()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: /oauth browser/i }))
+    await user.click(getCard('oauth_browser'))
 
     expect(await screen.findByTestId('route-probe')).toHaveTextContent('/admin/accounts/new-oauth')
   })
@@ -115,7 +123,7 @@ describe('AdminAccountsNewAccountPicker', () => {
     await renderWithRouter()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: /oauth device/i }))
+    await user.click(getCard('oauth_device'))
 
     expect(await screen.findByTestId('route-probe')).toHaveTextContent(
       '/admin/accounts/new-oauth-device',
@@ -126,7 +134,7 @@ describe('AdminAccountsNewAccountPicker', () => {
     await renderWithRouter()
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: /import auth.json/i }))
+    await user.click(getCard('oauth_import'))
 
     expect(await screen.findByTestId('route-probe')).toHaveTextContent('/admin/accounts/new-import')
   })
