@@ -30,13 +30,13 @@ func TestHealthService_Healthy(t *testing.T) {
 	assert.NotEmpty(t, health.Uptime)
 }
 
-func TestHealthService_NoCapacity(t *testing.T) {
+func TestHealthService_HealthyWithNoActiveAccounts(t *testing.T) {
 	repo := newInMemoryAccountRepo()
 	svc := NewHealthService(repo)
 
 	health, err := svc.GetHealth(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "no_capacity", health.Status)
+	assert.Equal(t, "healthy", health.Status)
 	assert.Equal(t, 0, health.ActiveAccounts)
 }
 

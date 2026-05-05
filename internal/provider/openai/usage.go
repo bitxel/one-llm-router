@@ -202,10 +202,15 @@ func ExtractModelParams(requestBody []byte) domain.JSONMap {
 	}
 
 	params := domain.JSONMap{}
-	for _, key := range []string{"reasoning_effort", "service_tier"} {
-		if v, ok := req[key]; ok {
-			params[key] = v
+	if reasoningEffort, ok := req["reasoning_effort"]; ok {
+		params["reasoning_effort"] = reasoningEffort
+	} else if reasoning, ok := req["reasoning"].(map[string]any); ok {
+		if effort, ok := reasoning["effort"]; ok {
+			params["reasoning_effort"] = effort
 		}
+	}
+	if serviceTier, ok := req["service_tier"]; ok {
+		params["service_tier"] = serviceTier
 	}
 	if len(params) == 0 {
 		return nil

@@ -873,17 +873,10 @@ func makeHealthHandler(_ *App, st *store.Store, gate *setup.Gate, logger *slog.L
 		}
 
 		// Steady-state path — best-effort DB ping plus active/disabled
-		// account tallies. The tallies drive US-1 Edge-3: an admin
-		// with zero active upstream accounts (e.g. the wizard-seeded
-		// key was rejected and has since been disabled) must see the
-		// health `status` degrade so the admin-home "no healthy
-		// accounts" banner can fire. Bare count-any-accounts would
-		// miss that case (the row exists, it's just not active).
-		//
-		// Contract (contracts/admin-api.md §Health endpoint) locks
-		// the state vocabulary to `healthy | degraded | unhealthy`,
-		// so "zero active" maps to `degraded` rather than adding a
-		// fourth `no_capacity` state.
+		// account tallies. Account capacity is exposed as operational
+		// data, but it is not a health dependency: an installed router
+		// with no active upstream accounts is reachable and correctly
+		// serving the admin API, so it remains `healthy`.
 		start := time.Now()
 		active, err := st.Engine().Context(r.Context()).
 			Where("status = ?", domain.AccountStatusActive).
@@ -914,11 +907,7 @@ func makeHealthHandler(_ *App, st *store.Store, gate *setup.Gate, logger *slog.L
 			return
 		}
 		latency := time.Since(start).Milliseconds()
-		status := "healthy"
-		if active == 0 {
-			status = "degraded"
-		}
-		data["status"] = status
+		data["status"] = "healthy"
 		data["active_accounts"] = active
 		data["disabled_accounts"] = disabled
 		accountsData := map[string]any{

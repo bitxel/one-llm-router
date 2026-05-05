@@ -49,13 +49,8 @@ func (s *HealthService) GetHealth(ctx context.Context) (HealthStatus, error) {
 		}
 	}
 
-	status := "healthy"
-	if active == 0 {
-		status = "no_capacity"
-	}
-
 	return HealthStatus{
-		Status:           status,
+		Status:           "healthy",
 		ActiveAccounts:   active,
 		DisabledAccounts: disabled,
 		DeletedAccounts:  deleted,

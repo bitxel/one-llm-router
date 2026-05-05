@@ -448,7 +448,7 @@ func TestChatCompletionsBridgeBuildUpstreamRequestSelectsAdapters(t *testing.T) 
 	}
 }
 
-func TestChatCompletionsBridgeRejectsUnsupportedFields(t *testing.T) {
+func TestChatCompletionsBridgeIgnoresUnsupportedFields(t *testing.T) {
 	t.Parallel()
 
 	bridge, ok := DefaultBridgeRegistry().Resolve(OpOpenAIChatCompletionsCreate, CredentialClassOAuth)
@@ -461,12 +461,12 @@ func TestChatCompletionsBridgeRejectsUnsupportedFields(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, _, err = bridge.BuildUpstreamRequest(context.Background(), BuildInput{
+	upstreamReq, _, err := bridge.BuildUpstreamRequest(context.Background(), BuildInput{
 		ClientRequest:   clientReq,
 		Credential:      CredentialClassOAuth,
 		CredentialValue: "oauth-access",
 		UpstreamBaseURL: "https://chatgpt.example.test/backend-api",
 	})
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "unsupported field")
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":"hi"}],"store":false,"stream":true}`, string(upstreamReq.RawBody))
 }

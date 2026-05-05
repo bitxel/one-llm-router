@@ -141,6 +141,7 @@ func TestExtractModelParams(t *testing.T) {
 	body := []byte(`{
 		"model": "o3",
 		"reasoning_effort": "high",
+		"reasoning": {"effort": "low"},
 		"service_tier": "flex"
 	}`)
 
@@ -148,6 +149,17 @@ func TestExtractModelParams(t *testing.T) {
 	require.NotNil(t, params)
 	assert.Equal(t, "high", params["reasoning_effort"])
 	assert.Equal(t, "flex", params["service_tier"])
+}
+
+func TestExtractModelParams_ReasoningObject(t *testing.T) {
+	body := []byte(`{
+		"model": "o3",
+		"reasoning": {"effort": "high"}
+	}`)
+
+	params := ExtractModelParams(body)
+	require.NotNil(t, params)
+	assert.Equal(t, "high", params["reasoning_effort"])
 }
 
 func TestExtractModelParams_None(t *testing.T) {

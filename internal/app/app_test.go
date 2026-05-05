@@ -161,11 +161,9 @@ func TestBuildApp_SteadyState_RunsMigrationsAndHealthy(t *testing.T) {
 		t.Fatal("Store() nil")
 	}
 
-	// Health now requires at least one active upstream account to
-	// report "healthy" (US-1 Edge-3 signal — zero active accounts
-	// degrades health so the admin home can surface a "no healthy
-	// accounts" banner). Seed one row via raw SQL against the
-	// already-migrated DB to stay off the account-service surface.
+	// Seed one row via raw SQL against the already-migrated DB to
+	// verify steady-state account tallies while staying off the
+	// account-service surface.
 	raw := openRawSQLite(t, dbFile)
 	if _, err := raw.Exec(
 		`INSERT INTO upstream_accounts (name, provider, api_key, status) VALUES (?, ?, ?, ?)`,
@@ -335,12 +333,10 @@ func TestBuildApp_PlaygroundRouteWiring(t *testing.T) {
 	})
 }
 
-// TestBuildApp_SteadyState_DegradedWhenNoActiveAccounts pins the
-// spec US-1 Edge-3 signal the admin-home banner depends on: after
-// wizard commit, if the seeded upstream key is later rejected /
-// disabled, `active == 0` MUST surface as health `degraded` rather
-// than `healthy` — otherwise the banner can never fire.
-func TestBuildApp_SteadyState_DegradedWhenNoActiveAccounts(t *testing.T) {
+// TestBuildApp_SteadyState_HealthyWhenNoActiveAccounts pins the
+// health semantics: account capacity is reported in the payload, but
+// zero active upstream accounts is not a router health degradation.
+func TestBuildApp_SteadyState_HealthyWhenNoActiveAccounts(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	dbFile := filepath.Join(dir, "router.db")
@@ -363,8 +359,8 @@ func TestBuildApp_SteadyState_DegradedWhenNoActiveAccounts(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if got := envelopeStatus(t, rec.Body.Bytes()); got != "degraded" {
-		t.Errorf("status = %q, want degraded (no active accounts)", got)
+	if got := envelopeStatus(t, rec.Body.Bytes()); got != "healthy" {
+		t.Errorf("status = %q, want healthy (no active accounts)", got)
 	}
 }
 

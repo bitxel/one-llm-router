@@ -122,11 +122,11 @@ func TestAdminHealthEndpoint(t *testing.T) {
 	r := httptest.NewRequest("GET", "/admin/health", nil)
 	mux.ServeHTTP(w, r)
 
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	var health core.HealthStatus
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &health))
-	assert.Equal(t, "no_capacity", health.Status)
+	assert.Equal(t, "healthy", health.Status)
 	assert.Equal(t, 0, health.ActiveAccounts)
 }
 

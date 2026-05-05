@@ -2,10 +2,12 @@ package openai
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -55,6 +57,9 @@ func TestChatAdapterNonStreamMapsRequestAndResponse(t *testing.T) {
 		"tools": [{"type":"function","function":{"name":"lookup","description":"Lookup","parameters":{"type":"object"}}}],
 		"tool_choice": {"type":"function","function":{"name":"lookup"}},
 		"response_format": {"type":"json_object"},
+		"reasoning_effort": "none",
+		"verbosity": "low",
+		"prompt_cache_key": "chat-cache-key",
 		"n": 1
 	}`
 	orig := httptest.NewRequest(http.MethodPost, "http://router/v1/chat/completions", strings.NewReader(reqBody))
@@ -77,6 +82,9 @@ func TestChatAdapterNonStreamMapsRequestAndResponse(t *testing.T) {
 	assert.NotContains(t, upstreamBody, "max_tokens")
 	assert.Equal(t, false, upstreamBody["store"])
 	assert.NotContains(t, upstreamBody, "n")
+	assert.Equal(t, map[string]any{"effort": "none"}, upstreamBody["reasoning"])
+	assert.Equal(t, "low", upstreamBody["text"].(map[string]any)["verbosity"])
+	assert.Equal(t, "chat-cache-key", upstreamBody["prompt_cache_key"])
 	assert.Contains(t, upstreamBody["instructions"], "You are concise.")
 	assert.Contains(t, upstreamBody["instructions"], "Use JSON.")
 	require.NotEmpty(t, upstreamBody["input"])
@@ -109,13 +117,12 @@ func TestChatAdapterValidateRejectsUnsupportedFields(t *testing.T) {
 		name string
 		body string
 	}{
-		{name: "unknown top level", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"unknown":true}`},
 		{name: "store true", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"store":true}`},
 		{name: "n greater than one", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"n":2}`},
 		{name: "conflicting token limits", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"max_tokens":4,"max_completion_tokens":5}`},
 		{name: "unsupported response format", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"response_format":{"type":"xml"}}`},
-		{name: "legacy function call", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"function_call":"auto"}`},
-		{name: "logprobs", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"logprobs":true}`},
+		{name: "invalid reasoning", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"reasoning":"medium"}`},
+		{name: "invalid reasoning effort", body: `{"model":"gpt","messages":[{"role":"user","content":"hi"}],"reasoning_effort":2}`},
 		{name: "empty messages", body: `{"model":"gpt","messages":[]}`},
 	}
 
@@ -151,6 +158,63 @@ func TestChatAdapterValidateRejectsUnsupportedFields(t *testing.T) {
 			assert.Equal(t, int32(0), upstreamCalls.Load())
 		})
 	}
+}
+
+func TestChatAdapterIgnoresUnknownAndUnsupportedFieldsWithWarning(t *testing.T) {
+	var logs bytes.Buffer
+	prevLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prevLogger) })
+
+	orig := httptest.NewRequest(http.MethodPost, "http://router/v1/chat/completions", strings.NewReader(`{
+		"model":"gpt",
+		"messages":[{"role":"user","content":"hi"}],
+		"unknown": true,
+		"logprobs": true,
+		"function_call": "auto"
+	}`))
+	orig.Header.Set("X-Request-Id", "req_chat_ignore")
+
+	adapted, err := buildChatAdapterRequest(orig)
+	require.NoError(t, err)
+
+	var upstream map[string]any
+	require.NoError(t, json.Unmarshal(adapted.upstreamBody, &upstream))
+	assert.NotContains(t, upstream, "unknown")
+	assert.NotContains(t, upstream, "logprobs")
+	assert.NotContains(t, upstream, "function_call")
+
+	logText := logs.String()
+	assert.Contains(t, logText, "chat completions field ignored")
+	assert.Contains(t, logText, "field=unknown")
+	assert.Contains(t, logText, "field=logprobs")
+	assert.Contains(t, logText, "field=function_call")
+	assert.Contains(t, logText, "request_id=req_chat_ignore")
+	assert.NotContains(t, logText, "true")
+	assert.NotContains(t, logText, "auto")
+}
+
+func TestChatAdapterReasoningEffortOverridesReasoningObject(t *testing.T) {
+	var logs bytes.Buffer
+	prevLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prevLogger) })
+
+	orig := httptest.NewRequest(http.MethodPost, "http://router/v1/chat/completions", strings.NewReader(`{
+		"model":"gpt",
+		"messages":[{"role":"user","content":"hi"}],
+		"reasoning_effort": "low",
+		"reasoning": {"effort":"high","summary":"none"}
+	}`))
+
+	adapted, err := buildChatAdapterRequest(orig)
+	require.NoError(t, err)
+
+	var upstream map[string]any
+	require.NoError(t, json.Unmarshal(adapted.upstreamBody, &upstream))
+	assert.Equal(t, map[string]any{"effort": "low", "summary": "none"}, upstream["reasoning"])
+	assert.Contains(t, logs.String(), "field=reasoning.effort")
+	assert.Contains(t, logs.String(), "reason=overridden_by_reasoning_effort")
 }
 
 func TestChatAdapterNonStreamFailedResponseIsNotSuccess(t *testing.T) {

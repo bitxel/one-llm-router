@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/user/one-llm-router/internal/domain"
+	"github.com/user/one-llm-router/internal/requestid"
 )
 
 var errChatAdapterValidation = errors.New("chat adapter validation failed")
@@ -43,6 +45,10 @@ var chatAdapterAllowedFields = map[string]struct{}{
 	"max_completion_tokens": {},
 	"store":                 {},
 	"stream_options":        {},
+	"reasoning_effort":      {},
+	"reasoning":             {},
+	"verbosity":             {},
+	"prompt_cache_key":      {},
 }
 
 var chatAdapterUnsupportedFields = map[string]struct{}{
@@ -172,15 +178,13 @@ func buildChatAdapterRequest(original *http.Request) (chatAdapterRequest, error)
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return chatAdapterRequest{}, fmt.Errorf("%w: decode request JSON: %w", errChatAdapterValidation, err)
 	}
-	for field, value := range raw {
+	for field := range raw {
 		if _, unsupported := chatAdapterUnsupportedFields[field]; unsupported {
-			if !jsonRawIsNull(value) {
-				return chatAdapterRequest{}, fmt.Errorf("%w: unsupported field %q", errChatAdapterValidation, field)
-			}
+			warnIgnoredChatField(original, field, "unsupported")
 			continue
 		}
 		if _, ok := chatAdapterAllowedFields[field]; !ok {
-			return chatAdapterRequest{}, fmt.Errorf("%w: unknown field %q", errChatAdapterValidation, field)
+			warnIgnoredChatField(original, field, "unknown")
 		}
 	}
 
@@ -230,6 +234,13 @@ func buildChatAdapterRequest(original *http.Request) (chatAdapterRequest, error)
 	copyOptionalRawJSON(payload, raw, "seed")
 	copyOptionalRawJSON(payload, raw, "service_tier")
 	copyOptionalRawJSON(payload, raw, "parallel_tool_calls")
+	copyOptionalRawJSON(payload, raw, "verbosity")
+	copyOptionalRawJSON(payload, raw, "prompt_cache_key")
+	if reasoning, ok, err := chatReasoning(raw["reasoning"], raw["reasoning_effort"], original); err != nil {
+		return chatAdapterRequest{}, err
+	} else if ok {
+		payload["reasoning"] = reasoning
+	}
 	if tools, ok, err := normalizeChatTools(raw["tools"]); err != nil {
 		return chatAdapterRequest{}, err
 	} else if ok {
@@ -255,6 +266,27 @@ func buildChatAdapterRequest(original *http.Request) (chatAdapterRequest, error)
 		return chatAdapterRequest{}, err
 	}
 	return chatAdapterRequest{model: model, stream: stream, includeUsage: includeUsage, upstreamBody: upstreamBody}, nil
+}
+
+func warnIgnoredChatField(req *http.Request, field, reason string) {
+	attrs := []any{
+		"component", "chat_adapter",
+		"field", field,
+		"reason", reason,
+	}
+	if req != nil {
+		requestID := requestid.FromContext(req.Context())
+		if requestID == "" {
+			requestID = strings.TrimSpace(req.Header.Get("X-Request-Id"))
+		}
+		if requestID != "" {
+			attrs = append(attrs, "request_id", requestID)
+		}
+		if path := strings.TrimSpace(req.URL.Path); path != "" {
+			attrs = append(attrs, "path", path)
+		}
+	}
+	slog.Default().Warn("chat completions field ignored", attrs...)
 }
 
 func requiredJSONString(raw map[string]json.RawMessage, field string) (string, error) {
@@ -369,6 +401,50 @@ func optionalJSONInt(raw json.RawMessage, field string) (int, bool, error) {
 	}
 	if value < 0 {
 		return 0, false, fmt.Errorf("%w: %s must be non-negative", errChatAdapterValidation, field)
+	}
+	return value, true, nil
+}
+
+func chatReasoning(reasoningRaw, effortRaw json.RawMessage, req *http.Request) (map[string]any, bool, error) {
+	var reasoning map[string]any
+	if len(reasoningRaw) > 0 && !jsonRawIsNull(reasoningRaw) {
+		if err := json.Unmarshal(reasoningRaw, &reasoning); err != nil {
+			return nil, false, fmt.Errorf("%w: reasoning must be an object", errChatAdapterValidation)
+		}
+		if reasoning == nil {
+			reasoning = map[string]any{}
+		}
+	}
+
+	effort, hasEffort, err := optionalJSONString(effortRaw, "reasoning_effort")
+	if err != nil {
+		return nil, false, err
+	}
+	if hasEffort {
+		if reasoning == nil {
+			reasoning = map[string]any{}
+		}
+		if existing, ok := reasoning["effort"]; ok && existing != nil && existing != effort {
+			warnIgnoredChatField(req, "reasoning.effort", "overridden_by_reasoning_effort")
+		}
+		reasoning["effort"] = effort
+	}
+	if len(reasoning) == 0 {
+		return nil, false, nil
+	}
+	return reasoning, true, nil
+}
+
+func optionalJSONString(raw json.RawMessage, field string) (string, bool, error) {
+	if len(raw) == 0 || jsonRawIsNull(raw) {
+		return "", false, nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", false, fmt.Errorf("%w: %s must be a string", errChatAdapterValidation, field)
+	}
+	if strings.TrimSpace(value) == "" {
+		return "", false, fmt.Errorf("%w: %s must be a non-empty string", errChatAdapterValidation, field)
 	}
 	return value, true, nil
 }

@@ -204,13 +204,25 @@ func TestProxyOAuthCodexNormalizationRejectsInvalidBeforeUpstream(t *testing.T) 
 	}
 }
 
-func TestProxyOAuthChatCompletionsBridgeRejectsUnsupportedBeforeUpstream(t *testing.T) {
+func TestProxyOAuthChatCompletionsBridgeIgnoresUnsupportedBeforeUpstream(t *testing.T) {
 	t.Parallel()
 
 	var upstreamCalls atomic.Int32
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	var upstreamBody []byte
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamCalls.Add(1)
-		w.WriteHeader(http.StatusOK)
+		var err error
+		upstreamBody, err = io.ReadAll(r.Body)
+		require.NoError(t, err)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(strings.Join([]string{
+			`event: response.output_text.delta`,
+			`data: {"type":"response.output_text.delta","delta":"ok"}`,
+			``,
+			`event: response.completed`,
+			`data: {"type":"response.completed","response":{"id":"resp_ignore","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`,
+			``,
+		}, "\n")))
 	}))
 	t.Cleanup(upstream.Close)
 
@@ -219,27 +231,25 @@ func TestProxyOAuthChatCompletionsBridgeRejectsUnsupportedBeforeUpstream(t *test
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{
 		"model":"gpt-5.4-mini",
 		"messages":[{"role":"user","content":"hi"}],
-		"logprobs": true
+		"logprobs": true,
+		"reasoning_effort": "low",
+		"reasoning": {"effort": "high"}
 	}`))
 
 	h.handler.ServeHTTP(rec, req)
 
-	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
-	assert.Equal(t, int32(0), upstreamCalls.Load())
-	var envelope RouterErrorEnvelope
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
-	assert.Equal(t, ErrCodeInvalidRequest, envelope.Error.Code)
-	assert.Equal(t, "router_error", envelope.Error.Type)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, int32(1), upstreamCalls.Load())
+	assert.NotContains(t, string(upstreamBody), "logprobs")
+	assert.Contains(t, string(upstreamBody), `"reasoning":{"effort":"low"}`)
 
 	recordRepo := store.NewRequestRecordRepo(h.store.Engine())
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		records, err := recordRepo.Query(context.Background(), core.QueryParams{Limit: 10})
 		require.NoError(c, err)
 		require.Len(c, records, 1)
-		assert.Nil(c, records[0].UpstreamRequestBody)
-		assert.Nil(c, records[0].UpstreamResponseBody)
-		require.NotNil(c, records[0].ErrorCode)
-		assert.Equal(c, ErrCodeInvalidRequest, *records[0].ErrorCode)
+		assert.Nil(c, records[0].ErrorCode)
+		assert.Equal(c, "low", records[0].ModelParams["reasoning_effort"])
 		assertRecordBridgeMetadata(c, records[0], openai.BridgeMetadata{
 			OpID:             openai.OpOpenAIChatCompletionsCreate,
 			BridgeID:         openai.BridgeOpenAIChatCompletionsToCodex,

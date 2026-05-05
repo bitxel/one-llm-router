@@ -324,10 +324,7 @@ func (h *Handler) Commit(w http.ResponseWriter, r *http.Request) {
 
 	// Exactly one `setup_committed` INFO event per contract.
 	// account_seeded distinguishes a wizard that skipped upstream
-	// account seeding (account_id=0) from one that registered a key —
-	// /api/admin/health reports `degraded` in the former case so the
-	// admin portal's "no healthy accounts" banner (V-001) stays the
-	// authoritative operator signal.
+	// account seeding (account_id=0) from one that registered a key.
 	h.logger.Info("setup_committed",
 		"request_id", reqID,
 		"driver", req.DB.Driver,
