@@ -186,6 +186,12 @@ func TestRun_SetupPending_TimeoutShutdown_LogsAbsentConfig(t *testing.T) {
 	if !strings.Contains(combined, "config.json absent") {
 		t.Fatalf("expected setup-pending log marker; stdout=%q stderr=%q", stdout, stderr)
 	}
+	if !strings.Contains(combined, `"msg":"starting one-llm-router"`) {
+		t.Fatalf("expected startup log marker; stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(combined, `"built_at":`) {
+		t.Fatalf("expected startup log to include built_at; stdout=%q stderr=%q", stdout, stderr)
+	}
 }
 
 func TestRun_RejectsCodexBackendOverrideEnv(t *testing.T) {

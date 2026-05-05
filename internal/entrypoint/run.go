@@ -197,6 +197,7 @@ func Run(ctx context.Context, args []string, stdout, stderr *os.File, opts Optio
 		"listen", listenAddr,
 		"version", buildinfo.Version,
 		"git_sha", buildinfo.GitSHA,
+		"built_at", buildinfo.BuiltAt,
 	)
 
 	serveErr := a.Start(appCtx)
