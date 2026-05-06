@@ -223,6 +223,34 @@ func stringPointer(v string) *string {
 	return &v
 }
 
+func TestClassifySSEForwardFailure(t *testing.T) {
+	t.Run("context canceled records cancelled without invalid upstream code", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		outcome, errCode := classifySSEForwardFailure(ctx, domain.OutcomeSuccess, context.Canceled)
+
+		assert.Equal(t, domain.OutcomeCancelled, outcome)
+		assert.Nil(t, errCode)
+	})
+
+	t.Run("read failure records invalid upstream response", func(t *testing.T) {
+		outcome, errCode := classifySSEForwardFailure(context.Background(), domain.OutcomeSuccess, errors.New("bad SSE"))
+
+		assert.Equal(t, domain.OutcomeRouterError, outcome)
+		require.NotNil(t, errCode)
+		assert.Equal(t, ErrCodeUpstreamRespInvalid, *errCode)
+	})
+
+	t.Run("upstream error outcome remains upstream error", func(t *testing.T) {
+		outcome, errCode := classifySSEForwardFailure(context.Background(), domain.OutcomeUpstreamError, errors.New("bad SSE"))
+
+		assert.Equal(t, domain.OutcomeUpstreamError, outcome)
+		require.NotNil(t, errCode)
+		assert.Equal(t, ErrCodeUpstreamRespInvalid, *errCode)
+	})
+}
+
 func TestProxyHandler_JSONResponse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))

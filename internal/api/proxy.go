@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -341,12 +342,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ttftMs = sseResult.TTFTMs
 		if sseResult.Err != nil {
 			h.logger.Warn("SSE stream read error", "request_id", requestID, "error", sseResult.Err)
-			if outcome == domain.OutcomeSuccess {
-				outcome = domain.OutcomeRouterError
-			}
-			code := ErrCodeUpstreamRespInvalid
-			errCode = &code
-			tokenUsage = nil
+			outcome, errCode = classifySSEForwardFailure(r.Context(), outcome, sseResult.Err)
 		} else if tokenUsage == nil && capture.TokenUsage != nil {
 			tokenUsage = capture.TokenUsage()
 		}
@@ -470,6 +466,20 @@ func mergeModelParams(base domain.JSONMap, extra domain.JSONMap) domain.JSONMap 
 		base[key] = value
 	}
 	return base
+}
+
+func classifySSEForwardFailure(ctx context.Context, currentOutcome string, err error) (string, *string) {
+	if (ctx != nil && ctx.Err() != nil) || errors.Is(err, context.Canceled) {
+		if currentOutcome == domain.OutcomeSuccess {
+			return domain.OutcomeCancelled, nil
+		}
+		return currentOutcome, nil
+	}
+	if currentOutcome == domain.OutcomeSuccess {
+		currentOutcome = domain.OutcomeRouterError
+	}
+	code := ErrCodeUpstreamRespInvalid
+	return currentOutcome, &code
 }
 
 func gatewayBridgeMetadata(bridge provider.OperationBridge, credential provider.CredentialClass) provider.BridgeMetadata {
