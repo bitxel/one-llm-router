@@ -141,6 +141,10 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveWebSocket(w, requestID, start, r, route, sessionKey)
 		return
 	}
+	if isModelsUnionRoute(route, r) {
+		h.serveModelsUnion(w, requestID, start, r, route)
+		return
+	}
 
 	var reqBodyBytes []byte
 	if r.Body != nil {

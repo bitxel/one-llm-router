@@ -142,10 +142,8 @@ func classifySupportedGatewayRoute(method, path string, websocket bool) (gateway
 		}
 	case "/v1/models":
 		if method == http.MethodGet {
-			// TODO(models-union): upgrade GET /v1/models from selected-account
-			// discovery to a global union of every active route-eligible account,
-			// then make model-bearing requests route only to accounts that
-			// advertise the requested model.
+			// GET /v1/models is handled as a router-level strict union before
+			// normal selected-account forwarding.
 			route := platformDirectRoute(openai.OpOpenAIModelsList, path)
 			route.OAuth = gatewayCredentialRoute{
 				Eligible:     true,

@@ -51,7 +51,7 @@ This contract covers client-facing `/v1/*` routes. These routes are data-plane r
 | `POST /v1/chat/completions/{completion_id}` | Direct forward |
 | `DELETE /v1/chat/completions/{completion_id}` | Direct forward |
 | `GET /v1/chat/completions/{completion_id}/messages` | Direct forward |
-| `GET /v1/models` | Direct forward |
+| `GET /v1/models` | Contribute real model-list data to the strict union response |
 | `GET /v1/models/{model}` | Direct forward |
 
 ## Supported OAuth Operations
@@ -62,13 +62,17 @@ This contract covers client-facing `/v1/*` routes. These routes are data-plane r
 | `WS /v1/responses` | Map to ChatGPT Codex Responses WebSocket; WebSocket relay with `x-codex-turn-state` compatibility |
 | `POST /v1/responses/compact` | Map to ChatGPT Codex `/backend-api/codex/responses/compact` |
 | `POST /v1/chat/completions` | Convert Chat Completions request to Codex Responses request and reconstruct Chat Completions-compatible JSON/SSE |
-| `GET /v1/models` | Return a codex-lb-compatible OpenAI model list facade backed by the Codex model list; no OpenAI Platform upstream call |
+| `GET /v1/models` | Contribute a codex-lb-compatible OpenAI model list facade backed by the Codex model list to the strict union response; no OpenAI Platform upstream call |
 
 All other `/v1/*` operations are unsupported for OAuth accounts in 006, including `GET /v1/models/{model}`.
 
-## OAuth `GET /v1/models` Facade
+## `GET /v1/models` Union And OAuth Facade
 
-Applies only to OAuth accounts on `GET /v1/models`. API-key accounts direct-forward the original request and do not use this facade.
+`GET /v1/models` is a router-level discovery operation over every active route-eligible upstream account. It returns one OpenAI-compatible list response whose `data` is deduplicated by model `id`.
+
+API-key accounts contribute their real OpenAI Platform-compatible `GET /v1/models` response. OAuth accounts use the facade rules below and contribute the adapted Codex model list. The operation is strict fail-fast: if any eligible account cannot prepare credentials, connect, or return a valid successful model list, the whole request fails with native data-plane error semantics rather than silently returning a partial list.
+
+OAuth facade rules:
 
 Rules:
 
@@ -77,6 +81,7 @@ Rules:
 - The route does not contact OpenAI Platform `/v1/models` with a ChatGPT OAuth token.
 - `GET /v1/models/{model}` remains unsupported for OAuth accounts in 006.
 - Unknown model metadata is omitted or set only from real local/Codex model metadata; implementation must not fabricate provider ownership, capabilities, or timestamps.
+- Duplicate model ids are represented once; the first account in stable active-account order wins unless a future spec defines conflict merging.
 
 ## OAuth Chat Completions Adapter
 

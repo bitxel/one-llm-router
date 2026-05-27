@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -664,7 +665,7 @@ func TestProxyHandler_NilBody(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"id":"resp_1"}`))
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-4o-mini","object":"model","created":1710000000,"owned_by":"openai"}]}`))
 	}))
 	defer upstream.Close()
 
@@ -752,7 +753,7 @@ func TestProxyHandler_HopByHopHeadersStripped(t *testing.T) {
 	handler, _ := setupProxyTest(t, upstream)
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/v1/models", nil)
+	r := httptest.NewRequest("GET", "/v1/responses/resp_1", nil)
 	handler.ServeHTTP(w, r)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -784,7 +785,7 @@ func TestProxyHandler_UpstreamRequestIDStripped(t *testing.T) {
 	handler, _ := setupProxyTest(t, upstream)
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/v1/models", nil)
+	r := httptest.NewRequest("GET", "/v1/responses/resp_1", nil)
 	handler.ServeHTTP(w, r)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -794,6 +795,180 @@ func TestProxyHandler_UpstreamRequestIDStripped(t *testing.T) {
 	if got := w.Header().Get("Request-Id"); got == "legacy-upstream-id-should-be-dropped" {
 		t.Fatalf("Request-Id leaked from upstream: %q", got)
 	}
+}
+
+func TestProxyHandler_ModelsUnionMergesAPIKeyAndOAuthAccounts(t *testing.T) {
+	now := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
+	var apiHits atomic.Int32
+	apiUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiHits.Add(1)
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "Bearer sk-api", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[
+			{"id":"gpt-5.4","object":"model","created":1710000000,"owned_by":"openai"},
+			{"id":"shared-model","object":"model","created":1710000001,"owned_by":"api-owner"}
+		]}`))
+	}))
+	t.Cleanup(apiUpstream.Close)
+
+	var oauthHits atomic.Int32
+	oauthUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		oauthHits.Add(1)
+		assert.Equal(t, "/codex/models", r.URL.Path)
+		assert.Equal(t, "Bearer oauth-access", r.Header.Get("Authorization"))
+		assert.Equal(t, "acct-oauth-access", r.Header.Get("chatgpt-account-id"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"models":[
+			{"slug":"shared-model","created":1720000000,"owned_by":"oauth-owner","display_name":"Shared OAuth"},
+			{"slug":"gpt-5.4-codex","created":1720000001,"owned_by":"codex-owner","display_name":"Codex"}
+		]}`))
+	}))
+	t.Cleanup(oauthUpstream.Close)
+
+	h := newProxyHarness(t, 5*time.Second)
+	apiBaseURL := apiUpstream.URL
+	require.NoError(t, h.repo.Create(context.Background(), &domain.UpstreamAccount{
+		Name:     "api",
+		Provider: domain.ProviderOpenAI,
+		APIKey:   "sk-api",
+		BaseURL:  &apiBaseURL,
+		Status:   domain.AccountStatusActive,
+	}))
+	h.client.SetCodexBackendBaseURLForTest(oauthUpstream.URL)
+	insertOAuthProxyAccount(t, h.repo, oauthUpstream.URL, now, "oauth-access", "oauth-refresh", now.Add(2*time.Hour))
+	coord := oauth.NewCoordinatorWithClock(oauth.NewFakeClock(now), &proxyRefreshProvider{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	coord.SetAccountStore(h.repo)
+	h.selector.PreForward = coord.RefreshIfStale
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	h.handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, int32(1), apiHits.Load())
+	assert.Equal(t, int32(1), oauthHits.Load())
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+
+	var body struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID      string         `json:"id"`
+			Object  string         `json:"object"`
+			Created float64        `json:"created"`
+			OwnedBy string         `json:"owned_by"`
+			Meta    map[string]any `json:"metadata"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "list", body.Object)
+	require.Len(t, body.Data, 3)
+	assert.Equal(t, "gpt-5.4", body.Data[0].ID)
+	assert.Equal(t, "shared-model", body.Data[1].ID)
+	assert.Equal(t, "api-owner", body.Data[1].OwnedBy, "first account wins duplicate metadata")
+	assert.Equal(t, "gpt-5.4-codex", body.Data[2].ID)
+	assert.Equal(t, "codex-owner", body.Data[2].OwnedBy)
+	require.NotNil(t, body.Data[2].Meta)
+	assert.Equal(t, "Codex", body.Data[2].Meta["display_name"])
+
+	recordRepo := store.NewRequestRecordRepo(h.store.Engine())
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		records, err := recordRepo.Query(context.Background(), core.QueryParams{Limit: 10})
+		require.NoError(c, err)
+		require.Len(c, records, 1)
+		assert.Nil(c, records[0].UpstreamAccountID)
+		assert.Equal(c, domain.OutcomeSuccess, records[0].Outcome)
+		assert.Equal(c, http.StatusOK, records[0].StatusCode)
+		raw, ok := records[0].RouterMetadata["models_union"]
+		if !assert.True(c, ok, "models_union metadata missing") {
+			return
+		}
+		meta, ok := raw.(map[string]any)
+		if !assert.True(c, ok, "models_union metadata must be object") {
+			return
+		}
+		assert.Equal(c, float64(2), meta["account_count"])
+		assert.NotContains(c, records[0].RouterMetadata, openai.RouterMetadataBridgeKey)
+	}, time.Second, 10*time.Millisecond)
+}
+
+func TestProxyHandler_ModelsUnionFailsOnInvalidProviderList(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"not-list","data":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	handler, _ := setupProxyTest(t, upstream)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadGateway, rec.Code, rec.Body.String())
+	var envelope RouterErrorEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	assert.Equal(t, ErrCodeUpstreamRespInvalid, envelope.Error.Code)
+}
+
+func TestProxyHandler_ModelsUnionForcesIdentityEncoding(t *testing.T) {
+	var upstreamAcceptEncoding atomic.Value
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamAcceptEncoding.Store(r.Header.Get("Accept-Encoding"))
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			gz := gzip.NewWriter(w)
+			_, _ = gz.Write([]byte(`{"object":"list","data":[{"id":"gpt-gzip","object":"model"}]}`))
+			_ = gz.Close()
+			return
+		}
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-identity","object":"model"}]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	handler, _ := setupProxyTest(t, upstream)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "identity", upstreamAcceptEncoding.Load())
+	var body openAIModelsListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Data, 1)
+	assert.Equal(t, "gpt-identity", body.Data[0]["id"])
+}
+
+func TestProxyHandler_ModelsUnionPreservesProviderErrorAndRecordsFailingAccount(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"code":"billing_hard_limit_reached","message":"quota","type":"insufficient_quota"}}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	handler, s := setupProxyTest(t, upstream)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"billing_hard_limit_reached","message":"quota","type":"insufficient_quota"}}`, rec.Body.String())
+
+	recordRepo := store.NewRequestRecordRepo(s.Engine())
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		records, err := recordRepo.Query(context.Background(), core.QueryParams{Limit: 10})
+		require.NoError(c, err)
+		require.Len(c, records, 1)
+		require.NotNil(c, records[0].UpstreamAccountID)
+		assert.Equal(c, int64(1), *records[0].UpstreamAccountID)
+		assert.Equal(c, domain.OutcomeUpstreamError, records[0].Outcome)
+		assert.Equal(c, http.StatusForbidden, records[0].StatusCode)
+		require.NotNil(c, records[0].ErrorCode)
+		assert.Equal(c, "billing_hard_limit_reached", *records[0].ErrorCode)
+		assert.Contains(c, records[0].RouterMetadata, "models_union")
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestRefreshIntegration_FreshOAuthUsesCurrentAccessToken(t *testing.T) {

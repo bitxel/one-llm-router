@@ -249,7 +249,7 @@ This matrix is the implementation and test source for credential-specific bridge
 | `op.openai.conversations.*` | `bridge.openai.conversations.direct` | No bridge | JSON | JSON capture allowed; no body expected for GET/DELETE |
 | `op.openai.chat_completions.create` | `bridge.openai.chat_completions.direct` | `bridge.openai.chat_completions.to_codex` | JSON or SSE | JSON capture allowed |
 | `op.openai.chat_completions.list`, `op.openai.chat_completions.retrieve`, `op.openai.chat_completions.update`, `op.openai.chat_completions.delete`, `op.openai.chat_completions.messages.list` | `bridge.openai.chat_completions.direct` | No bridge | JSON | JSON capture allowed; no body expected for GET/DELETE |
-| `op.openai.models.list` | `bridge.openai.models.direct` | `bridge.openai.models.from_codex` | JSON | JSON capture allowed; no body expected |
+| `op.openai.models.list` | `bridge.openai.models.direct` contributes to router-level strict union | `bridge.openai.models.from_codex` contributes to router-level strict union | JSON | JSON capture allowed; no body expected; client-facing `GET /v1/models` is aggregated across all active route-eligible accounts |
 | `op.openai.models.retrieve` | `bridge.openai.models.direct` | No bridge | JSON | JSON capture allowed; no body expected |
 | `op.codex_native.responses.create` | No bridge | `bridge.codex_native.responses.direct` | JSON or SSE | JSON capture allowed |
 | `op.codex_native.responses.websocket` | No bridge | `bridge.codex_native.responses.websocket.direct` | WebSocket | WebSocket no body |

@@ -47,7 +47,7 @@ func TestProxyAPIKeyDirectSupportedAllowlist(t *testing.T) {
 		{name: "chat completion update", method: http.MethodPost, target: "/v1/chat/completions/chatcmpl_123", body: `{"metadata":{"k":"v"}}`},
 		{name: "chat completion delete", method: http.MethodDelete, target: "/v1/chat/completions/chatcmpl_123"},
 		{name: "chat completion messages", method: http.MethodGet, target: "/v1/chat/completions/chatcmpl_123/messages?limit=5"},
-		{name: "models list", method: http.MethodGet, target: "/v1/models", acceptEncoding: "gzip"},
+		{name: "models list", method: http.MethodGet, target: "/v1/models", acceptEncoding: "identity"},
 		{name: "model retrieve", method: http.MethodGet, target: "/v1/models/gpt-4.1"},
 	}
 
@@ -71,6 +71,15 @@ func TestProxyAPIKeyDirectSupportedAllowlist(t *testing.T) {
 				assert.Equal(t, tc.body, string(data))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
+				if expectedPath == "/v1/models" {
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"object": "list",
+						"data": []map[string]any{
+							{"id": "gpt-4.1", "object": "model", "created": 1710000000, "owned_by": "openai"},
+						},
+					})
+					return
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"path": r.URL.Path})
 			}))
 			t.Cleanup(upstream.Close)

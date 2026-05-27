@@ -179,6 +179,48 @@ func TestAccountSelector_SelectEligibleNoCapacity(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrNoCapacity)
 }
 
+func TestAccountSelector_ListEligiblePrepared(t *testing.T) {
+	accounts := makeAccounts(1, 2, 3)
+	accounts[1].AuthMethod = domain.AuthMethodOAuthBrowser
+	accounts[1].APIKey = ""
+	repo := &mockAccountRepo{active: accounts}
+	selector := NewAccountSelector(repo, nil)
+	selector.PreForward = func(_ context.Context, acct *domain.UpstreamAccount) ([]byte, bool, error) {
+		if acct.ID == 2 {
+			return []byte("oauth-token"), true, nil
+		}
+		return []byte(acct.APIKey), false, nil
+	}
+
+	prepared, err := selector.ListEligiblePrepared(context.Background(), func(acct domain.UpstreamAccount) bool {
+		return acct.ID != 3
+	})
+	require.NoError(t, err)
+	require.Len(t, prepared, 2)
+	assert.Equal(t, int64(1), prepared[0].Account.ID)
+	assert.Equal(t, []byte("sk-test"), prepared[0].Token)
+	assert.Equal(t, int64(2), prepared[1].Account.ID)
+	assert.Equal(t, []byte("oauth-token"), prepared[1].Token)
+
+	prepared[1].Token[0] = 'X'
+	again, err := selector.ListEligiblePrepared(context.Background(), func(acct domain.UpstreamAccount) bool {
+		return acct.ID == 2
+	})
+	require.NoError(t, err)
+	require.Len(t, again, 1)
+	assert.Equal(t, []byte("oauth-token"), again[0].Token, "selector must not leak prepared token slice aliases")
+}
+
+func TestAccountSelector_ListEligiblePreparedNoCapacity(t *testing.T) {
+	repo := &mockAccountRepo{active: makeAccounts(1)}
+	selector := NewAccountSelector(repo, nil)
+
+	_, err := selector.ListEligiblePrepared(context.Background(), func(domain.UpstreamAccount) bool {
+		return false
+	})
+	assert.ErrorIs(t, err, domain.ErrNoCapacity)
+}
+
 func TestPreForward_WrapsErrors(t *testing.T) {
 	repo := &mockAccountRepo{active: makeAccounts(9)}
 	selector := NewAccountSelector(repo, nil)

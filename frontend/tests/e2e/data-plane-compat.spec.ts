@@ -64,25 +64,12 @@ const apiKeyChatBridge: BridgeMetadata = {
   credential_class: 'api_key',
 }
 
-const apiKeyModelsListBridge: BridgeMetadata = {
-  op_id: 'op.openai.models.list',
+const apiKeyModelsRetrieveBridge: BridgeMetadata = {
+  op_id: 'op.openai.models.retrieve',
   bridge_id: 'bridge.openai.models.direct',
   client_contract: 'contract.openai.v1.models',
   upstream_contract: 'contract.openai.v1.models',
   credential_class: 'api_key',
-}
-
-const apiKeyModelsRetrieveBridge: BridgeMetadata = {
-  ...apiKeyModelsListBridge,
-  op_id: 'op.openai.models.retrieve',
-}
-
-const oauthModelsBridge: BridgeMetadata = {
-  op_id: 'op.openai.models.list',
-  bridge_id: 'bridge.openai.models.from_codex',
-  client_contract: 'contract.openai.v1.models',
-  upstream_contract: 'contract.chatgpt.backend_api.codex.models',
-  credential_class: 'oauth',
 }
 
 const oauthResponsesBridge: BridgeMetadata = {
@@ -468,6 +455,23 @@ function expectNoBridgeMetadata(record: RequestLogRecord): void {
   expect(record.router_metadata?.bridge ?? undefined).toBeUndefined()
 }
 
+function expectModelsUnionMetadata(
+  record: RequestLogRecord,
+  expectedCredentialClasses: Array<'api_key' | 'oauth'>,
+): void {
+  expectNoBridgeMetadata(record)
+
+  const rawModelsUnion = record.router_metadata?.models_union
+  expect(rawModelsUnion, `${record.request_id} missing router_metadata.models_union`).toBeTruthy()
+  expect(rawModelsUnion, `${record.request_id} router_metadata.models_union`).toMatchObject({
+    account_count: expectedCredentialClasses.length,
+    credential_classes: expectedCredentialClasses,
+    source: 'active_eligible_accounts',
+    partial_success: false,
+    model_routing_bound: false,
+  })
+}
+
 const compatCases: CompatCase[] = [
   {
     name: 'R.text_input_string',
@@ -833,7 +837,7 @@ test.describe('data-plane compatibility', () => {
       expect(JSON.parse(modelsBodyText).data[0].id).toBe('gpt-5.4-mini')
       expect(upstream.captured.at(-1)?.path).toBe('/v1/models')
       const modelsRecord = await waitForRecordedRequest(page.request, modelsRequestID)
-      expectBridgeMetadata(modelsRecord, apiKeyModelsListBridge)
+      expectModelsUnionMetadata(modelsRecord, ['api_key'])
 
       const model = await page.request.get('/v1/models/gpt-5.4-mini')
       const { requestID: modelRequestID, text: modelBodyText } = await expectOKBody(
@@ -932,7 +936,7 @@ test.describe('data-plane compatibility', () => {
       })
       expect(codexBackendMock.requests.at(-1)?.path).toBe('/codex/models')
       const oauthModelsRecord = await waitForRecordedRequest(request, oauthModelsRequestID)
-      expectBridgeMetadata(oauthModelsRecord, oauthModelsBridge)
+      expectModelsUnionMetadata(oauthModelsRecord, ['oauth'])
 
       const oauthResponseJSON = await request.post('/v1/responses', {
         data: {

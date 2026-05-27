@@ -80,6 +80,12 @@ type AccountSelector struct {
 	PreForward    func(context.Context, *domain.UpstreamAccount) ([]byte, bool, error)
 }
 
+type PreparedAccount struct {
+	Account      domain.UpstreamAccount
+	Token        []byte
+	UsedFallback bool
+}
+
 func NewAccountSelector(repo AccountRepository, sessionRouter SessionRouter) *AccountSelector {
 	return &AccountSelector{
 		repo:          repo,
@@ -109,6 +115,33 @@ func (s *AccountSelector) SelectEligible(ctx context.Context, sessionKey string,
 
 	token, usedFallback, err := s.prepareToken(ctx, &acct)
 	return acct, token, usedFallback, err
+}
+
+func (s *AccountSelector) ListEligiblePrepared(ctx context.Context, eligible func(domain.UpstreamAccount) bool) ([]PreparedAccount, error) {
+	active, err := s.repo.ListActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active accounts: %w", err)
+	}
+
+	prepared := make([]PreparedAccount, 0, len(active))
+	for _, acct := range active {
+		if eligible != nil && !eligible(acct) {
+			continue
+		}
+		token, usedFallback, err := s.prepareToken(ctx, &acct)
+		if err != nil {
+			return nil, err
+		}
+		prepared = append(prepared, PreparedAccount{
+			Account:      acct,
+			Token:        token,
+			UsedFallback: usedFallback,
+		})
+	}
+	if len(prepared) == 0 {
+		return nil, domain.ErrNoCapacity
+	}
+	return prepared, nil
 }
 
 func (s *AccountSelector) SelectByID(ctx context.Context, id int64) (domain.UpstreamAccount, []byte, bool, error) {
