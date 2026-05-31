@@ -1284,6 +1284,8 @@ func TestProxyHandler_OAuthInvalidResponsesJSONReturnsInvalidRequest(t *testing.
 	defer upstream.Close()
 
 	h := newProxyHarness(t, 5*time.Second)
+	var logs bytes.Buffer
+	h.handler.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	h.client.SetCodexBackendBaseURLForTest(upstream.URL)
 	insertOAuthProxyAccount(t, h.repo, upstream.URL, now, "oauth-access", "oauth-refresh", now.Add(2*time.Hour))
 	provider := &proxyRefreshProvider{}
@@ -1304,6 +1306,15 @@ func TestProxyHandler_OAuthInvalidResponsesJSONReturnsInvalidRequest(t *testing.
 	assert.Equal(t, ErrCodeInvalidRequest, envelope.Error.Code)
 	assert.Equal(t, "invalid request body", envelope.Error.Message)
 	assert.Equal(t, int32(0), upstreamHits.Load())
+	logOutput := logs.String()
+	assert.Contains(t, logOutput, "router error")
+	assert.Contains(t, logOutput, "error_code=invalid_request")
+	assert.Contains(t, logOutput, "reason=")
+	assert.Contains(t, logOutput, "build upstream request body")
+	assert.Contains(t, logOutput, "decode codex upstream request body")
+	assert.Contains(t, logOutput, "unexpected end of JSON input")
+	assert.NotContains(t, logOutput, "oauth-access")
+	assert.NotContains(t, logOutput, "oauth-refresh")
 
 	recordRepo := store.NewRequestRecordRepo(h.store.Engine())
 	require.EventuallyWithT(t, func(c *assert.CollectT) {

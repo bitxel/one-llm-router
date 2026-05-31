@@ -63,6 +63,7 @@ type proxyErrorBodyCapture struct {
 	upstreamResponseBody []byte
 	modelParams          domain.JSONMap
 	routerMetadata       domain.JSONMap
+	cause                error
 }
 
 // shouldLogBody returns whether request/response body capture is
@@ -216,7 +217,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeError(w, requestID, start, r, &account,
 			http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
-			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes, routerMetadata: bridgeRouterMetadata})
+			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes, routerMetadata: bridgeRouterMetadata, cause: err})
 		return
 	}
 	upstreamBaseURL := account.EffectiveBaseURL()
@@ -233,7 +234,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeError(w, requestID, start, r, &account,
 			http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
-			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes, routerMetadata: bridgeRouterMetadata})
+			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes, routerMetadata: bridgeRouterMetadata, cause: err})
 		return
 	}
 	bridgeMetadata.UpstreamEndpoint = upstreamReq.Path
@@ -269,7 +270,14 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, openai.ErrInvalidUpstreamRequest) {
 			h.writeError(w, requestID, start, r, &account,
 				http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
-				domain.OutcomeRouterError, errorCapture)
+				domain.OutcomeRouterError, proxyErrorBodyCapture{
+					clientRequestBody:    errorCapture.clientRequestBody,
+					upstreamRequestBody:  errorCapture.upstreamRequestBody,
+					upstreamResponseBody: errorCapture.upstreamResponseBody,
+					modelParams:          errorCapture.modelParams,
+					routerMetadata:       errorCapture.routerMetadata,
+					cause:                err,
+				})
 			return
 		}
 		if errors.Is(err, openai.ErrUpstreamResponseInvalid) {
@@ -708,10 +716,36 @@ func (h *ProxyHandler) writeError(
 	}
 	h.recorder.Record(r.Context(), rec)
 
-	h.logger.Warn("router error",
+	attrs := []any{
 		"request_id", requestID,
 		"error_code", errCode,
 		"message", message,
 		"path", r.URL.Path,
-	)
+		"method", r.Method,
+	}
+	if accountID != nil {
+		attrs = append(attrs, "account_id", *accountID)
+	}
+	if capture.cause != nil {
+		attrs = append(attrs, "reason", sanitizeProxyLogError(capture.cause))
+	}
+	h.logger.Warn("router error", attrs...)
+}
+
+func sanitizeProxyLogError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return sanitizeProxyLogValue(err.Error())
+}
+
+func sanitizeProxyLogValue(value string) string {
+	lower := strings.ToLower(value)
+	if strings.Contains(lower, "bearer ") ||
+		strings.Contains(lower, "sk-") ||
+		strings.Contains(lower, "sk_") ||
+		strings.Contains(value, "eyJ") {
+		return "[redacted]"
+	}
+	return value
 }
