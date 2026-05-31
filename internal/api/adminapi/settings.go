@@ -39,6 +39,8 @@ import (
 // setup endpoints (8 KiB) because future settings keys may carry
 // plugin-specific blobs in 003+.
 const SettingsMaxBodyBytes = 16 << 10 // 16 KiB
+const maxModelRenameRules = 32
+const maxModelRenameModelLen = 128
 
 // SettingsHandler serves the 002 settings surface. It depends only on
 // the live config reader (for GETs) and a settings updater (for POSTs).
@@ -200,6 +202,7 @@ func projectSettings(cfg *config.Config) map[string]any {
 			"log_upstream_response_body": cfg.Runtime.LogUpstreamResponseBody,
 			"log_retention_days":         cfg.Runtime.LogRetentionDays,
 			"log_level":                  cfg.Runtime.LogLevel,
+			"model_renames":              cloneModelRenameRules(cfg.Runtime.ModelRenames),
 		},
 		"db":             projectDB(cfg.DB),
 		"plugins":        []any{}, // 002 ships no concrete plugins
@@ -346,13 +349,14 @@ func projectSystem() map[string]any {
 // pointer so the Update logic can distinguish "not provided" from
 // "explicitly set to zero".
 type SettingsPatch struct {
-	LogClientRequestBody    *bool   // runtime.log_client_request_body
-	LogUpstreamRequestBody  *bool   // runtime.log_upstream_request_body
-	LogUpstreamResponseBody *bool   // runtime.log_upstream_response_body
-	LogRetentionDays        *int    // runtime.log_retention_days
-	LogLevel                *string // runtime.log_level
-	AdminAuthEnabled        *bool   // plugins.admin_auth.enabled
-	ClientKeysEnabled       *bool   // plugins.client_keys.enabled
+	LogClientRequestBody    *bool                     // runtime.log_client_request_body
+	LogUpstreamRequestBody  *bool                     // runtime.log_upstream_request_body
+	LogUpstreamResponseBody *bool                     // runtime.log_upstream_response_body
+	LogRetentionDays        *int                      // runtime.log_retention_days
+	LogLevel                *string                   // runtime.log_level
+	ModelRenames            *[]config.ModelRenameRule // runtime.model_renames
+	AdminAuthEnabled        *bool                     // plugins.admin_auth.enabled
+	ClientKeysEnabled       *bool                     // plugins.client_keys.enabled
 }
 
 // RuntimeKeys returns the slice of runtime keys actually present in
@@ -374,6 +378,9 @@ func (p SettingsPatch) RuntimeKeys() []string {
 	}
 	if p.LogLevel != nil {
 		out = append(out, "log_level")
+	}
+	if p.ModelRenames != nil {
+		out = append(out, "model_renames")
 	}
 	return out
 }
@@ -506,6 +513,12 @@ func decodeRuntimePatch(raw map[string]json.RawMessage, patch *SettingsPatch) *s
 				return vErr
 			}
 			patch.LogLevel = &s
+		case "model_renames":
+			rules, err := decodeModelRenameRules(v)
+			if err != nil {
+				return err
+			}
+			patch.ModelRenames = &rules
 		default:
 			return &setup.ValidationError{
 				Code:  errcode.UnknownConfigKey,
@@ -515,6 +528,119 @@ func decodeRuntimePatch(raw map[string]json.RawMessage, patch *SettingsPatch) *s
 		}
 	}
 	return nil
+}
+
+func decodeModelRenameRules(raw json.RawMessage) ([]config.ModelRenameRule, *setup.ValidationError) {
+	if strings.TrimSpace(string(raw)) == "null" {
+		return nil, &setup.ValidationError{
+			Code:  errcode.InvalidModelRename,
+			Msg:   "model_renames must be an array of {from,to} objects",
+			Field: "runtime.model_renames",
+		}
+	}
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, &setup.ValidationError{
+			Code:  errcode.InvalidModelRename,
+			Msg:   "model_renames must be an array of {from,to} objects",
+			Field: "runtime.model_renames",
+		}
+	}
+	if len(entries) > maxModelRenameRules {
+		return nil, &setup.ValidationError{
+			Code:  errcode.InvalidModelRename,
+			Msg:   fmt.Sprintf("model_renames must contain at most %d entries", maxModelRenameRules),
+			Field: "runtime.model_renames",
+		}
+	}
+	seen := map[string]struct{}{}
+	out := make([]config.ModelRenameRule, 0, len(entries))
+	for idx, entry := range entries {
+		field := fmt.Sprintf("runtime.model_renames[%d]", idx)
+		for key := range entry {
+			if key != "from" && key != "to" {
+				return nil, &setup.ValidationError{
+					Code:  errcode.UnknownConfigKey,
+					Msg:   fmt.Sprintf("config key %q is not patchable in 002", field+"."+key),
+					Field: field + "." + key,
+				}
+			}
+		}
+		from, ok := decodeModelRenameString(entry["from"])
+		if !ok {
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   "model_renames.from must be a string",
+				Field: field + ".from",
+			}
+		}
+		to, ok := decodeModelRenameString(entry["to"])
+		if !ok {
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   "model_renames.to must be a string",
+				Field: field + ".to",
+			}
+		}
+		from = strings.TrimSpace(from)
+		to = strings.TrimSpace(to)
+		switch {
+		case from == "":
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   "model_renames.from must be non-empty",
+				Field: field + ".from",
+			}
+		case to == "":
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   "model_renames.to must be non-empty",
+				Field: field + ".to",
+			}
+		case len(from) > maxModelRenameModelLen:
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   fmt.Sprintf("model_renames.from must be %d characters or fewer", maxModelRenameModelLen),
+				Field: field + ".from",
+			}
+		case len(to) > maxModelRenameModelLen:
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   fmt.Sprintf("model_renames.to must be %d characters or fewer", maxModelRenameModelLen),
+				Field: field + ".to",
+			}
+		case from == to:
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   "model_renames.from and model_renames.to must differ",
+				Field: field + ".to",
+			}
+		}
+		if _, ok := seen[from]; ok {
+			return nil, &setup.ValidationError{
+				Code:  errcode.InvalidModelRename,
+				Msg:   "model_renames.from values must be unique",
+				Field: field + ".from",
+			}
+		}
+		seen[from] = struct{}{}
+		out = append(out, config.ModelRenameRule{From: from, To: to})
+	}
+	if out == nil {
+		out = []config.ModelRenameRule{}
+	}
+	return out, nil
+}
+
+func decodeModelRenameString(raw json.RawMessage) (string, bool) {
+	if raw == nil {
+		return "", false
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", false
+	}
+	return value, true
 }
 
 // decodePluginsPatch walks the plugins object. Every key must be a
@@ -590,6 +716,7 @@ func envOverriddenPatchField(patch SettingsPatch, src config.SourceMap) (string,
 		{patch.LogUpstreamResponseBody != nil, "runtime.log_upstream_response_body"},
 		{patch.LogRetentionDays != nil, "runtime.log_retention_days"},
 		{patch.LogLevel != nil, "runtime.log_level"},
+		{patch.ModelRenames != nil, "runtime.model_renames"},
 		{patch.AdminAuthEnabled != nil, "plugins.admin_auth.enabled"},
 		{patch.ClientKeysEnabled != nil, "plugins.client_keys.enabled"},
 	}
@@ -613,4 +740,13 @@ func unmarshalBool(raw json.RawMessage) (bool, error) {
 		return false, err
 	}
 	return b, nil
+}
+
+func cloneModelRenameRules(in []config.ModelRenameRule) []config.ModelRenameRule {
+	if in == nil {
+		return []config.ModelRenameRule{}
+	}
+	out := make([]config.ModelRenameRule, len(in))
+	copy(out, in)
+	return out
 }

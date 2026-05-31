@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -25,6 +26,9 @@ func sampleConfigForWrite() *Config {
 			LogUpstreamResponseBody: false,
 			LogRetentionDays:        30,
 			LogLevel:                "info",
+			ModelRenames: []ModelRenameRule{
+				{From: "client-model", To: "upstream-model"},
+			},
 		},
 		Plugins: DefaultPluginsConfig(),
 	}
@@ -69,7 +73,7 @@ func TestWriter_HappyPath_CreatesFileWithMode0600(t *testing.T) {
 	if parsed.DB != cfg.DB {
 		t.Errorf("DB round-trip mismatch: got %+v, want %+v", parsed.DB, cfg.DB)
 	}
-	if parsed.Runtime != cfg.Runtime {
+	if !reflect.DeepEqual(parsed.Runtime, cfg.Runtime) {
 		t.Errorf("Runtime round-trip mismatch: got %+v, want %+v", parsed.Runtime, cfg.Runtime)
 	}
 }

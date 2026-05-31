@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useFieldArray, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -28,6 +29,14 @@ const RuntimeFormSchema = z.object({
   log_upstream_response_body: z.boolean(),
   log_retention_days: z.coerce.number().int().min(1).max(365),
   log_level: z.enum(['debug', 'info', 'warn', 'error']),
+  model_renames: z
+    .array(
+      z.object({
+        from: z.string().trim().min(1).max(128),
+        to: z.string().trim().min(1).max(128),
+      }),
+    )
+    .max(32),
 })
 type RuntimeForm = z.infer<typeof RuntimeFormSchema>
 
@@ -87,6 +96,10 @@ function SettingsForm({ data, onPatch }: FormProps) {
   const form = useForm<RuntimeForm>({
     resolver: zodResolver(RuntimeFormSchema),
     defaultValues: data.runtime,
+  })
+  const modelRenameFields = useFieldArray({
+    control: form.control,
+    name: 'model_renames',
   })
 
   useEffect(() => {
@@ -224,6 +237,70 @@ function SettingsForm({ data, onPatch }: FormProps) {
               </Select>
             </div>
           </Field>
+          <Field
+            label="Model renames"
+            hint="Exact client model ids rewritten before upstream forwarding."
+          >
+            <div className="flex flex-col gap-3">
+              {modelRenameFields.fields.map((field, index) => (
+                <div
+                  key={field.id}
+                  className="grid gap-2 rounded-[2px] border border-[var(--line)] bg-[var(--panel-2)] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                >
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`model_renames.${index}.from`}>From</Label>
+                    <Input
+                      id={`model_renames.${index}.from`}
+                      {...form.register(`model_renames.${index}.from`)}
+                    />
+                    {form.formState.errors.model_renames?.[index]?.from ? (
+                      <p className="text-[11.5px] text-[var(--err)]">
+                        {form.formState.errors.model_renames[index]?.from?.message}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`model_renames.${index}.to`}>To</Label>
+                    <Input
+                      id={`model_renames.${index}.to`}
+                      {...form.register(`model_renames.${index}.to`)}
+                    />
+                    {form.formState.errors.model_renames?.[index]?.to ? (
+                      <p className="text-[11.5px] text-[var(--err)]">
+                        {form.formState.errors.model_renames[index]?.to?.message}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Remove model rename"
+                    onClick={() => modelRenameFields.remove(index)}
+                    className="self-end justify-self-start sm:justify-self-end"
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
+              {form.formState.errors.model_renames?.root ? (
+                <p className="text-[11.5px] text-[var(--err)]">
+                  {form.formState.errors.model_renames.root.message}
+                </p>
+              ) : null}
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={modelRenameFields.fields.length >= 32}
+                  onClick={() => modelRenameFields.append({ from: '', to: '' })}
+                >
+                  <Plus />
+                  Add rename
+                </Button>
+              </div>
+            </div>
+          </Field>
           <div className="mt-1 flex flex-col gap-2 border-t border-[var(--line)] pt-4 sm:flex-row sm:justify-end">
             <Button
               type="button"
@@ -315,6 +392,9 @@ function validateSettingsContract(data: SettingsPayload): Error | null {
   }
   if (!Array.isArray(data.plugin_intents)) {
     return new Error('settings payload contract violation: plugin_intents must be an array')
+  }
+  if (!Array.isArray(data.runtime.model_renames)) {
+    return new Error('settings payload contract violation: runtime.model_renames must be an array')
   }
   for (const plugin of PLUGIN_INTENTS) {
     const intent = data.plugin_intents.find((item) => item.id === plugin.id)

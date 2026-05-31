@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/user/one-llm-router/internal/clientip"
+	"github.com/user/one-llm-router/internal/config"
 	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/provider"
@@ -53,6 +55,7 @@ type ProxyHandler struct {
 	bridgeRegistry *provider.BridgeRegistry
 	bodyLog        bool
 	bodyLogFn      func() (clientReqLog, upstreamReqLog, upstreamRespLog bool)
+	modelRenameFn  func() []config.ModelRenameRule
 	maxRequestBody int64
 	logger         *slog.Logger
 }
@@ -92,6 +95,16 @@ func (h *ProxyHandler) SetBodyLogFunc(fn func() (clientReqLog, upstreamReqLog, u
 		return
 	}
 	h.bodyLogFn = fn
+}
+
+// SetModelRenameFunc installs a live-config getter for runtime model
+// rewrite rules. The proxy calls it per request so Settings updates
+// apply without a process restart.
+func (h *ProxyHandler) SetModelRenameFunc(fn func() []config.ModelRenameRule) {
+	if h == nil {
+		return
+	}
+	h.modelRenameFn = fn
 }
 
 const defaultMaxRequestBody = 32 << 20
@@ -176,6 +189,17 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			r.Body = newBoundedRequestBody(r.Body, h.maxRequestBody)
 		}
 	}
+	originalReqBodyBytes := reqBodyBytes
+	effectiveReqBodyBytes := reqBodyBytes
+	renameMetadata := domain.JSONMap(nil)
+	if len(reqBodyBytes) > 0 {
+		if rewritten, metadata, ok := h.rewriteModelForRoute(route, r.URL.Path, reqBodyBytes); ok {
+			effectiveReqBodyBytes = rewritten
+			renameMetadata = metadata
+			r.Body = io.NopCloser(bytes.NewReader(effectiveReqBodyBytes))
+			r.ContentLength = int64(len(effectiveReqBodyBytes))
+		}
+	}
 
 	account, accessToken, _, err := h.selector.SelectEligible(r.Context(), sessionKey, proxyAccountEligible(route))
 	if err != nil {
@@ -183,18 +207,18 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.writeError(w, requestID, start, r, nil,
 				http.StatusServiceUnavailable, ErrCodeNoAvailableAccount,
 				"No active upstream accounts available",
-				domain.OutcomeNoAvailableAccount, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes})
+				domain.OutcomeNoAvailableAccount, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
 			return
 		}
 		if errors.Is(err, core.ErrPreForward) {
 			h.writeError(w, requestID, start, r, &account,
 				http.StatusBadGateway, ErrCodeInternalError, "upstream credentials unavailable",
-				domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes})
+				domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
 			return
 		}
 		h.writeError(w, requestID, start, r, nil,
 			http.StatusInternalServerError, ErrCodeInternalError, "account selection failed",
-			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes})
+			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
 		return
 	}
 
@@ -204,20 +228,20 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, requestID, start, r, &account,
 			http.StatusServiceUnavailable, ErrCodeNoAvailableAccount,
 			"No active upstream accounts available",
-			domain.OutcomeNoAvailableAccount, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes})
+			domain.OutcomeNoAvailableAccount, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
 		return
 	}
 	bridgeMetadata := gatewayBridgeMetadata(bridge, credentialClass)
-	bridgeRouterMetadata := provider.MergeBridgeRouterMetadata(nil, bridgeMetadata)
+	bridgeRouterMetadata := provider.MergeBridgeRouterMetadata(renameMetadata, bridgeMetadata)
 	// Propagate request ID to upstream so OpenAI/Codex side can correlate a
 	// request with our router-side trace. Header filtering still controls
 	// operation-specific exceptions such as multipart transcribe.
 	r.Header.Set("X-Request-Id", requestID)
-	clientReq, err := bridge.DecodeClientRequest(r.Context(), decodeInputFromGatewayRoute(route, r, reqBodyBytes, requestID))
+	clientReq, err := bridge.DecodeClientRequest(r.Context(), decodeInputFromGatewayRoute(route, r, effectiveReqBodyBytes, requestID, renameMetadata))
 	if err != nil {
 		h.writeError(w, requestID, start, r, &account,
 			http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
-			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes, routerMetadata: bridgeRouterMetadata, cause: err})
+			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: bridgeRouterMetadata, cause: err})
 		return
 	}
 	upstreamBaseURL := account.EffectiveBaseURL()
@@ -234,11 +258,11 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeError(w, requestID, start, r, &account,
 			http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
-			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes, routerMetadata: bridgeRouterMetadata, cause: err})
+			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: bridgeRouterMetadata, cause: err})
 		return
 	}
 	bridgeMetadata.UpstreamEndpoint = upstreamReq.Path
-	bridgeRouterMetadata = provider.MergeBridgeRouterMetadata(nil, bridgeMetadata)
+	bridgeRouterMetadata = provider.MergeBridgeRouterMetadata(renameMetadata, bridgeMetadata)
 
 	h.logger.Info("request routed",
 		"request_id", requestID,
@@ -250,7 +274,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamResp, capture, err := h.client.ForwardBridgeRequestWithCapture(r.Context(), upstreamReq, responseAdapter)
 	if err != nil {
 		errorCapture := proxyErrorBodyCapture{
-			clientRequestBody:    reqBodyBytes,
+			clientRequestBody:    originalReqBodyBytes,
 			upstreamRequestBody:  capture.UpstreamRequestBody,
 			upstreamResponseBody: capture.UpstreamResponseBody,
 			routerMetadata:       bridgeRouterMetadata,
@@ -324,7 +348,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	responseBody := io.Reader(upstreamResp.Body)
 	responseMode := openai.DetectResponseMode(upstreamResp.Header.Get("Content-Type"))
-	if responseMode == domain.ResponseModeJSON && shouldSniffResponseForSSE(r, reqBodyBytes, upstreamResp.StatusCode) {
+	if responseMode == domain.ResponseModeJSON && shouldSniffResponseForSSE(r, originalReqBodyBytes, upstreamResp.StatusCode) {
 		buffered := bufio.NewReader(upstreamResp.Body)
 		responseBody = buffered
 		if bufferedReaderStartsWithSSE(buffered) {
@@ -417,9 +441,9 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var model *string
 	var modelParams domain.JSONMap
-	if len(reqBodyBytes) > 0 {
-		model = openai.ExtractModel(reqBodyBytes)
-		modelParams = openai.ExtractModelParams(reqBodyBytes)
+	if len(originalReqBodyBytes) > 0 {
+		model = openai.ExtractModel(originalReqBodyBytes)
+		modelParams = openai.ExtractModelParams(originalReqBodyBytes)
 	}
 	if capture.ModelParams != nil {
 		modelParams = mergeModelParams(modelParams, capture.ModelParams())
@@ -431,8 +455,8 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var clientReqBodyPtr *string
-	if clientReqBodyLog && len(reqBodyBytes) > 0 {
-		s := capturedBodyString(reqBodyBytes)
+	if clientReqBodyLog && len(originalReqBodyBytes) > 0 {
+		s := capturedBodyString(originalReqBodyBytes)
 		clientReqBodyPtr = &s
 	}
 	var upstreamReqBodyPtr *string
@@ -480,6 +504,53 @@ func mergeModelParams(base domain.JSONMap, extra domain.JSONMap) domain.JSONMap 
 	return base
 }
 
+const routerMetadataModelRenameKey = "model_rename"
+
+func (h *ProxyHandler) rewriteModelForRoute(route gatewayRoute, path string, body []byte) ([]byte, domain.JSONMap, bool) {
+	if h == nil || h.modelRenameFn == nil || len(body) == 0 {
+		return nil, nil, false
+	}
+	if route.BodyPolicy != gatewayBodyPolicyJSONCaptureAllowed ||
+		route.ResponseMode == domain.ResponseModeWebSocket ||
+		!strings.HasPrefix(path, "/v1/") {
+		return nil, nil, false
+	}
+	rules := h.modelRenameFn()
+	if len(rules) == 0 {
+		return nil, nil, false
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		// Preserve existing fail-fast behavior: malformed JSON is still
+		// reported by the selected bridge. The rename pass only rewrites
+		// syntactically valid requests.
+		return nil, nil, false
+	}
+	model, ok := payload["model"].(string)
+	if !ok {
+		return nil, nil, false
+	}
+	for _, rule := range rules {
+		if model != rule.From {
+			continue
+		}
+		payload["model"] = rule.To
+		rewritten, err := json.Marshal(payload)
+		if err != nil {
+			return nil, nil, false
+		}
+		metadata := domain.JSONMap{
+			routerMetadataModelRenameKey: domain.JSONMap{
+				"from": rule.From,
+				"to":   rule.To,
+			},
+		}
+		return rewritten, metadata, true
+	}
+	return nil, nil, false
+}
+
 func classifySSEForwardFailure(ctx context.Context, currentOutcome string, err error) (string, *string) {
 	if (ctx != nil && ctx.Err() != nil) || errors.Is(err, context.Canceled) {
 		if currentOutcome == domain.OutcomeSuccess {
@@ -515,7 +586,7 @@ func accountBridgeMetadata(account domain.UpstreamAccount) domain.JSONMap {
 	return metadata
 }
 
-func decodeInputFromGatewayRoute(route gatewayRoute, r *http.Request, body []byte, requestID string) provider.DecodeInput {
+func decodeInputFromGatewayRoute(route gatewayRoute, r *http.Request, body []byte, requestID string, metadata domain.JSONMap) provider.DecodeInput {
 	return provider.DecodeInput{
 		OpID:          route.OpID,
 		Method:        r.Method,
@@ -530,6 +601,7 @@ func decodeInputFromGatewayRoute(route gatewayRoute, r *http.Request, body []byt
 		ResponseMode:  route.ResponseMode,
 		BodyPolicy:    string(openAIBodyPolicy(route.BodyPolicy)),
 		RequestID:     requestID,
+		Metadata:      metadata,
 	}
 }
 

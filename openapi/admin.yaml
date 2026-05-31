@@ -811,6 +811,10 @@ components:
         log_level:
           type: string
           enum: [debug, info, warn, error]
+        model_renames:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/ModelRenameRule' }
 
     SettingsPluginsPatch:
       type: object
@@ -899,6 +903,7 @@ components:
         - log_upstream_response_body
         - log_retention_days
         - log_level
+        - model_renames
       properties:
         log_client_request_body: { type: boolean }
         log_upstream_request_body: { type: boolean }
@@ -910,6 +915,26 @@ components:
         log_level:
           type: string
           enum: [debug, info, warn, error]
+        model_renames:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/ModelRenameRule' }
+
+    ModelRenameRule:
+      type: object
+      additionalProperties: false
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Client-facing model id matched exactly and case-sensitively.
+        to:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Upstream model id sent to the selected provider.
 
     DBSettings:
       type: object
@@ -2210,6 +2235,19 @@ components:
                 field: { type: string }
                 detail: { type: string }
 
+    InvalidModelRenameEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [2017] }
+            msg: { type: string, enum: [invalid_model_rename] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
     # ---- Operation response body unions ----
     #
     # Every /api/admin/* operation whose 200 response body is a discriminated
@@ -2246,6 +2284,7 @@ components:
         - $ref: '#/components/schemas/EnvOverrideReadonlyEnvelope'
         - $ref: '#/components/schemas/InvalidRetentionEnvelope'
         - $ref: '#/components/schemas/InvalidLogLevelEnvelope'
+        - $ref: '#/components/schemas/InvalidModelRenameEnvelope'
         - $ref: '#/components/schemas/InvalidPluginFlagEnvelope'
 
     OAuthCancelResponseBody:

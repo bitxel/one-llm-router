@@ -82,6 +82,7 @@ As a platform operator, I want every routed OpenAI API call to remain observable
 3. Given an upstream returns rate-limit headers, then the client can still inspect those headers when the provider exposes them.
 4. Given the gateway cannot extract model or token usage from a response, then it records absence explicitly and does not invent usage.
 5. Given an operator requests router-local usage observability, then the data is returned through `/api/admin/usage` using the router-owned Admin API envelope and not through a provider-compatible data-plane route.
+6. Given an operator configures a `runtime.model_renames` rule, then matching `/v1/*` JSON requests rewrite the exact top-level `model` value before upstream forwarding, while request history preserves the original client model and records the applied rename in router metadata.
 
 **Edge Cases**:
 - Non-model resource APIs may not have model or token usage.
@@ -133,6 +134,7 @@ As a platform operator, I want high-risk OpenAI administration surfaces to be ex
 - **FR-014**: The gateway MUST prioritize current, common, stable OpenAI Platform client APIs as P0; newer product-specific APIs and legacy APIs MUST be P1/deferred unless a concrete client workload requires them before implementation starts.
 - **FR-015**: The gateway MUST support only explicitly listed Codex-native `/backend-api/*` compatibility paths and MUST reject arbitrary `/backend-api/*` proxying. `/api/codex/*` MUST NOT be treated as data-plane proxy space in 006.
 - **FR-016**: Router-local usage observability MUST be available through an Admin API operation documented in `openapi/admin.yaml`, regenerated into Go and TypeScript clients, wrapped as `{ "code": 0, "msg": "ok", "data": ... }` on success, and covered by Admin API contract tests.
+- **FR-017**: Runtime model rename rules MUST be exact, case-sensitive mappings configured through the Admin Settings API. They apply only to supported `/v1/*` JSON request bodies with a top-level string `model`, never to WebSocket, multipart, selected `/backend-api/*`, model-list, or unsupported routes. The router MUST record applied renames in `request_records.router_metadata` and MUST NOT silently rewrite any other request field.
 
 ## Endpoint Coverage Target
 

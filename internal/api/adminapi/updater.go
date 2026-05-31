@@ -149,6 +149,7 @@ func (u *ConfigUpdater) Update(patch SettingsPatch) (*config.Config, error) {
 // the field entirely.
 func cloneConfig(cfg *config.Config) *config.Config {
 	out := *cfg
+	out.Runtime.ModelRenames = cloneConfigModelRenameRules(cfg.Runtime.ModelRenames)
 	// Defensive copy of the plugin sub-structs (currently already
 	// value types but written out for symmetry with future pointer
 	// fields).
@@ -182,10 +183,22 @@ func applyPatch(cfg *config.Config, p SettingsPatch) {
 	if p.LogLevel != nil {
 		cfg.Runtime.LogLevel = *p.LogLevel
 	}
+	if p.ModelRenames != nil {
+		cfg.Runtime.ModelRenames = cloneConfigModelRenameRules(*p.ModelRenames)
+	}
 	if p.AdminAuthEnabled != nil {
 		cfg.Plugins.AdminAuth.Enabled = *p.AdminAuthEnabled
 	}
 	if p.ClientKeysEnabled != nil {
 		cfg.Plugins.ClientKeys.Enabled = *p.ClientKeysEnabled
 	}
+}
+
+func cloneConfigModelRenameRules(in []config.ModelRenameRule) []config.ModelRenameRule {
+	if in == nil {
+		return []config.ModelRenameRule{}
+	}
+	out := make([]config.ModelRenameRule, len(in))
+	copy(out, in)
+	return out
 }

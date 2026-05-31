@@ -51,6 +51,14 @@ type RuntimeConfig struct {
 	LogUpstreamResponseBody bool   `json:"log_upstream_response_body"`
 	LogRetentionDays        int    `json:"log_retention_days"`
 	LogLevel                string `json:"log_level"`
+	ModelRenames            []ModelRenameRule `json:"model_renames"`
+}
+
+// ModelRenameRule maps a client-facing model id to the upstream model id
+// used by data-plane forwarding. Matching is exact and case-sensitive.
+type ModelRenameRule struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // PluginsConfig is the typed surface for plugin operator intents.
@@ -100,6 +108,7 @@ func DefaultRuntimeConfig() RuntimeConfig {
 		LogUpstreamResponseBody: false,
 		LogRetentionDays:        30,
 		LogLevel:                "info",
+		ModelRenames:            []ModelRenameRule{},
 	}
 }
 

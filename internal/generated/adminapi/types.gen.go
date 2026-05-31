@@ -895,6 +895,36 @@ func (e InvalidLogLevelEnvelopeMsg) Valid() bool {
 	}
 }
 
+// Defines values for InvalidModelRenameEnvelopeCode.
+const (
+	N2017 InvalidModelRenameEnvelopeCode = 2017
+)
+
+// Valid indicates whether the value is a known member of the InvalidModelRenameEnvelopeCode enum.
+func (e InvalidModelRenameEnvelopeCode) Valid() bool {
+	switch e {
+	case N2017:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvalidModelRenameEnvelopeMsg.
+const (
+	InvalidModelRename InvalidModelRenameEnvelopeMsg = "invalid_model_rename"
+)
+
+// Valid indicates whether the value is a known member of the InvalidModelRenameEnvelopeMsg enum.
+func (e InvalidModelRenameEnvelopeMsg) Valid() bool {
+	switch e {
+	case InvalidModelRename:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvalidOAuthProviderEnvelopeCode.
 const (
 	N3002 InvalidOAuthProviderEnvelopeCode = 3002
@@ -3086,6 +3116,22 @@ type InvalidLogLevelEnvelopeCode int
 // InvalidLogLevelEnvelopeMsg defines model for InvalidLogLevelEnvelope.Msg.
 type InvalidLogLevelEnvelopeMsg string
 
+// InvalidModelRenameEnvelope defines model for InvalidModelRenameEnvelope.
+type InvalidModelRenameEnvelope struct {
+	Code InvalidModelRenameEnvelopeCode `json:"code"`
+	Data struct {
+		Detail *string `json:"detail,omitempty"`
+		Field  *string `json:"field,omitempty"`
+	} `json:"data"`
+	Msg InvalidModelRenameEnvelopeMsg `json:"msg"`
+}
+
+// InvalidModelRenameEnvelopeCode defines model for InvalidModelRenameEnvelope.Code.
+type InvalidModelRenameEnvelopeCode int
+
+// InvalidModelRenameEnvelopeMsg defines model for InvalidModelRenameEnvelope.Msg.
+type InvalidModelRenameEnvelopeMsg string
+
 // InvalidOAuthProviderEnvelope defines model for InvalidOAuthProviderEnvelope.
 type InvalidOAuthProviderEnvelope struct {
 	Code InvalidOAuthProviderEnvelopeCode `json:"code"`
@@ -3256,6 +3302,15 @@ type ManualCallbackSuccessEnvelopeDataStatus string
 
 // ManualCallbackSuccessEnvelopeMsg defines model for ManualCallbackSuccessEnvelope.Msg.
 type ManualCallbackSuccessEnvelopeMsg string
+
+// ModelRenameRule defines model for ModelRenameRule.
+type ModelRenameRule struct {
+	// From Client-facing model id matched exactly and case-sensitively.
+	From string `json:"from"`
+
+	// To Upstream model id sent to the selected provider.
+	To string `json:"to"`
+}
 
 // NoFlowInProgressEnvelope defines model for NoFlowInProgressEnvelope.
 type NoFlowInProgressEnvelope struct {
@@ -3740,7 +3795,7 @@ type RequestLogDetail struct {
 	RequestId         string                  `json:"request_id"`
 	ResponseMode      RequestResponseMode     `json:"response_mode"`
 
-	// RouterMetadata Router-owned audit metadata such as selected operation bridge details. Never includes tokens, headers, cookies, or body bytes.
+	// RouterMetadata Router-owned audit metadata such as selected operation bridge details and the actual upstream endpoint path sent to the LLM server. Never includes tokens, headers, cookies, or body bytes.
 	RouterMetadata *map[string]interface{} `json:"router_metadata,omitempty"`
 	SessionKey     *string                 `json:"session_key,omitempty"`
 	StatusCode     int                     `json:"status_code"`
@@ -3785,7 +3840,7 @@ type RequestLogRow struct {
 	RequestId    string                  `json:"request_id"`
 	ResponseMode RequestResponseMode     `json:"response_mode"`
 
-	// RouterMetadata Router-owned audit metadata such as selected operation bridge details. Never includes tokens, headers, cookies, or body bytes.
+	// RouterMetadata Router-owned audit metadata such as selected operation bridge details and the actual upstream endpoint path sent to the LLM server. Never includes tokens, headers, cookies, or body bytes.
 	RouterMetadata *map[string]interface{} `json:"router_metadata,omitempty"`
 	SessionKey     *string                 `json:"session_key,omitempty"`
 	StatusCode     int                     `json:"status_code"`
@@ -3875,6 +3930,7 @@ type RuntimeSettings struct {
 	LogRetentionDays        int                     `json:"log_retention_days"`
 	LogUpstreamRequestBody  bool                    `json:"log_upstream_request_body"`
 	LogUpstreamResponseBody bool                    `json:"log_upstream_response_body"`
+	ModelRenames            []ModelRenameRule       `json:"model_renames"`
 }
 
 // RuntimeSettingsLogLevel defines model for RuntimeSettings.LogLevel.
@@ -3940,7 +3996,8 @@ type SettingsRuntimePatch struct {
 	LogUpstreamRequestBody *bool `json:"log_upstream_request_body,omitempty"`
 
 	// LogUpstreamResponseBody Capture upstream/provider response bodies into request history.
-	LogUpstreamResponseBody *bool `json:"log_upstream_response_body,omitempty"`
+	LogUpstreamResponseBody *bool              `json:"log_upstream_response_body,omitempty"`
+	ModelRenames            *[]ModelRenameRule `json:"model_renames,omitempty"`
 }
 
 // SettingsRuntimePatchLogLevel defines model for SettingsRuntimePatch.LogLevel.
@@ -5961,6 +6018,32 @@ func (t *SettingsUpdateResponseBody) FromInvalidLogLevelEnvelope(v InvalidLogLev
 
 // MergeInvalidLogLevelEnvelope performs a merge with any union data inside the SettingsUpdateResponseBody, using the provided InvalidLogLevelEnvelope
 func (t *SettingsUpdateResponseBody) MergeInvalidLogLevelEnvelope(v InvalidLogLevelEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInvalidModelRenameEnvelope returns the union data inside the SettingsUpdateResponseBody as a InvalidModelRenameEnvelope
+func (t SettingsUpdateResponseBody) AsInvalidModelRenameEnvelope() (InvalidModelRenameEnvelope, error) {
+	var body InvalidModelRenameEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvalidModelRenameEnvelope overwrites any union data inside the SettingsUpdateResponseBody as the provided InvalidModelRenameEnvelope
+func (t *SettingsUpdateResponseBody) FromInvalidModelRenameEnvelope(v InvalidModelRenameEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvalidModelRenameEnvelope performs a merge with any union data inside the SettingsUpdateResponseBody, using the provided InvalidModelRenameEnvelope
+func (t *SettingsUpdateResponseBody) MergeInvalidModelRenameEnvelope(v InvalidModelRenameEnvelope) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err

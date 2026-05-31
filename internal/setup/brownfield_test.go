@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -178,7 +179,7 @@ func TestBootstrap_PopulatedDB_Materializes(t *testing.T) {
 	}
 	// Defaults copied in.
 	wantRuntime := config.DefaultRuntimeConfig()
-	if cfg.Runtime != wantRuntime {
+	if !reflect.DeepEqual(cfg.Runtime, wantRuntime) {
 		t.Errorf("Runtime = %+v, want %+v", cfg.Runtime, wantRuntime)
 	}
 	wantPlugins := config.DefaultPluginsConfig()

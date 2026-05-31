@@ -301,6 +301,21 @@ func applyRuntimeDefaults(rc *RuntimeConfig, defaults RuntimeConfig, present map
 		rc.LogLevel = defaults.LogLevel
 		src["runtime.log_level"] = srcDefault
 	}
+	if _, ok := present["runtime.model_renames"]; ok {
+		src["runtime.model_renames"] = srcFile
+	} else {
+		rc.ModelRenames = cloneModelRenameRules(defaults.ModelRenames)
+		src["runtime.model_renames"] = srcDefault
+	}
+}
+
+func cloneModelRenameRules(in []ModelRenameRule) []ModelRenameRule {
+	if in == nil {
+		return nil
+	}
+	out := make([]ModelRenameRule, len(in))
+	copy(out, in)
+	return out
 }
 
 // applyPluginDefaults sets per-plugin-flag sources. 002 only tracks

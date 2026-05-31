@@ -98,6 +98,7 @@ Each feature should prefer numbers toward the **low end** of its range and leave
 | `2014` | `invalid_log_level` | 200 | `runtime.log_level` must be one of `debug`, `info`, `warn`, `error`. |
 | `2015` | `invalid_account_provider` | 200 | `first_account.provider` is not in the 002 allow-list. Only `openai` is accepted at this feature level; additional providers ship in 003+. |
 | `2016` | `invalid_base_url` | 200 | `first_account.base_url` failed URL validation (missing scheme, non-http(s), contains path/query/fragment, or exceeds 256 characters). |
+| `2017` | `invalid_model_rename` | 200 | `runtime.model_renames` contains an invalid model mapping: non-array value, non-object entry, empty or overlong `from`/`to`, duplicate `from`, `from == to`, or more than 32 entries. |
 | `2900` | `db_connect_failed` | 500 | Commit-time DB open failed after the operator's successful probe. |
 | `2901` | `migrate_failed` | 500 | Boot-time or commit-time `migrate up` returned a non-`ErrNoChange` error. |
 | `2902` | `commit_tx_failed` | 500 | DB COMMIT failed during `POST /api/setup/commit` **before** the config file was written. No on-disk state change; client may retry. |

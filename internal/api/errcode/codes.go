@@ -66,6 +66,10 @@ const (
 	// (not https://, contains path, bad scheme, …). Rules live in
 	// domain.ValidateBaseURL (the shared 001/002 validator).
 	InvalidBaseURL = 2016
+	// InvalidModelRename surfaces invalid runtime.model_renames entries
+	// in the Settings API: empty fields, duplicates, self-maps, or
+	// limit violations.
+	InvalidModelRename = 2017
 
 	DBConnectFailed   = 2900
 	MigrateFailed     = 2901
@@ -184,6 +188,7 @@ var symbols = map[int]string{
 	InvalidLogLevel:        "invalid_log_level",
 	InvalidAccountProvider: "invalid_account_provider",
 	InvalidBaseURL:         "invalid_base_url",
+	InvalidModelRename:     "invalid_model_rename",
 
 	DBConnectFailed:   "db_connect_failed",
 	MigrateFailed:     "migrate_failed",

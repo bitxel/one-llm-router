@@ -56,7 +56,7 @@ func (s *syncedWriter) Write(p []byte) (int, error) {
 }
 
 // goodConfigBytes returns a minimal-but-complete config.json marshaling
-// the full supported schema (all 9 tracked keys present).
+// the full supported schema (all 10 tracked keys present).
 func goodConfigBytes(t *testing.T) []byte {
 	t.Helper()
 	cfg := Config{
@@ -68,6 +68,7 @@ func goodConfigBytes(t *testing.T) []byte {
 			LogUpstreamResponseBody: false,
 			LogRetentionDays:        30,
 			LogLevel:                "info",
+			ModelRenames:            []ModelRenameRule{},
 		},
 		Plugins: DefaultPluginsConfig(),
 	}
@@ -185,6 +186,7 @@ func TestLoad_HappyPath_AllFieldsFileSourced(t *testing.T) {
 		"runtime.log_upstream_response_body": "file",
 		"runtime.log_retention_days":         "file",
 		"runtime.log_level":                  "file",
+		"runtime.model_renames":              "file",
 		"plugins.admin_auth.enabled":         "file",
 		"plugins.client_keys.enabled":        "file",
 	}
@@ -231,6 +233,7 @@ func TestLoad_MissingRuntimeKeys_UsesDefaults(t *testing.T) {
 		"runtime.log_upstream_response_body",
 		"runtime.log_retention_days",
 		"runtime.log_level",
+		"runtime.model_renames",
 	} {
 		if src[key] != "default" {
 			t.Errorf("src[%q] = %q, want default", key, src[key])
@@ -503,7 +506,7 @@ func TestLoad_PluginBlockNonObject_TreatedAsAbsent(t *testing.T) {
 	}
 }
 
-func TestLoad_SourceMap_HasExactlyEightKeys(t *testing.T) {
+func TestLoad_SourceMap_HasExactlyTenKeys(t *testing.T) {
 	// Forward-compat safety net: if 003 adds a runtime key or plugin
 	// and forgets to update Load(), this test will fail. Keep this
 	// assertion even though it duplicates coverage from the happy-path
@@ -517,7 +520,7 @@ func TestLoad_SourceMap_HasExactlyEightKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	const wantKeys = 9
+	const wantKeys = 10
 	if got := len(src); got != wantKeys {
 		dump, _ := json.MarshalIndent(src, "", "  ")
 		t.Errorf("SourceMap has %d keys, want %d; dump=%s", got, wantKeys, dump)

@@ -70,7 +70,7 @@ func (h *ProxyHandler) serveWebSocket(
 	r.Header.Set("X-Request-Id", requestID)
 
 	turnState := openai.ResolveCodexTurnState(r.Header.Get("x-codex-turn-state"))
-	clientReq, err := bridge.DecodeClientRequest(r.Context(), decodeInputFromGatewayRoute(route, r, nil, requestID))
+	clientReq, err := bridge.DecodeClientRequest(r.Context(), decodeInputFromGatewayRoute(route, r, nil, requestID, nil))
 	if err != nil {
 		h.writeError(w, requestID, start, r, &account,
 			http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",

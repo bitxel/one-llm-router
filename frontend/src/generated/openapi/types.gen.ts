@@ -102,6 +102,7 @@ export type SettingsRuntimePatch = {
     log_upstream_response_body?: boolean;
     log_retention_days?: number;
     log_level?: 'debug' | 'info' | 'warn' | 'error';
+    model_renames?: Array<ModelRenameRule>;
 };
 
 export type SettingsPluginsPatch = {
@@ -159,6 +160,18 @@ export type RuntimeSettings = {
     log_upstream_response_body: boolean;
     log_retention_days: number;
     log_level: 'debug' | 'info' | 'warn' | 'error';
+    model_renames: Array<ModelRenameRule>;
+};
+
+export type ModelRenameRule = {
+    /**
+     * Client-facing model id matched exactly and case-sensitively.
+     */
+    from: string;
+    /**
+     * Upstream model id sent to the selected provider.
+     */
+    to: string;
 };
 
 /**
@@ -1014,9 +1027,18 @@ export type InvalidLogLevelEnvelope = EnvelopeBase & {
     };
 };
 
+export type InvalidModelRenameEnvelope = EnvelopeBase & {
+    code?: 2017;
+    msg?: 'invalid_model_rename';
+    data?: {
+        field?: string;
+        detail?: string;
+    };
+};
+
 export type SettingsGetResponseBody = SettingsEnvelope | SetupRequiredEnvelope;
 
-export type SettingsUpdateResponseBody = SettingsEnvelope | RequestBodyTooLargeEnvelope | MalformedBodyEnvelope | UnknownConfigKeyEnvelope | EnvOverrideReadonlyEnvelope | InvalidRetentionEnvelope | InvalidLogLevelEnvelope | InvalidPluginFlagEnvelope;
+export type SettingsUpdateResponseBody = SettingsEnvelope | RequestBodyTooLargeEnvelope | MalformedBodyEnvelope | UnknownConfigKeyEnvelope | EnvOverrideReadonlyEnvelope | InvalidRetentionEnvelope | InvalidLogLevelEnvelope | InvalidModelRenameEnvelope | InvalidPluginFlagEnvelope;
 
 export type OAuthCancelResponseBody = CancelSuccessEnvelope | FlowIdMismatchEnvelope;
 

@@ -49,7 +49,7 @@ Existing `request_records` row, reused for every routed 006 data-plane request.
 | `error_code` | Provider error code or router-native symbol such as `unsupported_endpoint` |
 | `model` | Extracted from JSON request body when safe and available |
 | `model_params` | Safe client/model parameters and adapter-derived model metadata |
-| `router_metadata` | Router-owned audit metadata such as route kind, credential class, and operation bridge details |
+| `router_metadata` | Router-owned audit metadata such as route kind, credential class, operation bridge details, and applied `model_rename` mapping |
 | `response_mode` | `json`, `sse`, or `websocket`; `/backend-api/transcribe` records the provider-compatible response mode, normally `json` |
 | `token_usage` | Extracted usage map when provider response has usage |
 | `client_request_body` | Captured only for safe JSON and only when runtime toggle allows |
@@ -64,6 +64,23 @@ Existing `request_records` row, reused for every routed 006 data-plane request.
 - Unsupported, deferred, and blocked routes are classified before any business request-body read; server-level connection/body caps may still reject pathological requests before routing.
 - `response_mode` value `websocket` requires Admin request-log OpenAPI enum regeneration so request logs can render and filter WebSocket rows.
 - `client_ip` is the direct TCP peer IP observed by this router process. `X-Forwarded-For`, `X-Real-IP`, and other forwarded headers are ignored until a future trusted-proxy configuration explicitly defines which hops may be trusted.
+
+## Entity: Runtime Model Rename Rule
+
+Hot-reloadable Admin Settings rule for exact client-facing model id rewrites on supported `/v1/*` JSON data-plane requests.
+
+| Attribute | Type | Constraints | Description |
+|---|---|---|---|
+| `from` | string | Required, 1..128 chars, unique per config | Client-facing model id matched exactly and case-sensitively |
+| `to` | string | Required, 1..128 chars, must differ from `from` | Upstream model id sent to the selected provider |
+
+### Invariants
+
+- Rules are evaluated before provider bridge decoding and upstream request construction.
+- A rule applies only when the request body is safe captured JSON and contains a top-level string `model` exactly equal to `from`.
+- WebSocket, multipart, selected `/backend-api/*`, model-list, and unsupported routes are not rewritten.
+- Request records keep the original client `model`; body capture, when enabled, stores the original client body and the effective upstream body in their existing columns.
+- Applied renames are recorded under `router_metadata.model_rename` as `{from,to}`.
 
 ## Entity: Admin Usage Summary
 

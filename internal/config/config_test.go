@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,9 @@ func sampleConfig() Config {
 			LogUpstreamResponseBody: true,
 			LogRetentionDays:        45,
 			LogLevel:                "debug",
+			ModelRenames: []ModelRenameRule{
+				{From: "client-model", To: "upstream-model"},
+			},
 		},
 		Plugins: PluginsConfig{
 			AdminAuth: AdminAuthPluginConfig{
@@ -143,8 +147,9 @@ func TestDefaultRuntimeConfig_MatchesDataModel(t *testing.T) {
 		LogUpstreamResponseBody: false,
 		LogRetentionDays:        30,
 		LogLevel:                "info",
+		ModelRenames:            []ModelRenameRule{},
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("default runtime mismatch: got %+v, want %+v", got, want)
 	}
 }

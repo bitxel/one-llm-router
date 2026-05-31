@@ -43,6 +43,7 @@ var registryFixture = []struct {
 	{InvalidLogLevel, "invalid_log_level"},
 	{InvalidAccountProvider, "invalid_account_provider"},
 	{InvalidBaseURL, "invalid_base_url"},
+	{InvalidModelRename, "invalid_model_rename"},
 
 	{DBConnectFailed, "db_connect_failed"},
 	{MigrateFailed, "migrate_failed"},

@@ -113,6 +113,9 @@ func TestSettings_Get_HappyPath(t *testing.T) {
 	if runtime["log_retention_days"] != float64(30) {
 		t.Fatalf("runtime.log_retention_days: got %v want 30", runtime["log_retention_days"])
 	}
+	if renames, ok := runtime["model_renames"].([]any); !ok || len(renames) != 0 {
+		t.Fatalf("runtime.model_renames: got %v want empty array", runtime["model_renames"])
+	}
 
 	db, _ := data["db"].(map[string]any)
 	if db["driver"] != "sqlite3" {
@@ -238,6 +241,70 @@ func TestSettings_Update_InvalidLogLevel_Returns2007(t *testing.T) {
 	code, _ := decodeEnvelope(t, rec)
 	if code != errcode.InvalidLogLevel {
 		t.Fatalf("code: got %d want %d", code, errcode.InvalidLogLevel)
+	}
+}
+
+func TestSettings_Update_ModelRenames_HappyPath(t *testing.T) {
+	cfg := baseConfig()
+	updater := &fakeUpdater{next: withRuntime(cfg, func(r *config.RuntimeConfig) {
+		r.ModelRenames = []config.ModelRenameRule{{From: "codex-mini", To: "gpt-5-mini"}}
+	})}
+	h := newHandler(&fakeReader{cfg: cfg}, updater)
+
+	rec := doUpdate(t, h, `{"runtime":{"model_renames":[{"from":" codex-mini ","to":" gpt-5-mini "}]}}`)
+	code, data := decodeEnvelope(t, rec)
+	if code != 0 {
+		t.Fatalf("code: got %d want 0, body=%s", code, rec.Body.String())
+	}
+	if len(updater.inputs) != 1 || updater.inputs[0].ModelRenames == nil {
+		t.Fatalf("model_renames patch missing: %+v", updater.inputs)
+	}
+	got := *updater.inputs[0].ModelRenames
+	if len(got) != 1 || got[0].From != "codex-mini" || got[0].To != "gpt-5-mini" {
+		t.Fatalf("model_renames patch: got %+v", got)
+	}
+	runtime, _ := data["runtime"].(map[string]any)
+	renames, _ := runtime["model_renames"].([]any)
+	if len(renames) != 1 {
+		t.Fatalf("projected model_renames: got %v", runtime["model_renames"])
+	}
+}
+
+func TestSettings_Update_InvalidModelRenames_Returns2017(t *testing.T) {
+	longModel := strings.Repeat("x", maxModelRenameModelLen+1)
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "null", body: `{"runtime":{"model_renames":null}}`},
+		{name: "non array", body: `{"runtime":{"model_renames":{"from":"a","to":"b"}}}`},
+		{name: "missing from", body: `{"runtime":{"model_renames":[{"to":"b"}]}}`},
+		{name: "missing to", body: `{"runtime":{"model_renames":[{"from":"a"}]}}`},
+		{name: "empty from", body: `{"runtime":{"model_renames":[{"from":" ","to":"b"}]}}`},
+		{name: "empty to", body: `{"runtime":{"model_renames":[{"from":"a","to":" "}]}}`},
+		{name: "same", body: `{"runtime":{"model_renames":[{"from":"a","to":"a"}]}}`},
+		{name: "duplicate from", body: `{"runtime":{"model_renames":[{"from":"a","to":"b"},{"from":"a","to":"c"}]}}`},
+		{name: "from too long", body: `{"runtime":{"model_renames":[{"from":"` + longModel + `","to":"b"}]}}`},
+		{name: "too many", body: `{"runtime":{"model_renames":[` + strings.Repeat(`{"from":"a","to":"b"},`, maxModelRenameRules) + `{"from":"z","to":"y"}]}}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHandler(&fakeReader{cfg: baseConfig()}, &fakeUpdater{})
+			rec := doUpdate(t, h, tc.body)
+			code, _ := decodeEnvelope(t, rec)
+			if code != errcode.InvalidModelRename {
+				t.Fatalf("code: got %d want %d, body=%s", code, errcode.InvalidModelRename, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestSettings_Update_ModelRenameUnknownSubKey_Returns2012(t *testing.T) {
+	h := newHandler(&fakeReader{cfg: baseConfig()}, &fakeUpdater{})
+	rec := doUpdate(t, h, `{"runtime":{"model_renames":[{"from":"a","to":"b","extra":true}]}}`)
+	code, data := decodeEnvelope(t, rec)
+	if code != errcode.UnknownConfigKey {
+		t.Fatalf("code: got %d want %d, data=%v", code, errcode.UnknownConfigKey, data)
 	}
 }
 

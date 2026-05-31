@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/user/one-llm-router/internal/config"
 	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/oauth"
@@ -282,6 +283,63 @@ func TestProxyHandler_JSONResponse(t *testing.T) {
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, "resp_123", resp["id"])
+}
+
+func TestProxyHandler_ModelRenameRewritesUpstreamBodyAndRecordsMetadata(t *testing.T) {
+	var upstreamBody map[string]any
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&upstreamBody))
+		assert.Equal(t, "gpt-5-mini", upstreamBody["model"])
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"resp_renamed","usage":{"input_tokens":1,"output_tokens":2}}`))
+	}))
+	defer upstream.Close()
+
+	s, err := store.New("sqlite3", ":memory:", 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, s.Migrate("sqlite3"))
+	defer func() { _ = s.Close() }()
+
+	engine := s.Engine()
+	accountRepo := store.NewAccountRepo(engine)
+	recordRepo := store.NewRequestRecordRepo(engine)
+
+	url := upstream.URL
+	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &url, Status: domain.AccountStatusActive}
+	require.NoError(t, accountRepo.Create(context.Background(), acct))
+
+	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
+	recorder := core.NewRequestRecorder(recordRepo, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	recorder.Start()
+
+	client := openai.NewClient(5 * time.Second)
+	handler := NewProxyHandler(selector, recorder, client, true, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler.SetModelRenameFunc(func() []config.ModelRenameRule {
+		return []config.ModelRenameRule{{From: "codex-mini", To: "gpt-5-mini"}}
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/v1/responses", strings.NewReader(`{"model":"codex-mini","input":"hello"}`))
+	handler.ServeHTTP(w, r)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	require.NoError(t, recorder.Close(context.Background()))
+	records, err := recordRepo.Query(context.Background(), core.QueryParams{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.NotNil(t, records[0].ClientRequestBody)
+	require.NotNil(t, records[0].UpstreamRequestBody)
+	assert.Contains(t, *records[0].ClientRequestBody, `"model":"codex-mini"`)
+	assert.Contains(t, *records[0].UpstreamRequestBody, `"model":"gpt-5-mini"`)
+
+	require.NotNil(t, records[0].RouterMetadata)
+	rawRename, ok := records[0].RouterMetadata[routerMetadataModelRenameKey].(map[string]interface{})
+	require.True(t, ok, "router metadata missing model rename: %#v", records[0].RouterMetadata)
+	assert.Equal(t, "codex-mini", rawRename["from"])
+	assert.Equal(t, "gpt-5-mini", rawRename["to"])
+	assert.Contains(t, records[0].RouterMetadata, openai.RouterMetadataBridgeKey)
 }
 
 func TestProxyHandler_SSEResponse(t *testing.T) {

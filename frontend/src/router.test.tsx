@@ -242,6 +242,7 @@ describe('routeTree new-account gating', () => {
             log_upstream_response_body: false,
             log_retention_days: 14,
             log_level: 'info',
+            model_renames: [],
           },
           db: {
             driver: 'sqlite3',
@@ -277,6 +278,7 @@ describe('routeTree new-account gating', () => {
           log_upstream_response_body: false,
           log_retention_days: 14,
           log_level: 'info',
+          model_renames: [],
         },
         db: {
           driver: 'sqlite3',

@@ -798,6 +798,13 @@ func registerSteadyStateRoutes(
 	initialBody := cfg.Runtime.LogClientRequestBody ||
 		cfg.Runtime.LogUpstreamRequestBody ||
 		cfg.Runtime.LogUpstreamResponseBody
+	modelRenameFunc := func() []config.ModelRenameRule {
+		live := config.Reader.Load()
+		if live == nil {
+			return cloneModelRenameRules(cfg.Runtime.ModelRenames)
+		}
+		return cloneModelRenameRules(live.Runtime.ModelRenames)
+	}
 	proxyClient := openai.NewClient(proxyClientTimeout)
 	if deps.CodexBackendBaseURL != "" {
 		proxyClient.SetCodexBackendBaseURLForTest(deps.CodexBackendBaseURL)
@@ -809,6 +816,7 @@ func registerSteadyStateRoutes(
 
 	proxy := api.NewProxyHandler(selector, recorder, proxyClient, initialBody, 0, a.logger)
 	proxy.SetBodyLogFunc(bodyLogFunc)
+	proxy.SetModelRenameFunc(modelRenameFunc)
 	// The data-plane proxy owns the provider-compatible `/v1/*`
 	// subtree plus the explicitly selected Codex-native compatibility
 	// paths. The classifier inside ProxyHandler is the final allowlist;
@@ -817,6 +825,15 @@ func registerSteadyStateRoutes(
 	mux.Handle("/v1/", proxy)
 	mux.Handle("/backend-api", proxy)
 	mux.Handle("/backend-api/", proxy)
+}
+
+func cloneModelRenameRules(in []config.ModelRenameRule) []config.ModelRenameRule {
+	if in == nil {
+		return []config.ModelRenameRule{}
+	}
+	out := make([]config.ModelRenameRule, len(in))
+	copy(out, in)
+	return out
 }
 
 // proxyClientTimeout is the upstream per-request timeout for /v1/*.
