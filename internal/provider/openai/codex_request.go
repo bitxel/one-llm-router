@@ -60,7 +60,7 @@ var codexUnsupportedToolTypes = map[string]struct{}{
 	"code_interpreter":     {},
 	"computer_use":         {},
 	"computer_use_preview": {},
-	"image_generation":     {},
+	// "image_generation":     {},
 }
 
 var codexResponsesIncludeAllowlist = map[string]struct{}{
