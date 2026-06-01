@@ -363,9 +363,9 @@ type accountListItemResponse struct {
 	LastRefresh      *time.Time `json:"last_refresh,omitempty"`
 	AccessExpiresAt  *time.Time `json:"access_expires_at,omitempty"`
 
-	PrimaryRemainingPercent   *float64   `json:"primary_remaining_percent,omitempty"`
-	SecondaryRemainingPercent *float64   `json:"secondary_remaining_percent,omitempty"`
-	UsageUpdatedAt            *time.Time `json:"usage_updated_at,omitempty"`
+	PrimaryUsedPercent   *float64   `json:"primary_used_percent,omitempty"`
+	SecondaryUsedPercent *float64   `json:"secondary_used_percent,omitempty"`
+	UsageUpdatedAt       *time.Time `json:"usage_updated_at,omitempty"`
 }
 
 func normaliseRequestedAuthMethod(raw string) domain.AuthMethod {
@@ -376,20 +376,20 @@ func normaliseRequestedAuthMethod(raw string) domain.AuthMethod {
 	return domain.AuthMethod(method)
 }
 
-func remainingPercent(usedPercent *float64) *float64 {
-	if usedPercent == nil {
+func usedPercent(value *float64) *float64 {
+	if value == nil {
 		return nil
 	}
-	if math.IsNaN(*usedPercent) || math.IsInf(*usedPercent, 0) {
+	if math.IsNaN(*value) || math.IsInf(*value, 0) {
 		return nil
 	}
-	remaining := 100 - *usedPercent
-	if remaining < 0 {
-		remaining = 0
-	} else if remaining > 100 {
-		remaining = 100
+	used := *value
+	if used < 0 {
+		used = 0
+	} else if used > 100 {
+		used = 100
 	}
-	return &remaining
+	return &used
 }
 
 func normalisedAccountAuthMethod(method domain.AuthMethod) domain.AuthMethod {
@@ -435,8 +435,8 @@ func newAccountListItemResponse(account domain.UpstreamAccount) accountListItemR
 	resp.ChatGPTAccountID = account.ChatGPTAccountID
 	resp.LastRefresh = account.LastRefresh
 	resp.AccessExpiresAt = account.AccessExpiresAt
-	resp.PrimaryRemainingPercent = remainingPercent(account.PrimaryUsedPercent)
-	resp.SecondaryRemainingPercent = remainingPercent(account.SecondaryUsedPercent)
+	resp.PrimaryUsedPercent = usedPercent(account.PrimaryUsedPercent)
+	resp.SecondaryUsedPercent = usedPercent(account.SecondaryUsedPercent)
 	resp.UsageUpdatedAt = account.UsageUpdatedAt
 	return resp
 }
@@ -465,8 +465,8 @@ func newAccountListProjectionResponse(account store.AccountListItem) accountList
 	resp.ChatGPTAccountID = account.ChatGPTAccountID
 	resp.LastRefresh = account.LastRefresh
 	resp.AccessExpiresAt = account.AccessExpiresAt
-	resp.PrimaryRemainingPercent = remainingPercent(account.PrimaryUsedPercent)
-	resp.SecondaryRemainingPercent = remainingPercent(account.SecondaryUsedPercent)
+	resp.PrimaryUsedPercent = usedPercent(account.PrimaryUsedPercent)
+	resp.SecondaryUsedPercent = usedPercent(account.SecondaryUsedPercent)
 	resp.UsageUpdatedAt = account.UsageUpdatedAt
 	return resp
 }

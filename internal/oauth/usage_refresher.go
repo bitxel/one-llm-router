@@ -87,10 +87,20 @@ func (r *UsageRefresher) refreshOne(ctx context.Context, acc domain.UpstreamAcco
 		return
 	}
 
-	primary := usage.PrimaryWindow.UsedPercent
-	secondary := usage.SecondaryWindow.UsedPercent
+	var primary *float64
+	var secondary *float64
+	if rateLimit := usage.RateLimit; rateLimit != nil {
+		if window := rateLimit.PrimaryWindow; window != nil {
+			used := window.UsedPercent
+			primary = &used
+		}
+		if window := rateLimit.SecondaryWindow; window != nil {
+			used := window.UsedPercent
+			secondary = &used
+		}
+	}
 
-	err = r.accounts.UpdateUsage(ctx, acc.ID, &primary, &secondary)
+	err = r.accounts.UpdateUsage(ctx, acc.ID, primary, secondary)
 	if err != nil {
 		r.logger.Error("usage refresher: failed to update store", "account_id", acc.ID, "error", err)
 	}

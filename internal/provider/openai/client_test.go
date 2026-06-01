@@ -628,3 +628,32 @@ func TestForwardRequest_StripsHopByHopHeaders(t *testing.T) {
 	assert.Equal(t, "alive", gotHeaders.Get("X-Keep-Me"))
 	assert.Equal(t, "Bearer k", gotHeaders.Get("Authorization"))
 }
+
+func TestFetchUsageParsesNestedRateLimitUsage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/wham/usage", r.URL.Path)
+		assert.Equal(t, "Bearer access-token", r.Header.Get("Authorization"))
+		assert.Equal(t, CodexCLIUserAgent, r.Header.Get("User-Agent"))
+		assert.Equal(t, "acct-123", r.Header.Get("chatgpt-account-id"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"user_id":"user-1",
+			"rate_limit":{
+				"primary_window":{"used_percent":28},
+				"secondary_window":null
+			}
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(30 * time.Second)
+	c.codexBackendBaseURL = srv.URL
+
+	usage, err := c.FetchUsage(context.Background(), "access-token", "acct-123")
+	require.NoError(t, err)
+	require.NotNil(t, usage)
+	require.NotNil(t, usage.RateLimit)
+	require.NotNil(t, usage.RateLimit.PrimaryWindow)
+	assert.Equal(t, 28.0, usage.RateLimit.PrimaryWindow.UsedPercent)
+	assert.Nil(t, usage.RateLimit.SecondaryWindow)
+}

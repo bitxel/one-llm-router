@@ -27,9 +27,13 @@ type UsageWindow struct {
 	UsedPercent float64 `json:"used_percent"`
 }
 
+type UsageRateLimit struct {
+	PrimaryWindow   *UsageWindow `json:"primary_window"`
+	SecondaryWindow *UsageWindow `json:"secondary_window"`
+}
+
 type UsageResponse struct {
-	PrimaryWindow   UsageWindow `json:"primary_window"`
-	SecondaryWindow UsageWindow `json:"secondary_window"`
+	RateLimit *UsageRateLimit `json:"rate_limit"`
 }
 
 // NewClient creates an upstream HTTP client. The timeout applies only to

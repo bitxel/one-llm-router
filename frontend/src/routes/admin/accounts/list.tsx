@@ -30,8 +30,8 @@ interface AccountListItem {
   chatgpt_account_id?: string | null
   last_refresh?: string | null
   access_expires_at?: string | null
-  primary_remaining_percent?: number | null
-  secondary_remaining_percent?: number | null
+  primary_used_percent?: number | null
+  secondary_used_percent?: number | null
   usage_updated_at?: string | null
 }
 
@@ -220,8 +220,8 @@ export function AdminAccountsList() {
                     {showOAuthMetadata ? (
                       <OAuthAccountFacts
                         plan={planLabel}
-                        primaryQuota={quotaSnapshot.primary}
-                        secondaryQuota={quotaSnapshot.secondary}
+                        primaryUsage={quotaSnapshot.primary}
+                        secondaryUsage={quotaSnapshot.secondary}
                       />
                     ) : (
                       <AccountFact label={strings.labels.baseURL} value={account.base_url} mono />
@@ -239,19 +239,19 @@ export function AdminAccountsList() {
 
 function OAuthAccountFacts({
   plan,
-  primaryQuota,
-  secondaryQuota,
+  primaryUsage,
+  secondaryUsage,
 }: {
   plan: string
-  primaryQuota: string
-  secondaryQuota: string
+  primaryUsage: string
+  secondaryUsage: string
 }) {
   return (
     <>
       <AccountFact label={strings.labels.plan} value={plan} />
       <div className="grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-3">
-        <QuotaCell label={strings.labels.primaryQuota} value={primaryQuota} />
-        <QuotaCell label={strings.labels.secondaryQuota} value={secondaryQuota} />
+        <QuotaCell label={strings.labels.primaryUsage} value={primaryUsage} />
+        <QuotaCell label={strings.labels.secondaryUsage} value={secondaryUsage} />
       </div>
     </>
   )
@@ -376,6 +376,13 @@ function findQuotaValue(account: AccountListItem, lane: QuotaLane): unknown {
 }
 
 const remainingKeys = [
+  'used_percent',
+  'used_quota',
+  'quota_used',
+  'used',
+  'usedPercent',
+  'usedQuota',
+  'quotaUsed',
   'remaining',
   'remaining_quota',
   'remainingQuota',
@@ -390,6 +397,18 @@ const remainingKeys = [
 function quotaKeysFor(lane: QuotaLane): string[] {
   const title = lane.charAt(0).toUpperCase() + lane.slice(1)
   return [
+    `${lane}_used_percent`,
+    `${lane}_used_quota`,
+    `${lane}_quota_used`,
+    `${lane}_used`,
+    `${lane}UsedPercent`,
+    `${lane}UsedQuota`,
+    `${lane}QuotaUsed`,
+    `${lane}Used`,
+    `${title}UsedPercent`,
+    `${title}UsedQuota`,
+    `${title}QuotaUsed`,
+    `${title}Used`,
     `${lane}_remaining_percent`,
     `${lane}_remaining_quota`,
     `${lane}_quota_remaining`,

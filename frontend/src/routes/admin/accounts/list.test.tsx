@@ -101,8 +101,8 @@ describe('AdminAccountsList', () => {
           updated_at: '2026-04-22T08:10:00Z',
           email: 'plus@example.com',
           plan_type: 'chatgpt-plus',
-          primary_remaining_quota: '18 messages',
-          secondary_remaining_quota: '42 messages',
+          primary_used_percent: 18,
+          secondary_used_percent: 42,
         },
         {
           id: 3,
@@ -153,10 +153,10 @@ describe('AdminAccountsList', () => {
     const plusRow = within(screen.getByTestId('account-row-2'))
     expect(plusRow.getByText('plus@example.com')).toBeInTheDocument()
     expect(plusRow.getByText('ChatGPT Plus')).toBeInTheDocument()
-    expect(plusRow.getByText('Primary quota')).toBeInTheDocument()
-    expect(plusRow.getByText('Secondary quota')).toBeInTheDocument()
-    expect(plusRow.getByText('18 messages')).toBeInTheDocument()
-    expect(plusRow.getByText('42 messages')).toBeInTheDocument()
+    expect(plusRow.getByText('Primary used')).toBeInTheDocument()
+    expect(plusRow.getByText('Secondary used')).toBeInTheDocument()
+    expect(plusRow.getByText('18%')).toBeInTheDocument()
+    expect(plusRow.getByText('42%')).toBeInTheDocument()
     expect(plusRow.getByText('Active')).toBeInTheDocument()
     expect(plusRow.getByTestId('account-status-active')).toHaveClass('text-[var(--ok)]')
     expect(

@@ -31,8 +31,8 @@ interface AccountDetail {
   chatgpt_account_id?: string | null
   last_refresh?: string | null
   access_expires_at?: string | null
-  primary_remaining_percent?: number | null
-  secondary_remaining_percent?: number | null
+  primary_used_percent?: number | null
+  secondary_used_percent?: number | null
   usage_updated_at?: string | null
 }
 
@@ -294,8 +294,8 @@ export function AdminAccountDetail() {
                 rows={[
                   [strings.labels.email, account.email ?? strings.empty],
                   [strings.labels.plan, planLabel],
-                  [strings.labels.primaryQuota, formatPercent(account.primary_remaining_percent)],
-                  [strings.labels.secondaryQuota, formatPercent(account.secondary_remaining_percent)],
+                  [strings.labels.primaryUsage, formatPercent(account.primary_used_percent)],
+                  [strings.labels.secondaryUsage, formatPercent(account.secondary_used_percent)],
                   [strings.labels.quotaUpdatedAt, formatTimestamp(account.usage_updated_at)],
                   [strings.labels.chatgptAccountID, account.chatgpt_account_id ?? strings.empty],
                   [strings.labels.lastRefresh, formatTimestamp(account.last_refresh)],
