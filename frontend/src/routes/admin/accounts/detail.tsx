@@ -27,9 +27,13 @@ interface AccountDetail {
   updated_at: string
   email?: string | null
   plan_type?: string | null
+  plan_type_label?: string | null
   chatgpt_account_id?: string | null
   last_refresh?: string | null
   access_expires_at?: string | null
+  primary_remaining_percent?: number | null
+  secondary_remaining_percent?: number | null
+  usage_updated_at?: string | null
 }
 
 const pauseAccountButtonClassName =
@@ -65,7 +69,8 @@ export function AdminAccountDetail() {
   const oauthExportable = account !== null && account.auth_method !== 'api_key'
   const showOAuthMetadata = account !== null && account.auth_method !== 'api_key'
   const planLabel =
-    account?.plan_type == null ? strings.empty : planTypeLabel(account.plan_type) || strings.empty
+    account?.plan_type_label ||
+    (account?.plan_type == null ? strings.empty : planTypeLabel(account.plan_type) || strings.empty)
   const accountStatusMeta = account ? statusMetaFor(account.status) : null
   const accountIsActive = account ? isActiveStatus(account.status) : false
 
@@ -289,6 +294,9 @@ export function AdminAccountDetail() {
                 rows={[
                   [strings.labels.email, account.email ?? strings.empty],
                   [strings.labels.plan, planLabel],
+                  [strings.labels.primaryQuota, formatPercent(account.primary_remaining_percent)],
+                  [strings.labels.secondaryQuota, formatPercent(account.secondary_remaining_percent)],
+                  [strings.labels.quotaUpdatedAt, formatTimestamp(account.usage_updated_at)],
                   [strings.labels.chatgptAccountID, account.chatgpt_account_id ?? strings.empty],
                   [strings.labels.lastRefresh, formatTimestamp(account.last_refresh)],
                   [strings.labels.accessExpiresAt, formatTimestamp(account.access_expires_at)],
@@ -386,6 +394,14 @@ function formatTimestamp(value: string | null | undefined): string {
     return value
   }
   return date.toISOString().replace('.000Z', 'Z')
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return strings.empty
+  }
+  const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
+  return `${formatter.format(value)}%`
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {

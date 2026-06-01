@@ -1,7 +1,10 @@
 package openai
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -18,6 +21,15 @@ var (
 type Client struct {
 	httpClient          *http.Client
 	codexBackendBaseURL string
+}
+
+type UsageWindow struct {
+	UsedPercent float64 `json:"used_percent"`
+}
+
+type UsageResponse struct {
+	PrimaryWindow   UsageWindow `json:"primary_window"`
+	SecondaryWindow UsageWindow `json:"secondary_window"`
 }
 
 // NewClient creates an upstream HTTP client. The timeout applies only to
@@ -50,4 +62,34 @@ func NewClient(timeout time.Duration) *Client {
 
 func (c *Client) SetCodexBackendBaseURLForTest(baseURL string) {
 	c.codexBackendBaseURL = baseURL
+}
+
+func (c *Client) FetchUsage(ctx context.Context, accessToken string, chatGPTAccountID string) (*UsageResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.codexBackendBaseURL+"/wham/usage", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create usage request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("User-Agent", CodexCLIUserAgent)
+	if chatGPTAccountID != "" {
+		req.Header.Set("chatgpt-account-id", chatGPTAccountID)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do usage request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("usage request failed with status %d", resp.StatusCode)
+	}
+
+	var usage UsageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&usage); err != nil {
+		return nil, fmt.Errorf("decode usage response: %w", err)
+	}
+
+	return &usage, nil
 }

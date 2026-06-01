@@ -56,13 +56,15 @@ func makeAppJWT(t *testing.T, payload map[string]any) string {
 func writeConfig(t *testing.T, dir, dbURL string) string {
 	t.Helper()
 	path := filepath.Join(dir, "config.json")
+	runtime := config.DefaultRuntimeConfig()
+	runtime.UsageRefreshIntervalSeconds = 0
 	cfg := &config.Config{
 		Version: config.SupportedVersion,
 		DB: config.DBConfig{
 			Driver: "sqlite3",
 			URL:    dbURL,
 		},
-		Runtime: config.DefaultRuntimeConfig(),
+		Runtime: runtime,
 		Plugins: config.DefaultPluginsConfig(),
 	}
 	if err := config.WriteAtomic(path, cfg); err != nil {

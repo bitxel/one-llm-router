@@ -412,6 +412,14 @@ func (*manualCallbackStore) UpdateStatusIfCurrent(context.Context, int64, string
 	return errors.New("manualCallbackStore.UpdateStatusIfCurrent: not implemented")
 }
 
+func (*manualCallbackStore) UpdateUsage(context.Context, int64, *float64, *float64) error {
+	return errors.New("manualCallbackStore.UpdateUsage: not implemented")
+}
+
+func (*manualCallbackStore) ListActive(context.Context) ([]domain.UpstreamAccount, error) {
+	return nil, errors.New("manualCallbackStore.ListActive: not implemented")
+}
+
 func (*manualCallbackStore) GetProjectionByID(context.Context, int64) (*domain.UpstreamAccount, error) {
 	return nil, errors.New("manualCallbackStore.GetProjectionByID: not implemented")
 }

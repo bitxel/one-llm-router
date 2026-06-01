@@ -144,6 +144,8 @@ type App struct {
 	// Nil in setup-pending mode.
 	oauthCoordinator *oauth.Coordinator
 
+	usageRefresher *oauth.UsageRefresher
+
 	srv        *http.Server
 	listenAddr string
 }
@@ -216,6 +218,10 @@ func (a *App) Stop(ctx context.Context) error {
 			err = closeErr
 		}
 		a.recorder = nil
+	}
+	if a.usageRefresher != nil {
+		a.usageRefresher.Stop()
+		a.usageRefresher = nil
 	}
 	if a.oauthCoordinator != nil {
 		a.oauthCoordinator.Shutdown()
@@ -809,6 +815,20 @@ func registerSteadyStateRoutes(
 	if deps.CodexBackendBaseURL != "" {
 		proxyClient.SetCodexBackendBaseURLForTest(deps.CodexBackendBaseURL)
 	}
+
+	refreshIntervalSeconds := cfg.Runtime.UsageRefreshIntervalSeconds
+	if refreshIntervalSeconds > 0 {
+		refresher := oauth.NewUsageRefresher(
+			accountRepo,
+			proxyClient,
+			oauthCoord,
+			a.logger,
+			time.Duration(refreshIntervalSeconds)*time.Second,
+		)
+		refresher.Start()
+		a.usageRefresher = refresher
+	}
+
 	playgroundSvc := core.NewPlaygroundService(accountRepo, selector, proxyClient)
 	playgroundSvc.SetRecorder(recorder)
 	playgroundSvc.SetBodyLogFunc(bodyLogFunc)

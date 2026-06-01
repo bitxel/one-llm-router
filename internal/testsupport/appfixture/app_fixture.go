@@ -36,7 +36,11 @@ func NewSteadyStateApp(t *testing.T) *Fixture {
 			Driver: "sqlite3",
 			URL:    dbPath,
 		},
-		Runtime: config.DefaultRuntimeConfig(),
+		Runtime: func() config.RuntimeConfig {
+			r := config.DefaultRuntimeConfig()
+			r.UsageRefreshIntervalSeconds = 0
+			return r
+		}(),
 		Plugins: config.DefaultPluginsConfig(),
 	}
 	if err := config.WriteAtomic(cfgPath, cfg); err != nil {

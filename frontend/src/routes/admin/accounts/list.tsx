@@ -30,6 +30,9 @@ interface AccountListItem {
   chatgpt_account_id?: string | null
   last_refresh?: string | null
   access_expires_at?: string | null
+  primary_remaining_percent?: number | null
+  secondary_remaining_percent?: number | null
+  usage_updated_at?: string | null
 }
 
 interface AccountsListPayload {
@@ -376,6 +379,8 @@ const remainingKeys = [
   'remaining',
   'remaining_quota',
   'remainingQuota',
+  'remaining_percent',
+  'remainingPercent',
   'quota_remaining',
   'quotaRemaining',
   'available',
@@ -385,12 +390,15 @@ const remainingKeys = [
 function quotaKeysFor(lane: QuotaLane): string[] {
   const title = lane.charAt(0).toUpperCase() + lane.slice(1)
   return [
+    `${lane}_remaining_percent`,
     `${lane}_remaining_quota`,
     `${lane}_quota_remaining`,
     `${lane}_remaining`,
+    `${lane}RemainingPercent`,
     `${lane}RemainingQuota`,
     `${lane}QuotaRemaining`,
     `${lane}Remaining`,
+    `${title}RemainingPercent`,
     `${title}RemainingQuota`,
     `${title}QuotaRemaining`,
     `${title}Remaining`,
@@ -412,7 +420,7 @@ function formatQuotaValue(value: unknown): string {
   }
 
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? quotaNumberFormatter.format(value) : strings.emptyField
+    return Number.isFinite(value) ? `${quotaNumberFormatter.format(value)}%` : strings.emptyField
   }
 
   if (typeof value === 'string') {

@@ -78,6 +78,10 @@ type UpstreamAccount struct {
 	Email            *string    `xorm:"'email'" json:"email,omitempty"`
 	PlanType         *string    `xorm:"'plan_type'" json:"plan_type,omitempty"`
 	ChatGPTAccountID *string    `xorm:"'chatgpt_account_id'" json:"chatgpt_account_id,omitempty"`
+
+	PrimaryUsedPercent   *float64   `xorm:"'primary_used_percent'" json:"-"`
+	SecondaryUsedPercent *float64   `xorm:"'secondary_used_percent'" json:"-"`
+	UsageUpdatedAt       *time.Time `xorm:"'usage_updated_at'" json:"-"`
 }
 
 func (a UpstreamAccount) TableName() string {
@@ -197,6 +201,15 @@ func (a *UpstreamAccount) validateAPIKeyShape() error {
 	}
 	if a.ChatGPTAccountID != nil {
 		offenders = append(offenders, "chatgpt_account_id=non-nil")
+	}
+	if a.PrimaryUsedPercent != nil {
+		offenders = append(offenders, "primary_used_percent=non-nil")
+	}
+	if a.SecondaryUsedPercent != nil {
+		offenders = append(offenders, "secondary_used_percent=non-nil")
+	}
+	if a.UsageUpdatedAt != nil {
+		offenders = append(offenders, "usage_updated_at=non-nil")
 	}
 	if len(offenders) == 0 {
 		return nil

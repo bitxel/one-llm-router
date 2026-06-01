@@ -83,6 +83,8 @@ type accountStore interface {
 	GetByID(ctx context.Context, id int64) (*domain.UpstreamAccount, error)
 	UpdateCredentials(ctx context.Context, id int64, patch store.CredentialPatch) error
 	UpdateStatusIfCurrent(ctx context.Context, id int64, status string, expectedLastRefresh time.Time) error
+	UpdateUsage(ctx context.Context, id int64, primary, secondary *float64) error
+	ListActive(ctx context.Context) ([]domain.UpstreamAccount, error)
 }
 
 func NewCoordinator(provider Provider, logger *slog.Logger) *Coordinator {

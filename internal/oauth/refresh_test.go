@@ -1256,6 +1256,14 @@ func (s *refreshRaceStore) UpdateStatusIfCurrent(ctx context.Context, id int64, 
 	return s.repo.UpdateStatusIfCurrent(ctx, id, status, expectedLastRefresh)
 }
 
+func (s *refreshRaceStore) UpdateUsage(ctx context.Context, id int64, primary, secondary *float64) error {
+	return s.repo.UpdateUsage(ctx, id, primary, secondary)
+}
+
+func (s *refreshRaceStore) ListActive(ctx context.Context) ([]domain.UpstreamAccount, error) {
+	return s.repo.ListActive(ctx)
+}
+
 func (s *refreshRaceStore) GetProjectionByID(ctx context.Context, id int64) (*domain.UpstreamAccount, error) {
 	return s.repo.GetProjectionByID(ctx, id)
 }
@@ -1297,6 +1305,14 @@ func (s *refreshRepeatedConflictStore) UpdateStatusIfCurrent(ctx context.Context
 	return s.repo.UpdateStatusIfCurrent(ctx, id, status, expectedLastRefresh)
 }
 
+func (s *refreshRepeatedConflictStore) UpdateUsage(ctx context.Context, id int64, primary, secondary *float64) error {
+	return s.repo.UpdateUsage(ctx, id, primary, secondary)
+}
+
+func (s *refreshRepeatedConflictStore) ListActive(ctx context.Context) ([]domain.UpstreamAccount, error) {
+	return s.repo.ListActive(ctx)
+}
+
 func (s *refreshRepeatedConflictStore) GetProjectionByID(ctx context.Context, id int64) (*domain.UpstreamAccount, error) {
 	return s.repo.GetProjectionByID(ctx, id)
 }
@@ -1325,6 +1341,14 @@ func (s *refreshDeletedReloadStore) UpdateCredentials(ctx context.Context, id in
 
 func (s *refreshDeletedReloadStore) UpdateStatusIfCurrent(ctx context.Context, id int64, status string, expectedLastRefresh time.Time) error {
 	return s.repo.UpdateStatusIfCurrent(ctx, id, status, expectedLastRefresh)
+}
+
+func (s *refreshDeletedReloadStore) UpdateUsage(ctx context.Context, id int64, primary, secondary *float64) error {
+	return s.repo.UpdateUsage(ctx, id, primary, secondary)
+}
+
+func (s *refreshDeletedReloadStore) ListActive(ctx context.Context) ([]domain.UpstreamAccount, error) {
+	return s.repo.ListActive(ctx)
 }
 
 func (s *refreshDeletedReloadStore) GetProjectionByID(ctx context.Context, id int64) (*domain.UpstreamAccount, error) {

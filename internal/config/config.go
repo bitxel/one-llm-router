@@ -46,12 +46,13 @@ type DBConfig struct {
 // POST /api/admin/settings/update. None are env-overridable in 002
 // (data-model.md §Field-level env override precedence).
 type RuntimeConfig struct {
-	LogClientRequestBody    bool   `json:"log_client_request_body"`
-	LogUpstreamRequestBody  bool   `json:"log_upstream_request_body"`
-	LogUpstreamResponseBody bool   `json:"log_upstream_response_body"`
-	LogRetentionDays        int    `json:"log_retention_days"`
-	LogLevel                string `json:"log_level"`
-	ModelRenames            []ModelRenameRule `json:"model_renames"`
+	LogClientRequestBody        bool              `json:"log_client_request_body"`
+	LogUpstreamRequestBody      bool              `json:"log_upstream_request_body"`
+	LogUpstreamResponseBody     bool              `json:"log_upstream_response_body"`
+	LogRetentionDays            int               `json:"log_retention_days"`
+	LogLevel                    string            `json:"log_level"`
+	UsageRefreshIntervalSeconds int               `json:"usage_refresh_interval_seconds"`
+	ModelRenames                []ModelRenameRule `json:"model_renames"`
 }
 
 // ModelRenameRule maps a client-facing model id to the upstream model id
@@ -103,12 +104,13 @@ type ClientKeysPluginConfig struct {
 // retention, info-level logs.
 func DefaultRuntimeConfig() RuntimeConfig {
 	return RuntimeConfig{
-		LogClientRequestBody:    false,
-		LogUpstreamRequestBody:  false,
-		LogUpstreamResponseBody: false,
-		LogRetentionDays:        30,
-		LogLevel:                "info",
-		ModelRenames:            []ModelRenameRule{},
+		LogClientRequestBody:        false,
+		LogUpstreamRequestBody:      false,
+		LogUpstreamResponseBody:     false,
+		LogRetentionDays:            30,
+		LogLevel:                    "info",
+		UsageRefreshIntervalSeconds: 300,
+		ModelRenames:                []ModelRenameRule{},
 	}
 }
 

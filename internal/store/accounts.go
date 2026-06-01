@@ -48,6 +48,10 @@ type AccountListItem struct {
 	LastRefresh      *time.Time `json:"last_refresh,omitempty"`
 	AccessExpiresAt  *time.Time `json:"access_expires_at,omitempty"`
 
+	PrimaryUsedPercent   *float64   `json:"-"`
+	SecondaryUsedPercent *float64   `json:"-"`
+	UsageUpdatedAt       *time.Time `json:"-"`
+
 	// PlanTypeLabel is DELIBERATELY absent from the store DTO. It is
 	// a UI-only presentation of PlanType — the handler in
 	// internal/api/adminapi fills it via adminapi.PlanTypeLabel when
@@ -357,7 +361,8 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 		Cols("id", "name", "provider", "auth_method", "status",
 			"base_url", "created_at", "updated_at",
 			"email", "plan_type", "chatgpt_account_id",
-			"last_refresh", "access_expires_at").
+			"last_refresh", "access_expires_at",
+			"primary_used_percent", "secondary_used_percent", "usage_updated_at").
 		Where("status != ?", domain.AccountStatusDeleted).
 		OrderBy("id ASC").
 		Find(&rows)
@@ -394,6 +399,9 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			it.ChatGPTAccountID = r.ChatGPTAccountID
 			it.LastRefresh = r.LastRefresh
 			it.AccessExpiresAt = r.AccessExpiresAt
+			it.PrimaryUsedPercent = r.PrimaryUsedPercent
+			it.SecondaryUsedPercent = r.SecondaryUsedPercent
+			it.UsageUpdatedAt = r.UsageUpdatedAt
 		}
 		items = append(items, it)
 	}
@@ -603,7 +611,8 @@ func (r *AccountRepo) GetProjectionByID(_ context.Context, id int64) (*domain.Up
 		Cols("id", "name", "provider", "base_url", "status",
 			"created_at", "updated_at", "auth_method",
 			"email", "plan_type", "chatgpt_account_id",
-			"last_refresh", "access_expires_at").
+			"last_refresh", "access_expires_at",
+			"primary_used_percent", "secondary_used_percent", "usage_updated_at").
 		Get(account)
 	if err != nil {
 		return nil, fmt.Errorf("get account projection %d: %w", id, err)
@@ -650,6 +659,23 @@ func (r *AccountRepo) UpdateStatus(_ context.Context, id int64, status string) e
 	}
 	if affected == 0 {
 		return domain.ErrAccountNotFound
+	}
+	return nil
+}
+
+func (r *AccountRepo) UpdateUsage(_ context.Context, id int64, primary, secondary *float64) error {
+	now := time.Now().UTC()
+	row := &domain.UpstreamAccount{
+		PrimaryUsedPercent:   primary,
+		SecondaryUsedPercent: secondary,
+		UsageUpdatedAt:       &now,
+	}
+	_, err := r.engine.
+		ID(id).
+		Cols("primary_used_percent", "secondary_used_percent", "usage_updated_at", "updated_at").
+		Update(row)
+	if err != nil {
+		return fmt.Errorf("update account %d usage: %w", id, err)
 	}
 	return nil
 }

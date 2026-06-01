@@ -742,6 +742,14 @@ func (s failingAccountStore) UpdateStatusIfCurrent(context.Context, int64, strin
 	return s.updateErr
 }
 
+func (s failingAccountStore) UpdateUsage(context.Context, int64, *float64, *float64) error {
+	return s.updateErr
+}
+
+func (s failingAccountStore) ListActive(context.Context) ([]domain.UpstreamAccount, error) {
+	return nil, s.getErr
+}
+
 func (s failingAccountStore) GetByID(ctx context.Context, id int64) (*domain.UpstreamAccount, error) {
 	return s.GetProjectionByID(ctx, id)
 }

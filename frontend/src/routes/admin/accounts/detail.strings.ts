@@ -36,9 +36,12 @@ export const strings = {
     baseURL: 'Base URL',
     email: 'Email',
     plan: 'Plan',
+    primaryQuota: 'Primary quota',
+    secondaryQuota: 'Secondary quota',
     chatgptAccountID: 'ChatGPT account',
     lastRefresh: 'Last refresh',
     accessExpiresAt: 'Access expires at',
+    quotaUpdatedAt: 'Quota refreshed at',
   },
   accountStatus: {
     active: 'Active',
