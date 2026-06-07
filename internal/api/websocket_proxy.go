@@ -37,7 +37,7 @@ func (h *ProxyHandler) serveWebSocket(
 		return
 	}
 
-	account, accessToken, _, err := h.selector.SelectEligible(r.Context(), sessionKey, proxyAccountEligible(route))
+	account, accessToken, _, err := h.selector.SelectEligible(r.Context(), sessionKey, proxyAccountEligible(route, nil))
 	if err != nil {
 		if errors.Is(err, domain.ErrNoCapacity) {
 			h.writeError(w, requestID, start, r, nil,

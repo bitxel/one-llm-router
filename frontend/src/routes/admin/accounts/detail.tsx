@@ -1,12 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
-import { Download, Pause, Play, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { Download, Pause, Play, RefreshCw, Trash2, X } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { accountsExportAuthJson } from '@/generated/openapi'
 import { api } from '@/lib/api-client'
 import { planTypeLabel } from '@/lib/plan-label'
@@ -36,6 +37,15 @@ interface AccountDetail {
   usage_updated_at?: string | null
 }
 
+interface AccountModel {
+  id: number
+  account_id: number
+  model_id: string
+  source: 'manual' | 'upstream'
+  created_at: string
+  updated_at: string
+}
+
 const pauseAccountButtonClassName =
   'border-[var(--line-3)] bg-[var(--panel)] text-[var(--text-muted)] [box-shadow:var(--shadow-btn)] hover:border-[var(--err)] hover:bg-[var(--err-soft)] hover:text-[var(--err)] focus-visible:border-[var(--err)] focus-visible:text-[var(--err)]'
 
@@ -57,6 +67,22 @@ export function AdminAccountDetail() {
   const rawAccountID = typeof params.accountId === 'string' ? params.accountId : ''
   const accountID = Number(rawAccountID)
   const hasValidID = Number.isInteger(accountID) && accountID > 0
+
+  const [newModelID, setNewModelID] = useState('')
+  const [isAddingModel, setIsAddingModel] = useState(false)
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false)
+  const addModelInputRef = useRef<HTMLInputElement>(null)
+  const modelsQueryKey = ['admin', 'account', rawAccountID, 'models'] as const
+
+  const modelsQuery = useQuery({
+    queryKey: modelsQueryKey,
+    queryFn: () =>
+      api.get<{ account_id: number; models: AccountModel[] }>(
+        `/api/admin/accounts/${rawAccountID}/models`,
+      ),
+    enabled: hasValidID,
+    staleTime: 10_000,
+  })
 
   const accountQuery = useQuery({
     queryKey: adminAccountDetailQueryKey(rawAccountID),
@@ -167,6 +193,60 @@ export function AdminAccountDetail() {
       toast.error(strings.toasts.deleteFailed)
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  async function handleAddModel() {
+    if (!account || isAddingModel || newModelID.trim() === '') {
+      return
+    }
+    setIsAddingModel(true)
+    try {
+      await api.post<Record<string, unknown>>(`/api/admin/accounts/${account.id}/models/add`, {
+        model_id: newModelID.trim(),
+      })
+      setNewModelID('')
+      await queryClient.invalidateQueries({ queryKey: modelsQueryKey })
+      toast.success(strings.toasts.modelAddSuccess)
+    } catch (_error) {
+      toast.error(strings.toasts.modelAddFailed)
+    } finally {
+      setIsAddingModel(false)
+      addModelInputRef.current?.focus()
+    }
+  }
+
+  async function handleRemoveModel(modelID: string) {
+    if (!account) {
+      return
+    }
+    try {
+      await api.post<Record<string, unknown>>(`/api/admin/accounts/${account.id}/models/remove`, {
+        model_id: modelID,
+      })
+      await queryClient.invalidateQueries({ queryKey: modelsQueryKey })
+      toast.success(strings.toasts.modelRemoveSuccess)
+    } catch (_error) {
+      toast.error(strings.toasts.modelRemoveFailed)
+    }
+  }
+
+  async function handleRefreshModels() {
+    if (!account || isRefreshingModels) {
+      return
+    }
+    setIsRefreshingModels(true)
+    try {
+      await api.post<Record<string, unknown>>(
+        `/api/admin/accounts/${account.id}/models/refresh`,
+        {},
+      )
+      await queryClient.invalidateQueries({ queryKey: modelsQueryKey })
+      toast.success(strings.toasts.modelRefreshSuccess)
+    } catch (_error) {
+      toast.error(strings.toasts.modelRefreshFailed)
+    } finally {
+      setIsRefreshingModels(false)
     }
   }
 
@@ -326,6 +406,81 @@ export function AdminAccountDetail() {
                     : strings.actions.delete}
               </Button>
             </div>
+          </PanelCard>
+
+          <PanelCard title={strings.modelsTitle}>
+            {modelsQuery.isLoading ? (
+              <div className="text-[13px] text-[var(--text-dim)]">{strings.modelsLoading}</div>
+            ) : modelsQuery.isError ? (
+              <ErrorBanner error={modelsQuery.error} className="mb-4" />
+            ) : (
+              <div className="space-y-3">
+                {(modelsQuery.data?.models?.length ?? 0) > 0 ? (
+                  <div className="divide-y divide-[var(--line-2)]">
+                    {modelsQuery.data?.models.map((m) => (
+                      <div
+                        key={m.model_id}
+                        className="flex items-center justify-between gap-3 py-2 text-[13px]"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <code className="truncate font-mono text-[var(--text)]">
+                            {m.model_id}
+                          </code>
+                          <span className="rounded border border-[var(--line-3)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)]">
+                            {m.source}
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 shrink-0"
+                          onClick={() => void handleRemoveModel(m.model_id)}
+                          aria-label={`${strings.removeModelTitle} ${m.model_id}`}
+                          title={`${strings.removeModelTitle} ${m.model_id}`}
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[13px] leading-[1.6] text-[var(--text-dim)]">
+                    {strings.modelsEmpty}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={addModelInputRef}
+                    value={newModelID}
+                    onChange={(e) => setNewModelID(e.target.value)}
+                    placeholder={strings.addModelPlaceholder}
+                    className="h-8 text-[13px]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        void handleAddModel()
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => void handleAddModel()}
+                    disabled={isAddingModel || newModelID.trim() === ''}
+                  >
+                    {isAddingModel ? strings.addingModel : strings.addModelButton}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void handleRefreshModels()}
+                    disabled={isRefreshingModels}
+                  >
+                    <RefreshCw className={`size-3.5 ${isRefreshingModels ? 'animate-spin' : ''}`} />
+                    {isRefreshingModels ? strings.refreshingModels : strings.refreshModelsButton}
+                  </Button>
+                </div>
+              </div>
+            )}
           </PanelCard>
         </div>
       ) : null}

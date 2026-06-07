@@ -25,6 +25,18 @@ type ServerInterface interface {
 	// Export an OAuth account row as a Codex CLI `auth.json` attachment.
 	// (POST /api/admin/accounts/{id}/export-auth-json)
 	AccountsExportAuthJSON(w http.ResponseWriter, r *http.Request, id int64)
+	// List models for an account.
+	// (GET /api/admin/accounts/{id}/models)
+	AccountModelsList(w http.ResponseWriter, r *http.Request, id int64)
+	// Add a model to an account (source=manual).
+	// (POST /api/admin/accounts/{id}/models/add)
+	AccountModelAdd(w http.ResponseWriter, r *http.Request, id int64)
+	// Refresh upstream models for an account.
+	// (POST /api/admin/accounts/{id}/models/refresh)
+	AccountModelRefresh(w http.ResponseWriter, r *http.Request, id int64)
+	// Remove a model from an account.
+	// (POST /api/admin/accounts/{id}/models/remove)
+	AccountModelRemove(w http.ResponseWriter, r *http.Request, id int64)
 	// Return the Admin Dashboard observability snapshot.
 	// (GET /api/admin/dashboard)
 	DashboardGet(w http.ResponseWriter, r *http.Request, params DashboardGetParams)
@@ -117,6 +129,130 @@ func (siw *ServerInterfaceWrapper) AccountsExportAuthJSON(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AccountsExportAuthJSON(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AccountModelsList operation middleware
+func (siw *ServerInterfaceWrapper) AccountModelsList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, AdminAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AccountModelsList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AccountModelAdd operation middleware
+func (siw *ServerInterfaceWrapper) AccountModelAdd(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, AdminAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AccountModelAdd(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AccountModelRefresh operation middleware
+func (siw *ServerInterfaceWrapper) AccountModelRefresh(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, AdminAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AccountModelRefresh(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AccountModelRemove operation middleware
+func (siw *ServerInterfaceWrapper) AccountModelRemove(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, AdminAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AccountModelRemove(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -678,6 +814,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/import-auth-json", wrapper.AccountsImportAuthJSON)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/export-auth-json", wrapper.AccountsExportAuthJSON)
+	m.HandleFunc("GET "+options.BaseURL+"/api/admin/accounts/{id}/models", wrapper.AccountModelsList)
+	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/models/add", wrapper.AccountModelAdd)
+	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/models/refresh", wrapper.AccountModelRefresh)
+	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/models/remove", wrapper.AccountModelRemove)
 	m.HandleFunc("GET "+options.BaseURL+"/api/admin/dashboard", wrapper.DashboardGet)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/oauth/browser/manual-callback", wrapper.OauthBrowserManualCallback)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/oauth/browser/start", wrapper.OauthBrowserStart)
@@ -756,6 +896,112 @@ func (response AccountsExportAuthJSON200JSONResponse) VisitAccountsExportAuthJSO
 type AccountsExportAuthJSON500JSONResponse struct{ SystemErrorJSONResponse }
 
 func (response AccountsExportAuthJSON500JSONResponse) VisitAccountsExportAuthJSONResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelsListRequestObject struct {
+	Id int64 `json:"id"`
+}
+
+type AccountModelsListResponseObject interface {
+	VisitAccountModelsListResponse(w http.ResponseWriter) error
+}
+
+type AccountModelsList200JSONResponse AccountModelsListResponseBody
+
+func (response AccountModelsList200JSONResponse) VisitAccountModelsListResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelsList500JSONResponse struct{ SystemErrorJSONResponse }
+
+func (response AccountModelsList500JSONResponse) VisitAccountModelsListResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelAddRequestObject struct {
+	Id   int64 `json:"id"`
+	Body *AccountModelAddJSONRequestBody
+}
+
+type AccountModelAddResponseObject interface {
+	VisitAccountModelAddResponse(w http.ResponseWriter) error
+}
+
+type AccountModelAdd200JSONResponse AccountModelsAddResponseBody
+
+func (response AccountModelAdd200JSONResponse) VisitAccountModelAddResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelAdd500JSONResponse struct{ SystemErrorJSONResponse }
+
+func (response AccountModelAdd500JSONResponse) VisitAccountModelAddResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelRefreshRequestObject struct {
+	Id int64 `json:"id"`
+}
+
+type AccountModelRefreshResponseObject interface {
+	VisitAccountModelRefreshResponse(w http.ResponseWriter) error
+}
+
+type AccountModelRefresh200JSONResponse AccountModelsRefreshResponseBody
+
+func (response AccountModelRefresh200JSONResponse) VisitAccountModelRefreshResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelRefresh500JSONResponse struct{ SystemErrorJSONResponse }
+
+func (response AccountModelRefresh500JSONResponse) VisitAccountModelRefreshResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelRemoveRequestObject struct {
+	Id   int64 `json:"id"`
+	Body *AccountModelRemoveJSONRequestBody
+}
+
+type AccountModelRemoveResponseObject interface {
+	VisitAccountModelRemoveResponse(w http.ResponseWriter) error
+}
+
+type AccountModelRemove200JSONResponse AccountModelsRemoveResponseBody
+
+func (response AccountModelRemove200JSONResponse) VisitAccountModelRemoveResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountModelRemove500JSONResponse struct{ SystemErrorJSONResponse }
+
+func (response AccountModelRemove500JSONResponse) VisitAccountModelRemoveResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -1105,6 +1351,18 @@ type StrictServerInterface interface {
 	// Export an OAuth account row as a Codex CLI `auth.json` attachment.
 	// (POST /api/admin/accounts/{id}/export-auth-json)
 	AccountsExportAuthJSON(ctx context.Context, request AccountsExportAuthJSONRequestObject) (AccountsExportAuthJSONResponseObject, error)
+	// List models for an account.
+	// (GET /api/admin/accounts/{id}/models)
+	AccountModelsList(ctx context.Context, request AccountModelsListRequestObject) (AccountModelsListResponseObject, error)
+	// Add a model to an account (source=manual).
+	// (POST /api/admin/accounts/{id}/models/add)
+	AccountModelAdd(ctx context.Context, request AccountModelAddRequestObject) (AccountModelAddResponseObject, error)
+	// Refresh upstream models for an account.
+	// (POST /api/admin/accounts/{id}/models/refresh)
+	AccountModelRefresh(ctx context.Context, request AccountModelRefreshRequestObject) (AccountModelRefreshResponseObject, error)
+	// Remove a model from an account.
+	// (POST /api/admin/accounts/{id}/models/remove)
+	AccountModelRemove(ctx context.Context, request AccountModelRemoveRequestObject) (AccountModelRemoveResponseObject, error)
 	// Return the Admin Dashboard observability snapshot.
 	// (GET /api/admin/dashboard)
 	DashboardGet(ctx context.Context, request DashboardGetRequestObject) (DashboardGetResponseObject, error)
@@ -1237,6 +1495,124 @@ func (sh *strictHandler) AccountsExportAuthJSON(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AccountsExportAuthJSONResponseObject); ok {
 		if err := validResponse.VisitAccountsExportAuthJSONResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AccountModelsList operation middleware
+func (sh *strictHandler) AccountModelsList(w http.ResponseWriter, r *http.Request, id int64) {
+	var request AccountModelsListRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AccountModelsList(ctx, request.(AccountModelsListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AccountModelsList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AccountModelsListResponseObject); ok {
+		if err := validResponse.VisitAccountModelsListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AccountModelAdd operation middleware
+func (sh *strictHandler) AccountModelAdd(w http.ResponseWriter, r *http.Request, id int64) {
+	var request AccountModelAddRequestObject
+
+	request.Id = id
+
+	var body AccountModelAddJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AccountModelAdd(ctx, request.(AccountModelAddRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AccountModelAdd")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AccountModelAddResponseObject); ok {
+		if err := validResponse.VisitAccountModelAddResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AccountModelRefresh operation middleware
+func (sh *strictHandler) AccountModelRefresh(w http.ResponseWriter, r *http.Request, id int64) {
+	var request AccountModelRefreshRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AccountModelRefresh(ctx, request.(AccountModelRefreshRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AccountModelRefresh")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AccountModelRefreshResponseObject); ok {
+		if err := validResponse.VisitAccountModelRefreshResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AccountModelRemove operation middleware
+func (sh *strictHandler) AccountModelRemove(w http.ResponseWriter, r *http.Request, id int64) {
+	var request AccountModelRemoveRequestObject
+
+	request.Id = id
+
+	var body AccountModelRemoveJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AccountModelRemove(ctx, request.(AccountModelRemoveRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AccountModelRemove")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AccountModelRemoveResponseObject); ok {
+		if err := validResponse.VisitAccountModelRemoveResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

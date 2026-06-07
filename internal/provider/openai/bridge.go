@@ -136,8 +136,15 @@ func (b operationBridge) upstreamURL(clientReq ClientRequest, baseURL string) st
 		}
 	}
 	target := strings.TrimRight(baseURL, "/") + b.resolvedUpstreamPath(clientReq)
+	var q []string
 	if clientReq.RawQuery != "" {
-		target += "?" + clientReq.RawQuery
+		q = append(q, clientReq.RawQuery)
+	}
+	if b.credential == CredentialClassOAuth {
+		q = append(q, "client_version=0.120.0")
+	}
+	if len(q) > 0 {
+		target += "?" + strings.Join(q, "&")
 	}
 	return target
 }

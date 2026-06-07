@@ -44,11 +44,115 @@ export type EnvelopeSystemError = EnvelopeBase & {
      * the OAuth credential row cannot be read from the store);
      * 4900 = `playground_internal_error`;
      * 5900 = `dashboard_internal_error`;
-     * 6900 = `usage_internal_error`.
+     * 6900 = `usage_internal_error`;
+     * 8900 = `account_model_internal_error`.
      *
      */
     code?: -1 | 1900 | 1901 | 2903 | 3900 | 3901 | 3902 | 4900 | 5900 | 6900;
 };
+
+export type AccountModel = {
+    id: number;
+    account_id: number;
+    /**
+     * Upstream model identifier (e.g. `gpt-4o`).
+     */
+    model_id: string;
+    /**
+     * `manual` — operator-added via the `/add` endpoint.
+     * `upstream` — discovered via the `/refresh` endpoint.
+     *
+     */
+    source: 'manual' | 'upstream';
+    created_at: string;
+    updated_at: string;
+};
+
+export type AddModelRequest = {
+    model_id: string;
+};
+
+export type RemoveModelRequest = {
+    model_id: string;
+};
+
+export type AccountModelsListData = {
+    account_id: number;
+    models: Array<AccountModel>;
+};
+
+export type AccountModelsAddSuccessData = {
+    account_id: number;
+    model_id: string;
+};
+
+export type AccountModelsRemoveSuccessData = {
+    account_id: number;
+    model_id: string;
+};
+
+export type AccountModelsRefreshSuccessData = {
+    account_id: number;
+    added: number;
+    kept_manual: number;
+    total_fetched: number;
+};
+
+export type AccountModelsListSuccessEnvelope = EnvelopeBase & {
+    code?: 0;
+    msg?: 'ok';
+    data?: AccountModelsListData;
+};
+
+export type AccountModelsAddSuccessEnvelope = EnvelopeBase & {
+    code?: 0;
+    msg?: 'ok';
+    data?: AccountModelsAddSuccessData;
+};
+
+export type AccountModelsRemoveSuccessEnvelope = EnvelopeBase & {
+    code?: 0;
+    msg?: 'ok';
+    data?: AccountModelsRemoveSuccessData;
+};
+
+export type AccountModelsRefreshSuccessEnvelope = EnvelopeBase & {
+    code?: 0;
+    msg?: 'ok';
+    data?: AccountModelsRefreshSuccessData;
+};
+
+export type AccountModelDuplicateEnvelope = EnvelopeBase & {
+    code?: 8002;
+    msg?: 'account_model_duplicate';
+    data?: {
+        [key: string]: unknown;
+    };
+};
+
+export type AccountModelRefreshFailedEnvelope = EnvelopeBase & {
+    code?: 8003;
+    msg?: 'account_model_refresh_failed';
+    data?: {
+        detail?: string;
+    };
+};
+
+export type AccountModelInternalErrorEnvelope = EnvelopeBase & {
+    code?: 8900;
+    msg?: 'account_model_internal_error';
+    data?: {
+        [key: string]: unknown;
+    };
+};
+
+export type AccountModelsListResponseBody = AccountModelsListSuccessEnvelope | AccountNotFoundEnvelope | AccountModelInternalErrorEnvelope;
+
+export type AccountModelsAddResponseBody = AccountModelsAddSuccessEnvelope | AccountNotFoundEnvelope | MalformedBodyEnvelope | AccountModelDuplicateEnvelope | AccountModelInternalErrorEnvelope;
+
+export type AccountModelsRemoveResponseBody = AccountModelsRemoveSuccessEnvelope | AccountNotFoundEnvelope | MalformedBodyEnvelope | AccountModelInternalErrorEnvelope;
+
+export type AccountModelsRefreshResponseBody = AccountModelsRefreshSuccessEnvelope | AccountNotFoundEnvelope | AccountModelRefreshFailedEnvelope | AccountModelInternalErrorEnvelope;
 
 /**
  * Unknown keys are ignored to keep forward compatibility painless
@@ -262,6 +366,15 @@ export type AccountListItem = {
      *
      */
     access_expires_at?: string | null;
+    /**
+     * Capability OpID prefixes the account supports. An empty list
+     * (or absent key) means the account supports NO governed
+     * operations — it will be skipped for any capability-gated
+     * route. OAuth accounts always skip capability checks.
+     * Example: `["op.openai.chat_completions", "op.openai.responses"]`.
+     *
+     */
+    capabilities?: Array<string>;
     created_at?: string;
     updated_at?: string;
 };
@@ -1631,3 +1744,135 @@ export type PlaygroundRunResponses = {
 };
 
 export type PlaygroundRunResponse = PlaygroundRunResponses[keyof PlaygroundRunResponses];
+
+export type AccountModelsListData2 = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/admin/accounts/{id}/models';
+};
+
+export type AccountModelsListErrors = {
+    /**
+     * HTTP 500 — reserved for system errors (panic, DB unavailable,
+     * store write failure, export read failure, transport-layer
+     * handler bug). The envelope is the same shape; `code` is always
+     * one of `-1` / 1900 / 1901 / 2903 / 3900 / 3901 / 3902 / 4900 / 5900 / 6900.
+     * Clients SHOULD treat any HTTP 500 as a retriable server fault and surface the
+     * `code`/`msg` to the operator.
+     *
+     */
+    500: EnvelopeSystemError;
+};
+
+export type AccountModelsListError = AccountModelsListErrors[keyof AccountModelsListErrors];
+
+export type AccountModelsListResponses = {
+    /**
+     * Envelope with models list or account-not-found.
+     */
+    200: AccountModelsListResponseBody;
+};
+
+export type AccountModelsListResponse = AccountModelsListResponses[keyof AccountModelsListResponses];
+
+export type AccountModelAddData = {
+    body: AddModelRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/admin/accounts/{id}/models/add';
+};
+
+export type AccountModelAddErrors = {
+    /**
+     * HTTP 500 — reserved for system errors (panic, DB unavailable,
+     * store write failure, export read failure, transport-layer
+     * handler bug). The envelope is the same shape; `code` is always
+     * one of `-1` / 1900 / 1901 / 2903 / 3900 / 3901 / 3902 / 4900 / 5900 / 6900.
+     * Clients SHOULD treat any HTTP 500 as a retriable server fault and surface the
+     * `code`/`msg` to the operator.
+     *
+     */
+    500: EnvelopeSystemError;
+};
+
+export type AccountModelAddError = AccountModelAddErrors[keyof AccountModelAddErrors];
+
+export type AccountModelAddResponses = {
+    /**
+     * Envelope — success, duplicate, or account-not-found.
+     */
+    200: AccountModelsAddResponseBody;
+};
+
+export type AccountModelAddResponse = AccountModelAddResponses[keyof AccountModelAddResponses];
+
+export type AccountModelRemoveData = {
+    body: RemoveModelRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/admin/accounts/{id}/models/remove';
+};
+
+export type AccountModelRemoveErrors = {
+    /**
+     * HTTP 500 — reserved for system errors (panic, DB unavailable,
+     * store write failure, export read failure, transport-layer
+     * handler bug). The envelope is the same shape; `code` is always
+     * one of `-1` / 1900 / 1901 / 2903 / 3900 / 3901 / 3902 / 4900 / 5900 / 6900.
+     * Clients SHOULD treat any HTTP 500 as a retriable server fault and surface the
+     * `code`/`msg` to the operator.
+     *
+     */
+    500: EnvelopeSystemError;
+};
+
+export type AccountModelRemoveError = AccountModelRemoveErrors[keyof AccountModelRemoveErrors];
+
+export type AccountModelRemoveResponses = {
+    /**
+     * Envelope — success, not-found, or account-not-found.
+     */
+    200: AccountModelsRemoveResponseBody;
+};
+
+export type AccountModelRemoveResponse = AccountModelRemoveResponses[keyof AccountModelRemoveResponses];
+
+export type AccountModelRefreshData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/admin/accounts/{id}/models/refresh';
+};
+
+export type AccountModelRefreshErrors = {
+    /**
+     * HTTP 500 — reserved for system errors (panic, DB unavailable,
+     * store write failure, export read failure, transport-layer
+     * handler bug). The envelope is the same shape; `code` is always
+     * one of `-1` / 1900 / 1901 / 2903 / 3900 / 3901 / 3902 / 4900 / 5900 / 6900.
+     * Clients SHOULD treat any HTTP 500 as a retriable server fault and surface the
+     * `code`/`msg` to the operator.
+     *
+     */
+    500: EnvelopeSystemError;
+};
+
+export type AccountModelRefreshError = AccountModelRefreshErrors[keyof AccountModelRefreshErrors];
+
+export type AccountModelRefreshResponses = {
+    /**
+     * Envelope — success, refresh-failed, or account-not-found.
+     */
+    200: AccountModelsRefreshResponseBody;
+};
+
+export type AccountModelRefreshResponse = AccountModelRefreshResponses[keyof AccountModelRefreshResponses];

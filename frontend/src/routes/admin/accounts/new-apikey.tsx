@@ -184,7 +184,10 @@ export function AdminAccountsNewAPIKey() {
             ) : null}
           </Field>
 
-          <Field label="Capabilities" hint="API operations this account can handle. Leave empty for none.">
+          <Field
+            label="Capabilities"
+            hint="API operations this account can handle. Leave empty for none."
+          >
             <div className="flex flex-col gap-2">
               {CAPABILITY_OPTIONS.map((opt) => (
                 <label

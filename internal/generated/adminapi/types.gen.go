@@ -58,6 +58,234 @@ func (e AccountListItemStatus) Valid() bool {
 	}
 }
 
+// Defines values for AccountModelSource.
+const (
+	Manual   AccountModelSource = "manual"
+	Upstream AccountModelSource = "upstream"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelSource enum.
+func (e AccountModelSource) Valid() bool {
+	switch e {
+	case Manual:
+		return true
+	case Upstream:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelDuplicateEnvelopeCode.
+const (
+	N8002 AccountModelDuplicateEnvelopeCode = 8002
+)
+
+// Valid indicates whether the value is a known member of the AccountModelDuplicateEnvelopeCode enum.
+func (e AccountModelDuplicateEnvelopeCode) Valid() bool {
+	switch e {
+	case N8002:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelDuplicateEnvelopeMsg.
+const (
+	AccountModelDuplicate AccountModelDuplicateEnvelopeMsg = "account_model_duplicate"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelDuplicateEnvelopeMsg enum.
+func (e AccountModelDuplicateEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountModelDuplicate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelInternalErrorEnvelopeCode.
+const (
+	N8900 AccountModelInternalErrorEnvelopeCode = 8900
+)
+
+// Valid indicates whether the value is a known member of the AccountModelInternalErrorEnvelopeCode enum.
+func (e AccountModelInternalErrorEnvelopeCode) Valid() bool {
+	switch e {
+	case N8900:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelInternalErrorEnvelopeMsg.
+const (
+	AccountModelInternalError AccountModelInternalErrorEnvelopeMsg = "account_model_internal_error"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelInternalErrorEnvelopeMsg enum.
+func (e AccountModelInternalErrorEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountModelInternalError:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelRefreshFailedEnvelopeCode.
+const (
+	N8003 AccountModelRefreshFailedEnvelopeCode = 8003
+)
+
+// Valid indicates whether the value is a known member of the AccountModelRefreshFailedEnvelopeCode enum.
+func (e AccountModelRefreshFailedEnvelopeCode) Valid() bool {
+	switch e {
+	case N8003:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelRefreshFailedEnvelopeMsg.
+const (
+	AccountModelRefreshFailed AccountModelRefreshFailedEnvelopeMsg = "account_model_refresh_failed"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelRefreshFailedEnvelopeMsg enum.
+func (e AccountModelRefreshFailedEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountModelRefreshFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsAddSuccessEnvelopeCode.
+const (
+	AccountModelsAddSuccessEnvelopeCodeN0 AccountModelsAddSuccessEnvelopeCode = 0
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsAddSuccessEnvelopeCode enum.
+func (e AccountModelsAddSuccessEnvelopeCode) Valid() bool {
+	switch e {
+	case AccountModelsAddSuccessEnvelopeCodeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsAddSuccessEnvelopeMsg.
+const (
+	AccountModelsAddSuccessEnvelopeMsgOk AccountModelsAddSuccessEnvelopeMsg = "ok"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsAddSuccessEnvelopeMsg enum.
+func (e AccountModelsAddSuccessEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountModelsAddSuccessEnvelopeMsgOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsListSuccessEnvelopeCode.
+const (
+	AccountModelsListSuccessEnvelopeCodeN0 AccountModelsListSuccessEnvelopeCode = 0
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsListSuccessEnvelopeCode enum.
+func (e AccountModelsListSuccessEnvelopeCode) Valid() bool {
+	switch e {
+	case AccountModelsListSuccessEnvelopeCodeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsListSuccessEnvelopeMsg.
+const (
+	AccountModelsListSuccessEnvelopeMsgOk AccountModelsListSuccessEnvelopeMsg = "ok"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsListSuccessEnvelopeMsg enum.
+func (e AccountModelsListSuccessEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountModelsListSuccessEnvelopeMsgOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsRefreshSuccessEnvelopeCode.
+const (
+	AccountModelsRefreshSuccessEnvelopeCodeN0 AccountModelsRefreshSuccessEnvelopeCode = 0
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsRefreshSuccessEnvelopeCode enum.
+func (e AccountModelsRefreshSuccessEnvelopeCode) Valid() bool {
+	switch e {
+	case AccountModelsRefreshSuccessEnvelopeCodeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsRefreshSuccessEnvelopeMsg.
+const (
+	AccountModelsRefreshSuccessEnvelopeMsgOk AccountModelsRefreshSuccessEnvelopeMsg = "ok"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsRefreshSuccessEnvelopeMsg enum.
+func (e AccountModelsRefreshSuccessEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountModelsRefreshSuccessEnvelopeMsgOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsRemoveSuccessEnvelopeCode.
+const (
+	AccountModelsRemoveSuccessEnvelopeCodeN0 AccountModelsRemoveSuccessEnvelopeCode = 0
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsRemoveSuccessEnvelopeCode enum.
+func (e AccountModelsRemoveSuccessEnvelopeCode) Valid() bool {
+	switch e {
+	case AccountModelsRemoveSuccessEnvelopeCodeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountModelsRemoveSuccessEnvelopeMsg.
+const (
+	AccountModelsRemoveSuccessEnvelopeMsgOk AccountModelsRemoveSuccessEnvelopeMsg = "ok"
+)
+
+// Valid indicates whether the value is a known member of the AccountModelsRemoveSuccessEnvelopeMsg enum.
+func (e AccountModelsRemoveSuccessEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountModelsRemoveSuccessEnvelopeMsgOk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AccountNotFoundEnvelopeCode.
 const (
 	N1001 AccountNotFoundEnvelopeCode = 1001
@@ -2389,16 +2617,23 @@ type AccountListItem struct {
 	// expires (derived from `id_token.exp` or, when missing,
 	// `last_refresh + expires_in`, else `last_refresh + 5 min`
 	// with a WARN). `null` for `auth_method == "api_key"` rows.
-	AccessExpiresAt  *time.Time                `json:"access_expires_at,omitempty"`
-	AuthMethod       AccountListItemAuthMethod `json:"auth_method"`
-	BaseUrl          *string                   `json:"base_url,omitempty"`
-	ChatgptAccountId *string                   `json:"chatgpt_account_id,omitempty"`
-	CreatedAt        *time.Time                `json:"created_at,omitempty"`
-	Email            *string                   `json:"email,omitempty"`
-	Id               int64                     `json:"id"`
-	LastRefresh      *time.Time                `json:"last_refresh,omitempty"`
-	Name             string                    `json:"name"`
-	PlanType         *string                   `json:"plan_type,omitempty"`
+	AccessExpiresAt *time.Time                `json:"access_expires_at,omitempty"`
+	AuthMethod      AccountListItemAuthMethod `json:"auth_method"`
+	BaseUrl         *string                   `json:"base_url,omitempty"`
+
+	// Capabilities Capability OpID prefixes the account supports. An empty list
+	// (or absent key) means the account supports NO governed
+	// operations — it will be skipped for any capability-gated
+	// route. OAuth accounts always skip capability checks.
+	// Example: `["op.openai.chat_completions", "op.openai.responses"]`.
+	Capabilities     *[]string  `json:"capabilities,omitempty"`
+	ChatgptAccountId *string    `json:"chatgpt_account_id,omitempty"`
+	CreatedAt        *time.Time `json:"created_at,omitempty"`
+	Email            *string    `json:"email,omitempty"`
+	Id               int64      `json:"id"`
+	LastRefresh      *time.Time `json:"last_refresh,omitempty"`
+	Name             string     `json:"name"`
+	PlanType         *string    `json:"plan_type,omitempty"`
 
 	// PlanTypeLabel Human-readable label computed from `plan_type` (e.g. `"ChatGPT Plus"`). Raw string fallback when the claim value is not in the default map.
 	PlanTypeLabel *string `json:"plan_type_label,omitempty"`
@@ -2418,6 +2653,164 @@ type AccountListItemAuthMethod string
 // AccountListItemStatus defines model for AccountListItem.Status.
 type AccountListItemStatus string
 
+// AccountModel defines model for AccountModel.
+type AccountModel struct {
+	AccountId int64     `json:"account_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Id        int64     `json:"id"`
+
+	// ModelId Upstream model identifier (e.g. `gpt-4o`).
+	ModelId string `json:"model_id"`
+
+	// Source `manual` — operator-added via the `/add` endpoint.
+	// `upstream` — discovered via the `/refresh` endpoint.
+	Source    AccountModelSource `json:"source"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+// AccountModelSource `manual` — operator-added via the `/add` endpoint.
+// `upstream` — discovered via the `/refresh` endpoint.
+type AccountModelSource string
+
+// AccountModelDuplicateEnvelope defines model for AccountModelDuplicateEnvelope.
+type AccountModelDuplicateEnvelope struct {
+	Code AccountModelDuplicateEnvelopeCode `json:"code"`
+	Data map[string]interface{}            `json:"data"`
+	Msg  AccountModelDuplicateEnvelopeMsg  `json:"msg"`
+}
+
+// AccountModelDuplicateEnvelopeCode defines model for AccountModelDuplicateEnvelope.Code.
+type AccountModelDuplicateEnvelopeCode int
+
+// AccountModelDuplicateEnvelopeMsg defines model for AccountModelDuplicateEnvelope.Msg.
+type AccountModelDuplicateEnvelopeMsg string
+
+// AccountModelInternalErrorEnvelope defines model for AccountModelInternalErrorEnvelope.
+type AccountModelInternalErrorEnvelope struct {
+	Code AccountModelInternalErrorEnvelopeCode `json:"code"`
+	Data map[string]interface{}                `json:"data"`
+	Msg  AccountModelInternalErrorEnvelopeMsg  `json:"msg"`
+}
+
+// AccountModelInternalErrorEnvelopeCode defines model for AccountModelInternalErrorEnvelope.Code.
+type AccountModelInternalErrorEnvelopeCode int
+
+// AccountModelInternalErrorEnvelopeMsg defines model for AccountModelInternalErrorEnvelope.Msg.
+type AccountModelInternalErrorEnvelopeMsg string
+
+// AccountModelRefreshFailedEnvelope defines model for AccountModelRefreshFailedEnvelope.
+type AccountModelRefreshFailedEnvelope struct {
+	Code AccountModelRefreshFailedEnvelopeCode `json:"code"`
+	Data struct {
+		Detail *string `json:"detail,omitempty"`
+	} `json:"data"`
+	Msg AccountModelRefreshFailedEnvelopeMsg `json:"msg"`
+}
+
+// AccountModelRefreshFailedEnvelopeCode defines model for AccountModelRefreshFailedEnvelope.Code.
+type AccountModelRefreshFailedEnvelopeCode int
+
+// AccountModelRefreshFailedEnvelopeMsg defines model for AccountModelRefreshFailedEnvelope.Msg.
+type AccountModelRefreshFailedEnvelopeMsg string
+
+// AccountModelsAddResponseBody defines model for AccountModelsAddResponseBody.
+type AccountModelsAddResponseBody struct {
+	union json.RawMessage
+}
+
+// AccountModelsAddSuccessData defines model for AccountModelsAddSuccessData.
+type AccountModelsAddSuccessData struct {
+	AccountId int64  `json:"account_id"`
+	ModelId   string `json:"model_id"`
+}
+
+// AccountModelsAddSuccessEnvelope defines model for AccountModelsAddSuccessEnvelope.
+type AccountModelsAddSuccessEnvelope struct {
+	Code AccountModelsAddSuccessEnvelopeCode `json:"code"`
+	Data AccountModelsAddSuccessData         `json:"data"`
+	Msg  AccountModelsAddSuccessEnvelopeMsg  `json:"msg"`
+}
+
+// AccountModelsAddSuccessEnvelopeCode defines model for AccountModelsAddSuccessEnvelope.Code.
+type AccountModelsAddSuccessEnvelopeCode int
+
+// AccountModelsAddSuccessEnvelopeMsg defines model for AccountModelsAddSuccessEnvelope.Msg.
+type AccountModelsAddSuccessEnvelopeMsg string
+
+// AccountModelsListData defines model for AccountModelsListData.
+type AccountModelsListData struct {
+	AccountId int64          `json:"account_id"`
+	Models    []AccountModel `json:"models"`
+}
+
+// AccountModelsListResponseBody defines model for AccountModelsListResponseBody.
+type AccountModelsListResponseBody struct {
+	union json.RawMessage
+}
+
+// AccountModelsListSuccessEnvelope defines model for AccountModelsListSuccessEnvelope.
+type AccountModelsListSuccessEnvelope struct {
+	Code AccountModelsListSuccessEnvelopeCode `json:"code"`
+	Data AccountModelsListData                `json:"data"`
+	Msg  AccountModelsListSuccessEnvelopeMsg  `json:"msg"`
+}
+
+// AccountModelsListSuccessEnvelopeCode defines model for AccountModelsListSuccessEnvelope.Code.
+type AccountModelsListSuccessEnvelopeCode int
+
+// AccountModelsListSuccessEnvelopeMsg defines model for AccountModelsListSuccessEnvelope.Msg.
+type AccountModelsListSuccessEnvelopeMsg string
+
+// AccountModelsRefreshResponseBody defines model for AccountModelsRefreshResponseBody.
+type AccountModelsRefreshResponseBody struct {
+	union json.RawMessage
+}
+
+// AccountModelsRefreshSuccessData defines model for AccountModelsRefreshSuccessData.
+type AccountModelsRefreshSuccessData struct {
+	AccountId    int64 `json:"account_id"`
+	Added        int   `json:"added"`
+	KeptManual   int   `json:"kept_manual"`
+	TotalFetched int   `json:"total_fetched"`
+}
+
+// AccountModelsRefreshSuccessEnvelope defines model for AccountModelsRefreshSuccessEnvelope.
+type AccountModelsRefreshSuccessEnvelope struct {
+	Code AccountModelsRefreshSuccessEnvelopeCode `json:"code"`
+	Data AccountModelsRefreshSuccessData         `json:"data"`
+	Msg  AccountModelsRefreshSuccessEnvelopeMsg  `json:"msg"`
+}
+
+// AccountModelsRefreshSuccessEnvelopeCode defines model for AccountModelsRefreshSuccessEnvelope.Code.
+type AccountModelsRefreshSuccessEnvelopeCode int
+
+// AccountModelsRefreshSuccessEnvelopeMsg defines model for AccountModelsRefreshSuccessEnvelope.Msg.
+type AccountModelsRefreshSuccessEnvelopeMsg string
+
+// AccountModelsRemoveResponseBody defines model for AccountModelsRemoveResponseBody.
+type AccountModelsRemoveResponseBody struct {
+	union json.RawMessage
+}
+
+// AccountModelsRemoveSuccessData defines model for AccountModelsRemoveSuccessData.
+type AccountModelsRemoveSuccessData struct {
+	AccountId int64  `json:"account_id"`
+	ModelId   string `json:"model_id"`
+}
+
+// AccountModelsRemoveSuccessEnvelope defines model for AccountModelsRemoveSuccessEnvelope.
+type AccountModelsRemoveSuccessEnvelope struct {
+	Code AccountModelsRemoveSuccessEnvelopeCode `json:"code"`
+	Data AccountModelsRemoveSuccessData         `json:"data"`
+	Msg  AccountModelsRemoveSuccessEnvelopeMsg  `json:"msg"`
+}
+
+// AccountModelsRemoveSuccessEnvelopeCode defines model for AccountModelsRemoveSuccessEnvelope.Code.
+type AccountModelsRemoveSuccessEnvelopeCode int
+
+// AccountModelsRemoveSuccessEnvelopeMsg defines model for AccountModelsRemoveSuccessEnvelope.Msg.
+type AccountModelsRemoveSuccessEnvelopeMsg string
+
 // AccountNotFoundEnvelope defines model for AccountNotFoundEnvelope.
 type AccountNotFoundEnvelope struct {
 	Code AccountNotFoundEnvelopeCode `json:"code"`
@@ -2430,6 +2823,11 @@ type AccountNotFoundEnvelopeCode int
 
 // AccountNotFoundEnvelopeMsg defines model for AccountNotFoundEnvelope.Msg.
 type AccountNotFoundEnvelopeMsg string
+
+// AddModelRequest defines model for AddModelRequest.
+type AddModelRequest struct {
+	ModelId string `json:"model_id"`
+}
 
 // AlreadyConsumedEnvelope defines model for AlreadyConsumedEnvelope.
 type AlreadyConsumedEnvelope struct {
@@ -2791,9 +3189,10 @@ type EnvelopeSystemError struct {
 	// 3902 = `oauth_export_read_failed` (raised only by
 	// `POST /api/admin/accounts/{id}/export-auth-json` when
 	// the OAuth credential row cannot be read from the store);
-	// 4900 = `playground_internal_error`;
-	// 5900 = `dashboard_internal_error`;
-	// 6900 = `usage_internal_error`.
+	//  4900 = `playground_internal_error`;
+	//  5900 = `dashboard_internal_error`;
+	//  6900 = `usage_internal_error`;
+	//  8900 = `account_model_internal_error`.
 	Code EnvelopeSystemErrorCode `json:"code"`
 
 	// Data Endpoint-specific payload. Empty object `{}` when there is nothing to say.
@@ -2821,9 +3220,11 @@ type EnvelopeSystemError struct {
 // 3902 = `oauth_export_read_failed` (raised only by
 // `POST /api/admin/accounts/{id}/export-auth-json` when
 // the OAuth credential row cannot be read from the store);
-// 4900 = `playground_internal_error`;
-// 5900 = `dashboard_internal_error`;
-// 6900 = `usage_internal_error`.
+//
+//	4900 = `playground_internal_error`;
+//	5900 = `dashboard_internal_error`;
+//	6900 = `usage_internal_error`;
+//	8900 = `account_model_internal_error`.
 type EnvelopeSystemErrorCode int
 
 // ExportAuthJSONResponseBody Dual-shape response for `accountsExportAuthJSON` — the success
@@ -3674,6 +4075,11 @@ type PluginSummary struct {
 // RailName defines model for RailName.
 type RailName string
 
+// RemoveModelRequest defines model for RemoveModelRequest.
+type RemoveModelRequest struct {
+	ModelId string `json:"model_id"`
+}
+
 // RequestBodyTooLargeEnvelope defines model for RequestBodyTooLargeEnvelope.
 type RequestBodyTooLargeEnvelope struct {
 	Code RequestBodyTooLargeEnvelopeCode `json:"code"`
@@ -4157,6 +4563,12 @@ type AccountsImportAuthJSONJSONRequestBody AccountsImportAuthJSONJSONBody
 // AccountsImportAuthJSONMultipartRequestBody defines body for AccountsImportAuthJSON for multipart/form-data ContentType.
 type AccountsImportAuthJSONMultipartRequestBody AccountsImportAuthJSONMultipartBody
 
+// AccountModelAddJSONRequestBody defines body for AccountModelAdd for application/json ContentType.
+type AccountModelAddJSONRequestBody = AddModelRequest
+
+// AccountModelRemoveJSONRequestBody defines body for AccountModelRemove for application/json ContentType.
+type AccountModelRemoveJSONRequestBody = RemoveModelRequest
+
 // OauthBrowserManualCallbackJSONRequestBody defines body for OauthBrowserManualCallback for application/json ContentType.
 type OauthBrowserManualCallbackJSONRequestBody = ManualCallbackRequest
 
@@ -4388,6 +4800,462 @@ func (a PlaygroundUsage) MarshalJSON() ([]byte, error) {
 		}
 	}
 	return json.Marshal(object)
+}
+
+// AsAccountModelsAddSuccessEnvelope returns the union data inside the AccountModelsAddResponseBody as a AccountModelsAddSuccessEnvelope
+func (t AccountModelsAddResponseBody) AsAccountModelsAddSuccessEnvelope() (AccountModelsAddSuccessEnvelope, error) {
+	var body AccountModelsAddSuccessEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelsAddSuccessEnvelope overwrites any union data inside the AccountModelsAddResponseBody as the provided AccountModelsAddSuccessEnvelope
+func (t *AccountModelsAddResponseBody) FromAccountModelsAddSuccessEnvelope(v AccountModelsAddSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelsAddSuccessEnvelope performs a merge with any union data inside the AccountModelsAddResponseBody, using the provided AccountModelsAddSuccessEnvelope
+func (t *AccountModelsAddResponseBody) MergeAccountModelsAddSuccessEnvelope(v AccountModelsAddSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountNotFoundEnvelope returns the union data inside the AccountModelsAddResponseBody as a AccountNotFoundEnvelope
+func (t AccountModelsAddResponseBody) AsAccountNotFoundEnvelope() (AccountNotFoundEnvelope, error) {
+	var body AccountNotFoundEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountNotFoundEnvelope overwrites any union data inside the AccountModelsAddResponseBody as the provided AccountNotFoundEnvelope
+func (t *AccountModelsAddResponseBody) FromAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountNotFoundEnvelope performs a merge with any union data inside the AccountModelsAddResponseBody, using the provided AccountNotFoundEnvelope
+func (t *AccountModelsAddResponseBody) MergeAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMalformedBodyEnvelope returns the union data inside the AccountModelsAddResponseBody as a MalformedBodyEnvelope
+func (t AccountModelsAddResponseBody) AsMalformedBodyEnvelope() (MalformedBodyEnvelope, error) {
+	var body MalformedBodyEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMalformedBodyEnvelope overwrites any union data inside the AccountModelsAddResponseBody as the provided MalformedBodyEnvelope
+func (t *AccountModelsAddResponseBody) FromMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMalformedBodyEnvelope performs a merge with any union data inside the AccountModelsAddResponseBody, using the provided MalformedBodyEnvelope
+func (t *AccountModelsAddResponseBody) MergeMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountModelDuplicateEnvelope returns the union data inside the AccountModelsAddResponseBody as a AccountModelDuplicateEnvelope
+func (t AccountModelsAddResponseBody) AsAccountModelDuplicateEnvelope() (AccountModelDuplicateEnvelope, error) {
+	var body AccountModelDuplicateEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelDuplicateEnvelope overwrites any union data inside the AccountModelsAddResponseBody as the provided AccountModelDuplicateEnvelope
+func (t *AccountModelsAddResponseBody) FromAccountModelDuplicateEnvelope(v AccountModelDuplicateEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelDuplicateEnvelope performs a merge with any union data inside the AccountModelsAddResponseBody, using the provided AccountModelDuplicateEnvelope
+func (t *AccountModelsAddResponseBody) MergeAccountModelDuplicateEnvelope(v AccountModelDuplicateEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountModelInternalErrorEnvelope returns the union data inside the AccountModelsAddResponseBody as a AccountModelInternalErrorEnvelope
+func (t AccountModelsAddResponseBody) AsAccountModelInternalErrorEnvelope() (AccountModelInternalErrorEnvelope, error) {
+	var body AccountModelInternalErrorEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelInternalErrorEnvelope overwrites any union data inside the AccountModelsAddResponseBody as the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsAddResponseBody) FromAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelInternalErrorEnvelope performs a merge with any union data inside the AccountModelsAddResponseBody, using the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsAddResponseBody) MergeAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AccountModelsAddResponseBody) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AccountModelsAddResponseBody) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAccountModelsListSuccessEnvelope returns the union data inside the AccountModelsListResponseBody as a AccountModelsListSuccessEnvelope
+func (t AccountModelsListResponseBody) AsAccountModelsListSuccessEnvelope() (AccountModelsListSuccessEnvelope, error) {
+	var body AccountModelsListSuccessEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelsListSuccessEnvelope overwrites any union data inside the AccountModelsListResponseBody as the provided AccountModelsListSuccessEnvelope
+func (t *AccountModelsListResponseBody) FromAccountModelsListSuccessEnvelope(v AccountModelsListSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelsListSuccessEnvelope performs a merge with any union data inside the AccountModelsListResponseBody, using the provided AccountModelsListSuccessEnvelope
+func (t *AccountModelsListResponseBody) MergeAccountModelsListSuccessEnvelope(v AccountModelsListSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountNotFoundEnvelope returns the union data inside the AccountModelsListResponseBody as a AccountNotFoundEnvelope
+func (t AccountModelsListResponseBody) AsAccountNotFoundEnvelope() (AccountNotFoundEnvelope, error) {
+	var body AccountNotFoundEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountNotFoundEnvelope overwrites any union data inside the AccountModelsListResponseBody as the provided AccountNotFoundEnvelope
+func (t *AccountModelsListResponseBody) FromAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountNotFoundEnvelope performs a merge with any union data inside the AccountModelsListResponseBody, using the provided AccountNotFoundEnvelope
+func (t *AccountModelsListResponseBody) MergeAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountModelInternalErrorEnvelope returns the union data inside the AccountModelsListResponseBody as a AccountModelInternalErrorEnvelope
+func (t AccountModelsListResponseBody) AsAccountModelInternalErrorEnvelope() (AccountModelInternalErrorEnvelope, error) {
+	var body AccountModelInternalErrorEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelInternalErrorEnvelope overwrites any union data inside the AccountModelsListResponseBody as the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsListResponseBody) FromAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelInternalErrorEnvelope performs a merge with any union data inside the AccountModelsListResponseBody, using the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsListResponseBody) MergeAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AccountModelsListResponseBody) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AccountModelsListResponseBody) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAccountModelsRefreshSuccessEnvelope returns the union data inside the AccountModelsRefreshResponseBody as a AccountModelsRefreshSuccessEnvelope
+func (t AccountModelsRefreshResponseBody) AsAccountModelsRefreshSuccessEnvelope() (AccountModelsRefreshSuccessEnvelope, error) {
+	var body AccountModelsRefreshSuccessEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelsRefreshSuccessEnvelope overwrites any union data inside the AccountModelsRefreshResponseBody as the provided AccountModelsRefreshSuccessEnvelope
+func (t *AccountModelsRefreshResponseBody) FromAccountModelsRefreshSuccessEnvelope(v AccountModelsRefreshSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelsRefreshSuccessEnvelope performs a merge with any union data inside the AccountModelsRefreshResponseBody, using the provided AccountModelsRefreshSuccessEnvelope
+func (t *AccountModelsRefreshResponseBody) MergeAccountModelsRefreshSuccessEnvelope(v AccountModelsRefreshSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountNotFoundEnvelope returns the union data inside the AccountModelsRefreshResponseBody as a AccountNotFoundEnvelope
+func (t AccountModelsRefreshResponseBody) AsAccountNotFoundEnvelope() (AccountNotFoundEnvelope, error) {
+	var body AccountNotFoundEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountNotFoundEnvelope overwrites any union data inside the AccountModelsRefreshResponseBody as the provided AccountNotFoundEnvelope
+func (t *AccountModelsRefreshResponseBody) FromAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountNotFoundEnvelope performs a merge with any union data inside the AccountModelsRefreshResponseBody, using the provided AccountNotFoundEnvelope
+func (t *AccountModelsRefreshResponseBody) MergeAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountModelRefreshFailedEnvelope returns the union data inside the AccountModelsRefreshResponseBody as a AccountModelRefreshFailedEnvelope
+func (t AccountModelsRefreshResponseBody) AsAccountModelRefreshFailedEnvelope() (AccountModelRefreshFailedEnvelope, error) {
+	var body AccountModelRefreshFailedEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelRefreshFailedEnvelope overwrites any union data inside the AccountModelsRefreshResponseBody as the provided AccountModelRefreshFailedEnvelope
+func (t *AccountModelsRefreshResponseBody) FromAccountModelRefreshFailedEnvelope(v AccountModelRefreshFailedEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelRefreshFailedEnvelope performs a merge with any union data inside the AccountModelsRefreshResponseBody, using the provided AccountModelRefreshFailedEnvelope
+func (t *AccountModelsRefreshResponseBody) MergeAccountModelRefreshFailedEnvelope(v AccountModelRefreshFailedEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountModelInternalErrorEnvelope returns the union data inside the AccountModelsRefreshResponseBody as a AccountModelInternalErrorEnvelope
+func (t AccountModelsRefreshResponseBody) AsAccountModelInternalErrorEnvelope() (AccountModelInternalErrorEnvelope, error) {
+	var body AccountModelInternalErrorEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelInternalErrorEnvelope overwrites any union data inside the AccountModelsRefreshResponseBody as the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsRefreshResponseBody) FromAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelInternalErrorEnvelope performs a merge with any union data inside the AccountModelsRefreshResponseBody, using the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsRefreshResponseBody) MergeAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AccountModelsRefreshResponseBody) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AccountModelsRefreshResponseBody) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAccountModelsRemoveSuccessEnvelope returns the union data inside the AccountModelsRemoveResponseBody as a AccountModelsRemoveSuccessEnvelope
+func (t AccountModelsRemoveResponseBody) AsAccountModelsRemoveSuccessEnvelope() (AccountModelsRemoveSuccessEnvelope, error) {
+	var body AccountModelsRemoveSuccessEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelsRemoveSuccessEnvelope overwrites any union data inside the AccountModelsRemoveResponseBody as the provided AccountModelsRemoveSuccessEnvelope
+func (t *AccountModelsRemoveResponseBody) FromAccountModelsRemoveSuccessEnvelope(v AccountModelsRemoveSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelsRemoveSuccessEnvelope performs a merge with any union data inside the AccountModelsRemoveResponseBody, using the provided AccountModelsRemoveSuccessEnvelope
+func (t *AccountModelsRemoveResponseBody) MergeAccountModelsRemoveSuccessEnvelope(v AccountModelsRemoveSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountNotFoundEnvelope returns the union data inside the AccountModelsRemoveResponseBody as a AccountNotFoundEnvelope
+func (t AccountModelsRemoveResponseBody) AsAccountNotFoundEnvelope() (AccountNotFoundEnvelope, error) {
+	var body AccountNotFoundEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountNotFoundEnvelope overwrites any union data inside the AccountModelsRemoveResponseBody as the provided AccountNotFoundEnvelope
+func (t *AccountModelsRemoveResponseBody) FromAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountNotFoundEnvelope performs a merge with any union data inside the AccountModelsRemoveResponseBody, using the provided AccountNotFoundEnvelope
+func (t *AccountModelsRemoveResponseBody) MergeAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMalformedBodyEnvelope returns the union data inside the AccountModelsRemoveResponseBody as a MalformedBodyEnvelope
+func (t AccountModelsRemoveResponseBody) AsMalformedBodyEnvelope() (MalformedBodyEnvelope, error) {
+	var body MalformedBodyEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMalformedBodyEnvelope overwrites any union data inside the AccountModelsRemoveResponseBody as the provided MalformedBodyEnvelope
+func (t *AccountModelsRemoveResponseBody) FromMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMalformedBodyEnvelope performs a merge with any union data inside the AccountModelsRemoveResponseBody, using the provided MalformedBodyEnvelope
+func (t *AccountModelsRemoveResponseBody) MergeMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountModelInternalErrorEnvelope returns the union data inside the AccountModelsRemoveResponseBody as a AccountModelInternalErrorEnvelope
+func (t AccountModelsRemoveResponseBody) AsAccountModelInternalErrorEnvelope() (AccountModelInternalErrorEnvelope, error) {
+	var body AccountModelInternalErrorEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountModelInternalErrorEnvelope overwrites any union data inside the AccountModelsRemoveResponseBody as the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsRemoveResponseBody) FromAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountModelInternalErrorEnvelope performs a merge with any union data inside the AccountModelsRemoveResponseBody, using the provided AccountModelInternalErrorEnvelope
+func (t *AccountModelsRemoveResponseBody) MergeAccountModelInternalErrorEnvelope(v AccountModelInternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AccountModelsRemoveResponseBody) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AccountModelsRemoveResponseBody) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
 }
 
 // AsBrowserStartEnvelope returns the union data inside the BrowserStartResponseBody as a BrowserStartEnvelope

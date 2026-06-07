@@ -33,7 +33,7 @@ func isModelsUnionRoute(route gatewayRoute, r *http.Request) bool {
 }
 
 func (h *ProxyHandler) serveModelsUnion(w http.ResponseWriter, requestID string, start time.Time, r *http.Request, route gatewayRoute) {
-	prepared, err := h.selector.ListEligiblePrepared(r.Context(), proxyAccountEligible(route))
+	prepared, err := h.selector.ListEligiblePrepared(r.Context(), proxyAccountEligible(route, nil))
 	if err != nil {
 		if errors.Is(err, domain.ErrNoCapacity) {
 			h.writeError(w, requestID, start, r, nil,
@@ -185,6 +185,32 @@ func (h *ProxyHandler) serveModelsUnion(w http.ResponseWriter, requestID string,
 		}
 	}
 
+	if h.accountModelRepo != nil && len(merged) > 0 {
+		accountIDs := make([]int64, 0, len(prepared))
+		for _, item := range prepared {
+			accountIDs = append(accountIDs, item.Account.ID)
+		}
+		allowedModels, err := h.accountModelRepo.DistinctModelsForAccounts(r.Context(), accountIDs)
+		if err != nil {
+			h.writeError(w, requestID, start, r, nil,
+				http.StatusInternalServerError, ErrCodeInternalError, "failed to load account models",
+				domain.OutcomeRouterError, proxyErrorBodyCapture{routerMetadata: metadata})
+			return
+		}
+		allowed := make(map[string]struct{}, len(allowedModels))
+		for _, m := range allowedModels {
+			allowed[m] = struct{}{}
+		}
+		filtered := make([]map[string]any, 0, len(allowed))
+		for _, model := range merged {
+			id, _ := model["id"].(string)
+			if _, ok := allowed[id]; ok {
+				filtered = append(filtered, model)
+			}
+		}
+		merged = filtered
+	}
+
 	response, err := json.Marshal(openAIModelsListResponse{
 		Object: "list",
 		Data:   merged,
@@ -269,7 +295,7 @@ func modelsUnionMetadata(prepared []core.PreparedAccount) domain.JSONMap {
 			"credential_classes":  classes,
 			"source":              "active_eligible_accounts",
 			"partial_success":     false,
-			"model_routing_bound": false,
+			"model_routing_bound": true,
 		},
 	}
 }

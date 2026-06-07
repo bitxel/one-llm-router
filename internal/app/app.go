@@ -692,6 +692,7 @@ func registerSteadyStateRoutes(
 	gate *setup.Gate,
 ) {
 	accountRepo := store.NewAccountRepo(st.Engine())
+	accountModelRepo := store.NewAccountModelRepo(st.Engine())
 	recordRepo := store.NewRequestRecordRepo(st.Engine())
 
 	accountSvc := core.NewAccountService(accountRepo, a.logger)
@@ -726,6 +727,15 @@ func registerSteadyStateRoutes(
 	settingsUpdater.SetEnv(deps.Env)
 	settingsHandler := adminapi.NewSettingsHandler(config.Reader, settingsUpdater, a.logger)
 	settingsHandler.SetSourceReader(config.SourceReader)
+
+	modelsHandler := adminapi.NewAccountModelHandler(
+		accountRepo,
+		accountModelRepo,
+		&http.Client{Timeout: 30 * time.Second},
+		deps.CodexBackendBaseURL,
+		a.logger,
+	)
+
 	oauthChain := func(next http.Handler) http.Handler { return next }
 
 	// Register OAuth admin lifecycle routes in one scope so a future
@@ -771,6 +781,11 @@ func registerSteadyStateRoutes(
 	mux.HandleFunc("POST /api/admin/accounts/{id}/enable", wrapped.EnableAccount)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/disable", wrapped.DisableAccount)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/delete", wrapped.DeleteAccount)
+
+	mux.HandleFunc("GET /api/admin/accounts/{id}/models", modelsHandler.ListModels)
+	mux.HandleFunc("POST /api/admin/accounts/{id}/models/add", modelsHandler.AddModel)
+	mux.HandleFunc("POST /api/admin/accounts/{id}/models/remove", modelsHandler.RemoveModel)
+	mux.HandleFunc("POST /api/admin/accounts/{id}/models/refresh", modelsHandler.RefreshModels)
 
 	mux.HandleFunc("GET /api/admin/sessions/resolve", wrapped.ResolveSession)
 
@@ -837,6 +852,7 @@ func registerSteadyStateRoutes(
 	proxy := api.NewProxyHandler(selector, recorder, proxyClient, initialBody, 0, a.logger)
 	proxy.SetBodyLogFunc(bodyLogFunc)
 	proxy.SetModelRenameFunc(modelRenameFunc)
+	proxy.SetAccountModelRepo(accountModelRepo)
 	// The data-plane proxy owns the provider-compatible `/v1/*`
 	// subtree plus the explicitly selected Codex-native compatibility
 	// paths. The classifier inside ProxyHandler is the final allowlist;

@@ -20,10 +20,11 @@ import "net/http"
 //	POST /api/admin/accounts/{id}/delete   — DeleteAccount
 //	GET  /api/admin/requests           — QueryRequests
 //	GET  /api/admin/sessions/resolve   — ResolveSession
-//
-// Only settings is 002-native; every other route is 001 logic that
-// has been envelope-wrapped by WrappedHandler.
-func RegisterRoutes(mux *http.ServeMux, settings *SettingsHandler, wrapped *WrappedHandler) {
+//	GET  /api/admin/accounts/{id}/models       — AccountModelHandler.ListModels
+//	POST /api/admin/accounts/{id}/models/add    — AccountModelHandler.AddModel
+//	POST /api/admin/accounts/{id}/models/remove — AccountModelHandler.RemoveModel
+//	POST /api/admin/accounts/{id}/models/refresh — AccountModelHandler.RefreshModels
+func RegisterRoutes(mux *http.ServeMux, settings *SettingsHandler, wrapped *WrappedHandler, models *AccountModelHandler) {
 	mux.HandleFunc("GET /api/admin/settings", settings.Get)
 	mux.HandleFunc("POST /api/admin/settings/update", settings.Update)
 
@@ -38,4 +39,11 @@ func RegisterRoutes(mux *http.ServeMux, settings *SettingsHandler, wrapped *Wrap
 
 	mux.HandleFunc("GET /api/admin/requests", wrapped.QueryRequests)
 	mux.HandleFunc("GET /api/admin/sessions/resolve", wrapped.ResolveSession)
+
+	if models != nil {
+		mux.HandleFunc("GET /api/admin/accounts/{id}/models", models.ListModels)
+		mux.HandleFunc("POST /api/admin/accounts/{id}/models/add", models.AddModel)
+		mux.HandleFunc("POST /api/admin/accounts/{id}/models/remove", models.RemoveModel)
+		mux.HandleFunc("POST /api/admin/accounts/{id}/models/refresh", models.RefreshModels)
+	}
 }

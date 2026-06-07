@@ -615,3 +615,43 @@ func (h *RequestLogsHandler) SettingsGet(context.Context, generatedadminapi.Sett
 func (h *RequestLogsHandler) SettingsUpdate(context.Context, generatedadminapi.SettingsUpdateRequestObject) (generatedadminapi.SettingsUpdateResponseObject, error) {
 	return nil, errors.New("adminapi.RequestLogsHandler.SettingsUpdate: not implemented")
 }
+
+func (h *RequestLogsHandler) AccountModelsList(ctx context.Context, request generatedadminapi.AccountModelsListRequestObject) (generatedadminapi.AccountModelsListResponseObject, error) {
+	return generatedadminapi.AccountModelsList500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.N1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *RequestLogsHandler) AccountModelAdd(ctx context.Context, request generatedadminapi.AccountModelAddRequestObject) (generatedadminapi.AccountModelAddResponseObject, error) {
+	return generatedadminapi.AccountModelAdd500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.N1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *RequestLogsHandler) AccountModelRefresh(ctx context.Context, request generatedadminapi.AccountModelRefreshRequestObject) (generatedadminapi.AccountModelRefreshResponseObject, error) {
+	return generatedadminapi.AccountModelRefresh500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.N1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *RequestLogsHandler) AccountModelRemove(ctx context.Context, request generatedadminapi.AccountModelRemoveRequestObject) (generatedadminapi.AccountModelRemoveResponseObject, error) {
+	return generatedadminapi.AccountModelRemove500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.N1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}

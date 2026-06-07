@@ -144,6 +144,18 @@ const (
 	UsageInternalError = 6900
 )
 
+// Feature 008 — Account Model Routing.
+//
+// Codes are used by the admin API model management endpoints. The data-plane
+// `model_not_supported` error uses the native MVP shape at HTTP 400; the
+// code 8001 is registered here for operator observability and potential
+// admin API use.
+const (
+	AccountModelDuplicate    = 8002
+	AccountModelRefreshFailed = 8003
+	AccountModelInternalError = 8900
+)
+
 // legacyOK1000 is the pre-envelope success alias kept only so wrapped 001
 // admin handlers that already shipped with code=1000 still decode as
 // success ("ok"). New code MUST emit OK (=0) instead. It is not exported
@@ -228,6 +240,10 @@ var symbols = map[int]string{
 	DashboardInternalError: "dashboard_internal_error",
 
 	UsageInternalError: "usage_internal_error",
+
+	AccountModelDuplicate:     "account_model_duplicate",
+	AccountModelRefreshFailed: "account_model_refresh_failed",
+	AccountModelInternalError: "account_model_internal_error",
 }
 
 // Symbol returns the registered snake_case symbol for code, or the empty

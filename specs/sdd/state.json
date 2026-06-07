@@ -318,7 +318,35 @@
         "implementation_completed": "Implemented on 2026-04-27. Tasks T-001 through T-020 are complete, including bridge execution through UpstreamRequest plus ClientResponseAdapter, safe request-log metadata, deterministic E2E metadata assertions, error-boundary coverage, overhead benchmark, historical request-log compatibility, and final gates: golangci-lint run; go test ./...; go build ./...; bash scripts/coverage-floor.sh; make data-plane-compat."
       },
       "blockers": []
+    },
+    "008-account-model-routing": {
+      "phase": "SPECIFIED",
+      "complexity": "simple",
+      "complexity_reason": "Well-scoped feature: new table, admin CRUD, eligibility filter, GET /v1/models intersection. No new dependencies, no complex transport shapes.",
+      "created": "2026-06-07T00:00:00+08:00",
+      "last_updated": "2026-06-07T00:00:00+08:00",
+      "description": "Account Model Routing — per-account model filtering so requests are only routed to accounts that support the requested model.",
+      "artifacts": {
+        "spec": "specs/008-account-model-routing/spec.md",
+        "plan": "specs/008-account-model-routing/plan.md",
+        "tasks": "specs/008-account-model-routing/tasks.md",
+        "data_model": "specs/008-account-model-routing/data-model.md",
+        "quickstart": "specs/008-account-model-routing/quickstart.md",
+        "research": "specs/008-account-model-routing/research.md",
+        "contracts": [
+          "specs/008-account-model-routing/contracts/account-models-api.md"
+        ]
+      },
+      "metrics": {
+        "user_stories_count": 5,
+        "priorities": {
+          "P0": 3,
+          "P1": 2,
+          "P2": 0
+        }
+      },
+      "blockers": []
     }
   },
-      "last_updated": "2026-04-27T19:00:40+08:00"
+  "last_updated": "2026-06-07T00:00:00+08:00"
 }

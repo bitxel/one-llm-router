@@ -266,7 +266,7 @@ func TestCodexBridgeBuildUpstreamRequestNormalizesResponses(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses?trace=true", upstreamReq.URL)
+	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses?trace=true&client_version=0.120.0", upstreamReq.URL)
 	assert.Equal(t, "Bearer oauth-access", upstreamReq.Headers.Get("Authorization"))
 	assert.Equal(t, CodexCLIUserAgent, upstreamReq.Headers.Get("User-Agent"))
 	assert.Equal(t, "application/json", upstreamReq.Headers.Get("Content-Type"))
@@ -303,7 +303,7 @@ func TestCodexNativeBridgeBuildUpstreamRequestKeepsNativeContract(t *testing.T) 
 	require.NoError(t, err)
 
 	assert.Equal(t, ContractChatGPTBackendAPICodexResponses, upstreamReq.Contract())
-	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses", upstreamReq.URL)
+	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses?client_version=0.120.0", upstreamReq.URL)
 	assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":[{"type":"input_text","text":"hello"}]}],"store":false,"stream":true}`, string(upstreamReq.RawBody))
 	require.NotNil(t, adapter)
 	assert.Equal(t, ClientResponseAdapterCodexNative, adapter.Kind())
@@ -331,7 +331,7 @@ func TestCodexCompactBridgeBuildUpstreamRequestNormalizesCompact(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses/compact", upstreamReq.URL)
+	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses/compact?client_version=0.120.0", upstreamReq.URL)
 	assert.Equal(t, "identity", upstreamReq.Headers.Get("Accept-Encoding"))
 	assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":[{"type":"input_text","text":"hello"}]}]}`, string(upstreamReq.RawBody))
 	require.NotNil(t, adapter)
@@ -360,7 +360,7 @@ func TestCodexNativeCompactBridgeBuildUpstreamRequestForcesIdentityEncoding(t *t
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses/compact", upstreamReq.URL)
+	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses/compact?client_version=0.120.0", upstreamReq.URL)
 	assert.Equal(t, "identity", upstreamReq.Headers.Get("Accept-Encoding"))
 	require.NotNil(t, adapter)
 	assert.Equal(t, ClientResponseAdapterCodexNative, adapter.Kind())
@@ -388,7 +388,7 @@ func TestCodexModelsBridgeBuildUpstreamRequestUsesModelsFacadeAdapter(t *testing
 	require.NoError(t, err)
 
 	assert.Equal(t, ContractChatGPTBackendAPICodexModels, upstreamReq.Contract())
-	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/models", upstreamReq.URL)
+	assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/models?client_version=0.120.0", upstreamReq.URL)
 	assert.Empty(t, upstreamReq.RawBody)
 	assert.Equal(t, "identity", upstreamReq.Headers.Get("Accept-Encoding"))
 	assert.Empty(t, upstreamReq.Headers.Get("Content-Type"))
@@ -438,7 +438,7 @@ func TestChatCompletionsBridgeBuildUpstreamRequestSelectsAdapters(t *testing.T) 
 			})
 			require.NoError(t, err)
 
-			assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses", upstreamReq.URL)
+			assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses?client_version=0.120.0", upstreamReq.URL)
 			assert.Equal(t, "identity", upstreamReq.Headers.Get("Accept-Encoding"))
 			assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":"hi"}],"store":false,"stream":true}`, string(upstreamReq.RawBody))
 			require.NotNil(t, adapter)

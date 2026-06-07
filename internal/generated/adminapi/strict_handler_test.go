@@ -88,6 +88,18 @@ func (stubServer) SettingsGet(context.Context, SettingsGetRequestObject) (Settin
 func (stubServer) SettingsUpdate(context.Context, SettingsUpdateRequestObject) (SettingsUpdateResponseObject, error) {
 	panic("stubServer.SettingsUpdate not wired")
 }
+func (stubServer) AccountModelsList(context.Context, AccountModelsListRequestObject) (AccountModelsListResponseObject, error) {
+	panic("stubServer.AccountModelsList not wired")
+}
+func (stubServer) AccountModelAdd(context.Context, AccountModelAddRequestObject) (AccountModelAddResponseObject, error) {
+	panic("stubServer.AccountModelAdd not wired")
+}
+func (stubServer) AccountModelRefresh(context.Context, AccountModelRefreshRequestObject) (AccountModelRefreshResponseObject, error) {
+	panic("stubServer.AccountModelRefresh not wired")
+}
+func (stubServer) AccountModelRemove(context.Context, AccountModelRemoveRequestObject) (AccountModelRemoveResponseObject, error) {
+	panic("stubServer.AccountModelRemove not wired")
+}
 
 // decodeEnvelope decodes the recorded response body into the
 // blessed envelope shape. Fails the test with a readable message

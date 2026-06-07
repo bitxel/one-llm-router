@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -49,15 +50,16 @@ func dynamicHopByHopHeaders(headers http.Header) map[string]struct{} {
 }
 
 type ProxyHandler struct {
-	selector       *core.AccountSelector
-	recorder       *core.RequestRecorder
-	client         *openai.Client
-	bridgeRegistry *provider.BridgeRegistry
-	bodyLog        bool
-	bodyLogFn      func() (clientReqLog, upstreamReqLog, upstreamRespLog bool)
-	modelRenameFn  func() []config.ModelRenameRule
-	maxRequestBody int64
-	logger         *slog.Logger
+	selector         *core.AccountSelector
+	recorder         *core.RequestRecorder
+	client           *openai.Client
+	bridgeRegistry   *provider.BridgeRegistry
+	accountModelRepo core.AccountModelRepository
+	bodyLog          bool
+	bodyLogFn        func() (clientReqLog, upstreamReqLog, upstreamRespLog bool)
+	modelRenameFn    func() []config.ModelRenameRule
+	maxRequestBody   int64
+	logger           *slog.Logger
 }
 
 type proxyErrorBodyCapture struct {
@@ -105,6 +107,16 @@ func (h *ProxyHandler) SetModelRenameFunc(fn func() []config.ModelRenameRule) {
 		return
 	}
 	h.modelRenameFn = fn
+}
+
+// SetAccountModelRepo installs the account model repository for model-based
+// eligibility filtering. When not set, all accounts are eligible regardless
+// of model (existing behavior).
+func (h *ProxyHandler) SetAccountModelRepo(repo core.AccountModelRepository) {
+	if h == nil {
+		return
+	}
+	h.accountModelRepo = repo
 }
 
 const defaultMaxRequestBody = 32 << 20
@@ -201,9 +213,37 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	account, accessToken, _, err := h.selector.SelectEligible(r.Context(), sessionKey, proxyAccountEligible(route))
+	extractedModel := openai.ExtractModel(effectiveReqBodyBytes)
+	eligibleAccountIDs, err := h.buildModelEligibleSet(r.Context(), extractedModel)
+	if err != nil {
+		h.logger.Error("model eligibility check failed", "error", err)
+		h.writeError(w, requestID, start, r, nil,
+			http.StatusInternalServerError, ErrCodeInternalError, "model eligibility check failed",
+			domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
+		return
+	}
+
+	hasModelFilter := eligibleAccountIDs != nil
+
+	account, accessToken, _, err := h.selector.SelectEligible(r.Context(), sessionKey, proxyAccountEligible(route, eligibleAccountIDs))
 	if err != nil {
 		if errors.Is(err, domain.ErrNoCapacity) {
+			if hasModelFilter {
+				modelStr := ""
+				if extractedModel != nil {
+					modelStr = *extractedModel
+				}
+				h.logger.Warn("model_not_supported", "model", modelStr, "request_id", requestID)
+				WriteNativeError(w, http.StatusBadRequest, "invalid_request",
+					ErrCodeModelNotSupported,
+					"No active account supports the requested model",
+					requestID)
+			h.recordProxyError(requestID, start, r, nil,
+				http.StatusBadRequest, ErrCodeModelNotSupported, "No active account supports the requested model",
+				domain.OutcomeNoAvailableAccount,
+				proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
+				return
+			}
 			h.writeError(w, requestID, start, r, nil,
 				http.StatusServiceUnavailable, ErrCodeNoAvailableAccount,
 				"No active upstream accounts available",
@@ -710,19 +750,44 @@ func openAIBodyPolicy(policy gatewayBodyPolicy) openai.GatewayBodyPolicy {
 	}
 }
 
-func proxyAccountEligible(route gatewayRoute) func(domain.UpstreamAccount) bool {
+func proxyAccountEligible(route gatewayRoute, eligibleAccountIDs map[int64]struct{}) func(domain.UpstreamAccount) bool {
 	return func(account domain.UpstreamAccount) bool {
 		if account.IsOAuth() {
-			return route.OAuth.Eligible
+			if !route.OAuth.Eligible {
+				return false
+			}
+		} else {
+			if !route.APIKey.Eligible {
+				return false
+			}
 		}
-		if !route.APIKey.Eligible {
-			return false
+		if !account.IsOAuth() && route.OpID != "" {
+			if !account.HasCapabilityFor(string(route.OpID)) {
+				return false
+			}
 		}
-		if route.OpID != "" {
-			return account.HasCapabilityFor(string(route.OpID))
+		if eligibleAccountIDs != nil {
+			if _, ok := eligibleAccountIDs[account.ID]; !ok {
+				return false
+			}
 		}
 		return true
 	}
+}
+
+func (h *ProxyHandler) buildModelEligibleSet(ctx context.Context, model *string) (map[int64]struct{}, error) {
+	if model == nil || h.accountModelRepo == nil {
+		return nil, nil
+	}
+	ids, err := h.accountModelRepo.AccountsWithModel(ctx, *model)
+	if err != nil {
+		return nil, fmt.Errorf("accounts with model %q: %w", *model, err)
+	}
+	eligible := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		eligible[id] = struct{}{}
+	}
+	return eligible, nil
 }
 
 func (h *ProxyHandler) writeError(
@@ -736,7 +801,18 @@ func (h *ProxyHandler) writeError(
 	capture proxyErrorBodyCapture,
 ) {
 	WriteRouterError(w, statusCode, errCode, message, requestID)
+	h.recordProxyError(requestID, start, r, account, statusCode, errCode, message, outcome, capture)
+}
 
+func (h *ProxyHandler) recordProxyError(
+	requestID string,
+	start time.Time,
+	r *http.Request,
+	account *domain.UpstreamAccount,
+	statusCode int,
+	errCode, message, outcome string,
+	capture proxyErrorBodyCapture,
+) {
 	var accountID *int64
 	if account != nil {
 		accountID = &account.ID

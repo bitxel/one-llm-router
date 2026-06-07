@@ -40,6 +40,8 @@ All router-owned responses use a single envelope. See `specs/001-codex-router-mv
 | `4000–4999` | Feature 004 — Account Playground | 004 author |
 | `5000–5999` | Feature 005 — Observability | 005 author |
 | `6000–6999` | Feature 006 — OpenAI API gateway | 006 author |
+| `7000–7999` | Feature 007 — Data-plane Operation Bridge (reserved, no codes minted) | 007 author |
+| `8000–8999` | Feature 008 — Account Model Routing | 008 author |
 
 Each feature should prefer numbers toward the **low end** of its range and leave headroom at the top for additive codes in later revisions.
 
@@ -164,6 +166,17 @@ All business errors below are returned at **HTTP 200** in the standard Admin API
 |---|---|---|---|
 | `6900` | `usage_internal_error` | 500 | Unexpected usage summary handler/service/storage failure for `GET /api/admin/usage`. Operator should consult logs. |
 
+### Feature 008 — Account Model Routing
+
+All business errors below are returned at **HTTP 200** in the standard Admin API envelope, except `8001` which fires on the data-plane path (`/v1/chat/completions`) and uses the native MVP shape (`{"error":{"type":"invalid_request","code":"model_not_supported","message":"..."}}`) at **HTTP 400**. `8900` is a system error and is returned at **HTTP 500** only.
+
+| Code | Symbol | HTTP | Meaning |
+|---|---|---|---|
+| `8001` | `model_not_supported` | 400 (data-plane native) | No active account supports the requested model. Data-plane only — native MVP error shape, not admin envelope. String constant `ErrCodeModelNotSupported` in `internal/api/errors.go`. |
+| `8002` | `account_model_duplicate` | 200 | Attempted to add a model that already exists on the account. |
+| `8003` | `account_model_refresh_failed` | 200 | Upstream models endpoint unreachable or returned error during refresh. |
+| `8900` | `account_model_internal_error` | 500 | Unexpected model service failure. |
+
 ## Adding a new code (checklist)
 
 Every PR that introduces a new error path must:
@@ -189,3 +202,4 @@ Every PR that introduces a new error path must:
 | 1.8 | 2026-04-25 | Registered Feature 005 Observability codes `5001 dashboard_invalid_filter` and `5900 dashboard_internal_error`. |
 | 1.9 | 2026-04-26 | Clarified Feature 006 data-plane envelope exclusions for selected `/backend-api/*` paths, plus native `unsupported_endpoint` / `blocked_endpoint` router errors that are intentionally outside the Admin API code registry. |
 | 1.10 | 2026-04-27 | Moved router-local usage observability to `GET /api/admin/usage` and registered `6900 usage_internal_error`; removed `/api/codex/usage` from data-plane envelope exclusions. |
+| 1.11 | 2026-06-07 | Reserved `8000–8999` for Feature 008 — Account Model Routing. |

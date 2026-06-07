@@ -83,6 +83,10 @@ var registryFixture = []struct {
 	{DashboardInternalError, "dashboard_internal_error"},
 
 	{UsageInternalError, "usage_internal_error"},
+
+	{AccountModelDuplicate, "account_model_duplicate"},
+	{AccountModelRefreshFailed, "account_model_refresh_failed"},
+	{AccountModelInternalError, "account_model_internal_error"},
 }
 
 func TestSymbol_KnownCodes(t *testing.T) {

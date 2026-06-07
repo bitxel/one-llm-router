@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AccountsExportAuthJsonData, AccountsExportAuthJsonErrors, AccountsExportAuthJsonResponses, AccountsImportAuthJsonData, AccountsImportAuthJsonErrors, AccountsImportAuthJsonResponses, DashboardGetData, DashboardGetErrors, DashboardGetResponses, OauthBrowserManualCallbackData, OauthBrowserManualCallbackErrors, OauthBrowserManualCallbackResponses, OauthBrowserStartData, OauthBrowserStartErrors, OauthBrowserStartResponses, OauthCancelData, OauthCancelErrors, OauthCancelResponses, OauthDeviceStartData, OauthDeviceStartErrors, OauthDeviceStartResponses, OauthFlowStatusData, OauthFlowStatusErrors, OauthFlowStatusResponses, PlaygroundRunData, PlaygroundRunErrors, PlaygroundRunResponses, RequestsGetData, RequestsGetErrors, RequestsGetResponses, RequestsListData2, RequestsListErrors, RequestsListResponses, RequestsOptionsData2, RequestsOptionsErrors, RequestsOptionsResponses, SettingsGetData, SettingsGetErrors, SettingsGetResponses, SettingsUpdateData, SettingsUpdateErrors, SettingsUpdateResponses, UsageGetData, UsageGetErrors, UsageGetResponses } from './types.gen';
+import type { AccountModelAddData, AccountModelAddErrors, AccountModelAddResponses, AccountModelRefreshData, AccountModelRefreshErrors, AccountModelRefreshResponses, AccountModelRemoveData, AccountModelRemoveErrors, AccountModelRemoveResponses, AccountModelsListData2, AccountModelsListErrors, AccountModelsListResponses, AccountsExportAuthJsonData, AccountsExportAuthJsonErrors, AccountsExportAuthJsonResponses, AccountsImportAuthJsonData, AccountsImportAuthJsonErrors, AccountsImportAuthJsonResponses, DashboardGetData, DashboardGetErrors, DashboardGetResponses, OauthBrowserManualCallbackData, OauthBrowserManualCallbackErrors, OauthBrowserManualCallbackResponses, OauthBrowserStartData, OauthBrowserStartErrors, OauthBrowserStartResponses, OauthCancelData, OauthCancelErrors, OauthCancelResponses, OauthDeviceStartData, OauthDeviceStartErrors, OauthDeviceStartResponses, OauthFlowStatusData, OauthFlowStatusErrors, OauthFlowStatusResponses, PlaygroundRunData, PlaygroundRunErrors, PlaygroundRunResponses, RequestsGetData, RequestsGetErrors, RequestsGetResponses, RequestsListData2, RequestsListErrors, RequestsListResponses, RequestsOptionsData2, RequestsOptionsErrors, RequestsOptionsResponses, SettingsGetData, SettingsGetErrors, SettingsGetResponses, SettingsUpdateData, SettingsUpdateErrors, SettingsUpdateResponses, UsageGetData, UsageGetErrors, UsageGetResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -334,4 +334,68 @@ export const playgroundRun = <ThrowOnError extends boolean = false>(options: Opt
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * List models for an account.
+ *
+ * Returns every model row associated with the given account.
+ * The list includes both `manual` and `upstream` sourced rows.
+ *
+ */
+export const accountModelsList = <ThrowOnError extends boolean = false>(options: Options<AccountModelsListData2, ThrowOnError>) => (options.client ?? client).get<AccountModelsListResponses, AccountModelsListErrors, ThrowOnError>({
+    security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
+    url: '/api/admin/accounts/{id}/models',
+    ...options
+});
+
+/**
+ * Add a model to an account (source=manual).
+ *
+ * Inserts a new `manual` model row. Returns `8002 account_model_duplicate`
+ * when the model already exists on the account regardless of source.
+ *
+ */
+export const accountModelAdd = <ThrowOnError extends boolean = false>(options: Options<AccountModelAddData, ThrowOnError>) => (options.client ?? client).post<AccountModelAddResponses, AccountModelAddErrors, ThrowOnError>({
+    security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
+    url: '/api/admin/accounts/{id}/models/add',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Remove a model from an account.
+ *
+ * Deletes the model row for the given account by model_id.
+ * Returns `1001 account_not_found` when the model does not exist
+ * on the account (via the shared account-not-found code).
+ *
+ */
+export const accountModelRemove = <ThrowOnError extends boolean = false>(options: Options<AccountModelRemoveData, ThrowOnError>) => (options.client ?? client).post<AccountModelRemoveResponses, AccountModelRemoveErrors, ThrowOnError>({
+    security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
+    url: '/api/admin/accounts/{id}/models/remove',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Refresh upstream models for an account.
+ *
+ * Fetches the upstream `GET /v1/models` list for the account,
+ * replaces all `source=upstream` rows with the fetched model IDs,
+ * and preserves `source=manual` rows. Returns `8003
+ * account_model_refresh_failed` when the upstream request fails
+ * or returns an unparseable response.
+ *
+ */
+export const accountModelRefresh = <ThrowOnError extends boolean = false>(options: Options<AccountModelRefreshData, ThrowOnError>) => (options.client ?? client).post<AccountModelRefreshResponses, AccountModelRefreshErrors, ThrowOnError>({
+    security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
+    url: '/api/admin/accounts/{id}/models/refresh',
+    ...options
 });

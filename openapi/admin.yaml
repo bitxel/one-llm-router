@@ -130,6 +130,12 @@ tags:
     description: |
       Request/response history search, detail inspection, and dynamic
       filter option discovery for the admin Requests page.
+  - name: account-models
+    description: |
+      Per-account model management — list, add, remove, and
+      refresh-from-upstream for the models an account advertises.
+      The data-plane proxy consults this list to route requests
+      to accounts that support the requested model.
 
 paths:
   /api/admin/settings:
@@ -664,6 +670,108 @@ paths:
         '500':
           $ref: '#/components/responses/SystemError'
 
+  /api/admin/accounts/{id}/models:
+    get:
+      operationId: accountModelsList
+      tags: [account-models]
+      summary: List models for an account.
+      description: |
+        Returns every model row associated with the given account.
+        The list includes both `manual` and `upstream` sourced rows.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: Envelope with models list or account-not-found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountModelsListResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/accounts/{id}/models/add:
+    post:
+      operationId: accountModelAdd
+      tags: [account-models]
+      summary: Add a model to an account (source=manual).
+      description: |
+        Inserts a new `manual` model row. Returns `8002 account_model_duplicate`
+        when the model already exists on the account regardless of source.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddModelRequest' }
+      responses:
+        '200':
+          description: Envelope — success, duplicate, or account-not-found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountModelsAddResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/accounts/{id}/models/remove:
+    post:
+      operationId: accountModelRemove
+      tags: [account-models]
+      summary: Remove a model from an account.
+      description: |
+        Deletes the model row for the given account by model_id.
+        Returns `1001 account_not_found` when the model does not exist
+        on the account (via the shared account-not-found code).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoveModelRequest' }
+      responses:
+        '200':
+          description: Envelope — success, not-found, or account-not-found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountModelsRemoveResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/accounts/{id}/models/refresh:
+    post:
+      operationId: accountModelRefresh
+      tags: [account-models]
+      summary: Refresh upstream models for an account.
+      description: |
+        Fetches the upstream `GET /v1/models` list for the account,
+        replaces all `source=upstream` rows with the fetched model IDs,
+        and preserves `source=manual` rows. Returns `8003
+        account_model_refresh_failed` when the upstream request fails
+        or returns an unparseable response.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: Envelope — success, refresh-failed, or account-not-found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountModelsRefreshResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
 components:
   securitySchemes:
     adminAuth:
@@ -739,9 +847,184 @@ components:
                 3902 = `oauth_export_read_failed` (raised only by
                 `POST /api/admin/accounts/{id}/export-auth-json` when
                 the OAuth credential row cannot be read from the store);
-                4900 = `playground_internal_error`;
-                5900 = `dashboard_internal_error`;
-                6900 = `usage_internal_error`.
+                 4900 = `playground_internal_error`;
+                 5900 = `dashboard_internal_error`;
+                 6900 = `usage_internal_error`;
+                 8900 = `account_model_internal_error`.
+
+    # ---- Account Model types ----
+
+    AccountModel:
+      type: object
+      required: [id, account_id, model_id, source, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        account_id: { type: integer, format: int64, minimum: 1 }
+        model_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Upstream model identifier (e.g. `gpt-4o`).
+        source:
+          type: string
+          enum: [manual, upstream]
+          description: |
+            `manual` — operator-added via the `/add` endpoint.
+            `upstream` — discovered via the `/refresh` endpoint.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AddModelRequest:
+      type: object
+      required: [model_id]
+      additionalProperties: false
+      properties:
+        model_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    RemoveModelRequest:
+      type: object
+      required: [model_id]
+      additionalProperties: false
+      properties:
+        model_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    AccountModelsListData:
+      type: object
+      required: [account_id, models]
+      properties:
+        account_id: { type: integer, format: int64, minimum: 1 }
+        models:
+          type: array
+          items: { $ref: '#/components/schemas/AccountModel' }
+
+    AccountModelsAddSuccessData:
+      type: object
+      required: [account_id, model_id]
+      properties:
+        account_id: { type: integer, format: int64, minimum: 1 }
+        model_id: { type: string }
+
+    AccountModelsRemoveSuccessData:
+      type: object
+      required: [account_id, model_id]
+      properties:
+        account_id: { type: integer, format: int64, minimum: 1 }
+        model_id: { type: string }
+
+    AccountModelsRefreshSuccessData:
+      type: object
+      required: [account_id, added, kept_manual, total_fetched]
+      properties:
+        account_id: { type: integer, format: int64, minimum: 1 }
+        added: { type: integer, minimum: 0 }
+        kept_manual: { type: integer, minimum: 0 }
+        total_fetched: { type: integer, minimum: 0 }
+
+    # ---- Account Model success envelopes ----
+
+    AccountModelsListSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/AccountModelsListData' }
+
+    AccountModelsAddSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/AccountModelsAddSuccessData' }
+
+    AccountModelsRemoveSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/AccountModelsRemoveSuccessData' }
+
+    AccountModelsRefreshSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/AccountModelsRefreshSuccessData' }
+
+    # ---- Account Model business-error envelopes ----
+
+    AccountModelDuplicateEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [8002] }
+            msg: { type: string, enum: [account_model_duplicate] }
+            data: { type: object }
+
+    AccountModelRefreshFailedEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [8003] }
+            msg: { type: string, enum: [account_model_refresh_failed] }
+            data:
+              type: object
+              properties:
+                detail: { type: string }
+
+    AccountModelInternalErrorEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [8900] }
+            msg: { type: string, enum: [account_model_internal_error] }
+            data: { type: object }
+
+    # ---- Account Model operation response body unions ----
+
+    AccountModelsListResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/AccountModelsListSuccessEnvelope'
+        - $ref: '#/components/schemas/AccountNotFoundEnvelope'
+        - $ref: '#/components/schemas/AccountModelInternalErrorEnvelope'
+
+    AccountModelsAddResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/AccountModelsAddSuccessEnvelope'
+        - $ref: '#/components/schemas/AccountNotFoundEnvelope'
+        - $ref: '#/components/schemas/MalformedBodyEnvelope'
+        - $ref: '#/components/schemas/AccountModelDuplicateEnvelope'
+        - $ref: '#/components/schemas/AccountModelInternalErrorEnvelope'
+
+    AccountModelsRemoveResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/AccountModelsRemoveSuccessEnvelope'
+        - $ref: '#/components/schemas/AccountNotFoundEnvelope'
+        - $ref: '#/components/schemas/MalformedBodyEnvelope'
+        - $ref: '#/components/schemas/AccountModelInternalErrorEnvelope'
+
+    AccountModelsRefreshResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/AccountModelsRefreshSuccessEnvelope'
+        - $ref: '#/components/schemas/AccountNotFoundEnvelope'
+        - $ref: '#/components/schemas/AccountModelRefreshFailedEnvelope'
+        - $ref: '#/components/schemas/AccountModelInternalErrorEnvelope'
 
     # ---- Shared request types ----
 

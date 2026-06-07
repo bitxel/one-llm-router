@@ -14,7 +14,7 @@ import (
 
 func TestRegisterRoutes(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, &SettingsHandler{}, &WrappedHandler{})
+	RegisterRoutes(mux, &SettingsHandler{}, &WrappedHandler{}, &AccountModelHandler{})
 
 	rows := []struct {
 		method  string
@@ -30,6 +30,10 @@ func TestRegisterRoutes(t *testing.T) {
 		{http.MethodPost, "/api/admin/accounts/7/enable", "POST /api/admin/accounts/{id}/enable"},
 		{http.MethodPost, "/api/admin/accounts/7/disable", "POST /api/admin/accounts/{id}/disable"},
 		{http.MethodPost, "/api/admin/accounts/7/delete", "POST /api/admin/accounts/{id}/delete"},
+		{http.MethodGet, "/api/admin/accounts/7/models", "GET /api/admin/accounts/{id}/models"},
+		{http.MethodPost, "/api/admin/accounts/7/models/add", "POST /api/admin/accounts/{id}/models/add"},
+		{http.MethodPost, "/api/admin/accounts/7/models/remove", "POST /api/admin/accounts/{id}/models/remove"},
+		{http.MethodPost, "/api/admin/accounts/7/models/refresh", "POST /api/admin/accounts/{id}/models/refresh"},
 		{http.MethodGet, "/api/admin/requests", "GET /api/admin/requests"},
 		{http.MethodGet, "/api/admin/sessions/resolve", "GET /api/admin/sessions/resolve"},
 	}

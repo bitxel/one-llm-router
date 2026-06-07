@@ -1890,3 +1890,183 @@ func TestRefreshIntegration_SelectorFailureStillReturns500(t *testing.T) {
 	assert.Equal(t, ErrCodeInternalError, envelope.Error.Code)
 	assert.Equal(t, "account selection failed", envelope.Error.Message)
 }
+
+func TestBuildModelEligibleSet_NilModel(t *testing.T) {
+	h := &ProxyHandler{}
+	got, err := h.buildModelEligibleSet(context.Background(), nil)
+	require.NoError(t, err)
+	require.Nil(t, got)
+}
+
+func TestBuildModelEligibleSet_NilRepo(t *testing.T) {
+	h := &ProxyHandler{}
+	model := "gpt-4o"
+	got, err := h.buildModelEligibleSet(context.Background(), &model)
+	require.NoError(t, err)
+	require.Nil(t, got)
+}
+
+func TestBuildModelEligibleSet_NoMatches(t *testing.T) {
+	s, err := store.New("sqlite3", ":memory:", 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, s.Migrate("sqlite3"))
+	t.Cleanup(func() { _ = s.Close() })
+
+	modelRepo := store.NewAccountModelRepo(s.Engine())
+	accountRepo := store.NewAccountRepo(s.Engine())
+
+	acct := &domain.UpstreamAccount{
+		Name:     "test-account",
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Status:   domain.AccountStatusActive,
+	}
+	require.NoError(t, accountRepo.Create(context.Background(), acct))
+
+	handler := &ProxyHandler{accountModelRepo: modelRepo}
+	model := "nonexistent-model"
+	got, err := handler.buildModelEligibleSet(context.Background(), &model)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Empty(t, got)
+}
+
+func TestBuildModelEligibleSet_WithMatches(t *testing.T) {
+	s, err := store.New("sqlite3", ":memory:", 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, s.Migrate("sqlite3"))
+	t.Cleanup(func() { _ = s.Close() })
+
+	modelRepo := store.NewAccountModelRepo(s.Engine())
+	accountRepo := store.NewAccountRepo(s.Engine())
+
+	acct := &domain.UpstreamAccount{
+		Name:     "test-account",
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Status:   domain.AccountStatusActive,
+	}
+	require.NoError(t, accountRepo.Create(context.Background(), acct))
+
+	require.NoError(t, modelRepo.Insert(context.Background(), acct.ID, "gpt-4o", domain.AccountModelSourceManual))
+
+	handler := &ProxyHandler{accountModelRepo: modelRepo}
+	model := "gpt-4o"
+	got, err := handler.buildModelEligibleSet(context.Background(), &model)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Len(t, got, 1)
+	_, ok := got[acct.ID]
+	require.True(t, ok, "account ID should be in eligible set")
+}
+
+func TestProxyAccountEligible_NilFilter(t *testing.T) {
+	route := gatewayRoute{
+		APIKey: gatewayCredentialRoute{Eligible: true},
+		OAuth:  gatewayCredentialRoute{Eligible: true},
+	}
+	eligible := proxyAccountEligible(route, nil)
+
+	acct := domain.UpstreamAccount{ID: 1, AuthMethod: domain.AuthMethodAPIKey, APIKey: "sk-test"}
+	require.True(t, eligible(acct), "all accounts pass when eligibleAccountIDs is nil")
+}
+
+func TestProxyAccountEligible_IncludedAccounts(t *testing.T) {
+	route := gatewayRoute{
+		APIKey: gatewayCredentialRoute{Eligible: true},
+		OAuth:  gatewayCredentialRoute{Eligible: true},
+	}
+	eligibleAccountIDs := map[int64]struct{}{1: {}, 2: {}}
+	eligible := proxyAccountEligible(route, eligibleAccountIDs)
+
+	acct1 := domain.UpstreamAccount{ID: 1, AuthMethod: domain.AuthMethodAPIKey, APIKey: "sk-test"}
+	require.True(t, eligible(acct1), "account 1 is in the set")
+
+	acct3 := domain.UpstreamAccount{ID: 3, AuthMethod: domain.AuthMethodAPIKey, APIKey: "sk-test"}
+	require.False(t, eligible(acct3), "account 3 is not in the set")
+}
+
+func TestProxyAccountEligible_EmptySetRejectsAll(t *testing.T) {
+	route := gatewayRoute{
+		APIKey: gatewayCredentialRoute{Eligible: true},
+		OAuth:  gatewayCredentialRoute{Eligible: true},
+	}
+	eligibleAccountIDs := map[int64]struct{}{}
+	eligible := proxyAccountEligible(route, eligibleAccountIDs)
+
+	acct := domain.UpstreamAccount{ID: 1, AuthMethod: domain.AuthMethodAPIKey, APIKey: "sk-test"}
+	require.False(t, eligible(acct), "no accounts pass when eligibleAccountIDs is empty")
+}
+
+func TestProxyAccountEligible_DoesNotOverrideRouteEligibility(t *testing.T) {
+	route := gatewayRoute{
+		APIKey: gatewayCredentialRoute{Eligible: false},
+	}
+	eligibleAccountIDs := map[int64]struct{}{1: {}}
+	eligible := proxyAccountEligible(route, eligibleAccountIDs)
+
+	acct := domain.UpstreamAccount{ID: 1, AuthMethod: domain.AuthMethodAPIKey, APIKey: "sk-test"}
+	require.False(t, eligible(acct), "account passes model filter but fails route eligibility")
+}
+
+func TestProxyHandler_ModelsUnionIntersectsAccountModels(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-4o","object":"model"},{"id":"gpt-4o-mini","object":"model"}]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	s, err := store.New("sqlite3", ":memory:", 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, s.Migrate("sqlite3"))
+	t.Cleanup(func() { _ = s.Close() })
+
+	engine := s.Engine()
+	accountRepo := store.NewAccountRepo(engine)
+	modelRepo := store.NewAccountModelRepo(engine)
+	recordRepo := store.NewRequestRecordRepo(engine)
+
+	acct := &domain.UpstreamAccount{
+		Name:         "test-account",
+		Provider:     "openai",
+		APIKey:       "sk-test",
+		BaseURL:      &upstream.URL,
+		Status:       domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
+	}
+	require.NoError(t, accountRepo.Create(context.Background(), acct))
+
+	acct2 := &domain.UpstreamAccount{
+		Name:         "test-account-2",
+		Provider:     "openai",
+		APIKey:       "sk-test-2",
+		BaseURL:      &upstream.URL,
+		Status:       domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
+	}
+	require.NoError(t, accountRepo.Create(context.Background(), acct2))
+
+	require.NoError(t, modelRepo.Insert(context.Background(), acct.ID, "gpt-4o", domain.AccountModelSourceManual))
+
+	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
+	recorder := core.NewRequestRecorder(recordRepo, slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})))
+	recorder.Start()
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
+
+	client := openai.NewClient(5_000_000_000)
+	handler := NewProxyHandler(selector, recorder, client, false, 0, slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})))
+	handler.SetAccountModelRepo(modelRepo)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body struct {
+		Object string           `json:"object"`
+		Data   []map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Data, 1, "only gpt-4o should appear since only acct1 has it in account_models")
+	require.Equal(t, "gpt-4o", body.Data[0]["id"])
+}

@@ -14,6 +14,7 @@ const (
 	ErrCodeUpstreamConnFailed  = "upstream_connect_failed"
 	ErrCodeUpstreamRespInvalid = "upstream_response_invalid"
 	ErrCodeUpstreamTimeout     = "upstream_timeout"
+	ErrCodeModelNotSupported   = "model_not_supported"
 )
 
 type RouterErrorEnvelope struct {

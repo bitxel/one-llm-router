@@ -978,8 +978,13 @@ func TestApp003Wiring_OAuthResponsesStreamFalseReturnsCollectedJSON(t *testing.T
 		PlanType:         stringPtr("chatgpt-plus"),
 		ChatGPTAccountID: stringPtr("acct-wired"),
 	}
-	if _, err := repo.InsertUpstreamAccount(context.Background(), acct); err != nil {
+	if id, err := repo.InsertUpstreamAccount(context.Background(), acct); err != nil {
 		t.Fatalf("InsertUpstreamAccount err = %v", err)
+	} else {
+		modelRepo := store.NewAccountModelRepo(a.Store().Engine())
+		if err := modelRepo.Insert(context.Background(), id, "gpt-4o-mini", domain.AccountModelSourceManual); err != nil {
+			t.Fatalf("Insert account model err = %v", err)
+		}
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"gpt-4o-mini","input":"ping","stream":false}`))
@@ -1064,8 +1069,13 @@ func TestApp003Wiring_OAuthResponsesStreamTrueKeepsSSE(t *testing.T) {
 		PlanType:         stringPtr("chatgpt-plus"),
 		ChatGPTAccountID: stringPtr("acct-wired"),
 	}
-	if _, err := repo.InsertUpstreamAccount(context.Background(), acct); err != nil {
+	if id, err := repo.InsertUpstreamAccount(context.Background(), acct); err != nil {
 		t.Fatalf("InsertUpstreamAccount err = %v", err)
+	} else {
+		modelRepo := store.NewAccountModelRepo(a.Store().Engine())
+		if err := modelRepo.Insert(context.Background(), id, "gpt-4o-mini", domain.AccountModelSourceManual); err != nil {
+			t.Fatalf("Insert account model err = %v", err)
+		}
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"gpt-4o-mini","input":"ping","stream":true}`))
@@ -1111,7 +1121,7 @@ func TestApp003Wiring_ProxyInvokesRefreshHookForOAuthRows(t *testing.T) {
 	t.Cleanup(func() { _ = a.Stop(context.Background()) })
 
 	now := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
-	_, err = a.Store().Engine().Exec(
+	res, err := a.Store().Engine().Exec(
 		`INSERT INTO upstream_accounts
 			(name, provider, base_url, status, auth_method, access_token, created_at, updated_at)
 		  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1126,6 +1136,17 @@ func TestApp003Wiring_ProxyInvokesRefreshHookForOAuthRows(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("seed malformed oauth row: %v", err)
+	}
+	acctID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	_, err = a.Store().Engine().Exec(
+		`INSERT INTO account_models (account_id, model_id, source) VALUES (?, ?, ?)`,
+		acctID, "gpt-4o-mini", domain.AccountModelSourceManual,
+	)
+	if err != nil {
+		t.Fatalf("seed account model: %v", err)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"gpt-4o-mini"}`))
