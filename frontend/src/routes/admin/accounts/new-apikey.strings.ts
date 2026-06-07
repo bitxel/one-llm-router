@@ -9,11 +9,10 @@ export const strings = {
   eyebrow: apiKeyMethod.title,
   stripe: 'Accounts',
   titleLead: 'Register a',
-  titleStrong: 'service key.',
+  titleStrong: 'API Key.',
   intro:
-    'Create a classic upstream account row using the existing 002 API-key contract. The key is accepted once, stored plaintext in this build, and never echoed back to the browser.',
+    'Paste an OpenAI API key to create a new upstream account. The key is stored and used for routing requests to the OpenAI-compatible API.',
   panelTitle: 'API-key account',
-  panelMeta: apiKeyMethod.badge,
   loading: 'Creating account...',
   labels: {
     name: 'Nickname',
@@ -40,7 +39,7 @@ export const strings = {
     apiKeyRequired: 'API key is required',
     apiKeyMax: 'API key must be 1-256 characters',
     baseURLMax: 'base_url must be <=256 characters',
-    baseURLShape: 'base_url must be an absolute http(s) URL without path, query, or fragment',
+    baseURLShape: 'base_url must be an absolute http(s) URL without query or fragment',
     missingAccountID: 'create account response missing account id',
   },
   toasts: {

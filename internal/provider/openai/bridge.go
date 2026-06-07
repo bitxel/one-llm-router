@@ -216,7 +216,21 @@ func (b operationBridge) resolvedUpstreamPath(clientReq ClientRequest) string {
 	if b.upstreamPath != "" {
 		return b.upstreamPath
 	}
-	return clientReq.Path
+	// API-key bridge: client path like /v1/chat/completions → /chat/completions
+	// because base_url already carries /v1.
+	return stripV1Prefix(clientReq.Path)
+}
+
+// stripV1Prefix strips a leading "/v1" from path so it can be appended to a
+// base_url that already contains "/v1" (e.g. "https://api.openai.com/v1").
+func stripV1Prefix(path string) string {
+	if strings.HasPrefix(path, "/v1/") {
+		return path[3:]
+	}
+	if path == "/v1" {
+		return "/"
+	}
+	return path
 }
 
 func (b operationBridge) upstreamBodyAndAdapter(clientReq ClientRequest) ([]byte, io.Reader, int64, clientResponseAdapter, error) {

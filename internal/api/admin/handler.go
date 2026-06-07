@@ -68,11 +68,12 @@ func (h *Handler) SetAccountListProvider(provider accountListProvider) {
 }
 
 type createAccountRequest struct {
-	Name     string  `json:"name"`
-	Provider string  `json:"provider,omitempty"`
-	APIKey   string  `json:"api_key"`
-	BaseURL  *string `json:"base_url,omitempty"`
-	AuthMode string  `json:"auth_method,omitempty"`
+	Name         string   `json:"name"`
+	Provider     string   `json:"provider,omitempty"`
+	APIKey       string   `json:"api_key"`
+	BaseURL      *string  `json:"base_url,omitempty"`
+	AuthMode     string   `json:"auth_method,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) {
@@ -108,10 +109,14 @@ func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := h.accounts.Create(r.Context(), req.Name, req.Provider, req.APIKey, req.BaseURL)
+	account, err := h.accounts.Create(r.Context(), req.Name, req.Provider, req.APIKey, req.BaseURL, req.Capabilities)
 	if err != nil {
 		var validationErr *domain.ValidationError
 		if errors.As(err, &validationErr) {
+			h.logger.Warn("create account validation failed",
+				"field", validationErr.Field,
+				"error", validationErr.Error(),
+			)
 			writeJSON(w, http.StatusBadRequest, createAccountErrorResponse{
 				Error: validationErr.Error(),
 				Field: validationErr.Field,
@@ -337,24 +342,25 @@ type createAccountErrorResponse struct {
 }
 
 type accountCreateResponse struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Provider  string    `json:"provider"`
-	BaseURL   *string   `json:"base_url,omitempty"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Provider     string    `json:"provider"`
+	BaseURL      *string   `json:"base_url,omitempty"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Capabilities []string  `json:"capabilities,omitempty"`
 }
 
 type accountListItemResponse struct {
-	ID         int64             `json:"id"`
-	Name       string            `json:"name"`
-	Provider   string            `json:"provider"`
-	AuthMethod domain.AuthMethod `json:"auth_method"`
-	Status     string            `json:"status"`
-	BaseURL    *string           `json:"base_url,omitempty"`
-	CreatedAt  time.Time         `json:"created_at"`
-	UpdatedAt  time.Time         `json:"updated_at"`
+	ID           int64             `json:"id"`
+	Name         string            `json:"name"`
+	Provider     string            `json:"provider"`
+	AuthMethod   domain.AuthMethod `json:"auth_method"`
+	Status       string            `json:"status"`
+	BaseURL      *string           `json:"base_url,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 
 	Email            *string    `json:"email,omitempty"`
 	PlanType         *string    `json:"plan_type,omitempty"`
@@ -362,6 +368,8 @@ type accountListItemResponse struct {
 	ChatGPTAccountID *string    `json:"chatgpt_account_id,omitempty"`
 	LastRefresh      *time.Time `json:"last_refresh,omitempty"`
 	AccessExpiresAt  *time.Time `json:"access_expires_at,omitempty"`
+
+	Capabilities []string `json:"capabilities,omitempty"`
 
 	PrimaryUsedPercent   *float64   `json:"primary_used_percent,omitempty"`
 	SecondaryUsedPercent *float64   `json:"secondary_used_percent,omitempty"`
@@ -401,27 +409,29 @@ func normalisedAccountAuthMethod(method domain.AuthMethod) domain.AuthMethod {
 
 func newAccountCreateResponse(account domain.UpstreamAccount) accountCreateResponse {
 	return accountCreateResponse{
-		ID:        account.ID,
-		Name:      account.Name,
-		Provider:  account.Provider,
-		BaseURL:   account.BaseURL,
-		Status:    account.Status,
-		CreatedAt: account.CreatedAt,
-		UpdatedAt: account.UpdatedAt,
+		ID:           account.ID,
+		Name:         account.Name,
+		Provider:     account.Provider,
+		BaseURL:      account.BaseURL,
+		Status:       account.Status,
+		CreatedAt:    account.CreatedAt,
+		UpdatedAt:    account.UpdatedAt,
+		Capabilities: account.Capabilities,
 	}
 }
 
 func newAccountListItemResponse(account domain.UpstreamAccount) accountListItemResponse {
 	method := normalisedAccountAuthMethod(account.AuthMethod)
 	resp := accountListItemResponse{
-		ID:         account.ID,
-		Name:       account.Name,
-		Provider:   account.Provider,
-		AuthMethod: method,
-		Status:     account.Status,
-		BaseURL:    account.BaseURL,
-		CreatedAt:  account.CreatedAt,
-		UpdatedAt:  account.UpdatedAt,
+		ID:           account.ID,
+		Name:         account.Name,
+		Provider:     account.Provider,
+		AuthMethod:   method,
+		Status:       account.Status,
+		BaseURL:      account.BaseURL,
+		CreatedAt:    account.CreatedAt,
+		UpdatedAt:    account.UpdatedAt,
+		Capabilities: account.Capabilities,
 	}
 	if method == domain.AuthMethodAPIKey {
 		return resp
@@ -444,14 +454,15 @@ func newAccountListItemResponse(account domain.UpstreamAccount) accountListItemR
 func newAccountListProjectionResponse(account store.AccountListItem) accountListItemResponse {
 	method := normalisedAccountAuthMethod(account.AuthMethod)
 	resp := accountListItemResponse{
-		ID:         account.ID,
-		Name:       account.Name,
-		Provider:   account.Provider,
-		AuthMethod: method,
-		Status:     account.Status,
-		BaseURL:    account.BaseURL,
-		CreatedAt:  account.CreatedAt,
-		UpdatedAt:  account.UpdatedAt,
+		ID:           account.ID,
+		Name:         account.Name,
+		Provider:     account.Provider,
+		AuthMethod:   method,
+		Status:       account.Status,
+		BaseURL:      account.BaseURL,
+		CreatedAt:    account.CreatedAt,
+		UpdatedAt:    account.UpdatedAt,
+		Capabilities: account.Capabilities,
 	}
 	if method == domain.AuthMethodAPIKey {
 		return resp
@@ -526,3 +537,5 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
+
+

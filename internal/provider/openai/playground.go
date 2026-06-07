@@ -70,7 +70,7 @@ func (c *Client) buildPlaygroundUpstreamRequest(account domain.UpstreamAccount, 
 			}
 			return body, strings.TrimRight(c.codexBaseURL(), "/") + "/codex/responses", nil
 		}
-		return body, strings.TrimRight(account.EffectiveBaseURL(), "/") + "/v1/responses", nil
+		return body, strings.TrimRight(account.EffectiveBaseURL(), "/") + "/responses", nil
 
 	case core.PlaygroundEndpointChatCompletions:
 		body, err := BuildPlaygroundChatCompletionsBody(request.Model, request.Text, request.EffectiveMaxOutputTokens())
@@ -88,7 +88,7 @@ func (c *Client) buildPlaygroundUpstreamRequest(account domain.UpstreamAccount, 
 			}
 			return adapted.upstreamBody, strings.TrimRight(c.codexBaseURL(), "/") + "/codex/responses", nil
 		}
-		return body, strings.TrimRight(account.EffectiveBaseURL(), "/") + "/v1/chat/completions", nil
+		return body, strings.TrimRight(account.EffectiveBaseURL(), "/") + "/chat/completions", nil
 
 	default:
 		return nil, "", fmt.Errorf("unsupported playground endpoint %q", request.EffectiveEndpoint())

@@ -60,6 +60,12 @@ func TestProxyAPIKeyDirectSupportedAllowlist(t *testing.T) {
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				upstreamCalls.Add(1)
 				expectedPath, expectedQuery, _ := strings.Cut(tc.target, "?")
+				// upstream path strips /v1 since base_url carries it
+				if strings.HasPrefix(expectedPath, "/v1/") {
+					expectedPath = expectedPath[3:]
+				} else if expectedPath == "/v1" {
+					expectedPath = "/"
+				}
 				assert.Equal(t, expectedPath, r.URL.Path)
 				assert.Equal(t, expectedQuery, r.URL.RawQuery)
 				assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
@@ -71,7 +77,7 @@ func TestProxyAPIKeyDirectSupportedAllowlist(t *testing.T) {
 				assert.Equal(t, tc.body, string(data))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				if expectedPath == "/v1/models" {
+				if expectedPath == "/models" {
 					_ = json.NewEncoder(w).Encode(map[string]any{
 						"object": "list",
 						"data": []map[string]any{
@@ -103,7 +109,7 @@ func TestProxyAPIKeyDirectPreservesProviderErrors(t *testing.T) {
 	t.Parallel()
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/models/missing-model", r.URL.Path)
+		assert.Equal(t, "/models/missing-model", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"error":{"code":"model_not_found","message":"missing"}}`))
@@ -124,7 +130,7 @@ func TestProxyAPIKeyRecordsBridgeMetadata(t *testing.T) {
 	t.Parallel()
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "/chat/completions", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"id":"chatcmpl_123","object":"chat.completion","choices":[]}`))

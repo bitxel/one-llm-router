@@ -331,12 +331,13 @@ func (v Validator) APIKey(apiKey string) *ValidationError {
 // BaseURL validates first_account.base_url when present (nil/empty
 // string are both treated as "not supplied"). Delegates to the shared
 // domain.ValidateBaseURL so the wizard and the 001 admin CRUD path
-// apply identical rules (scheme http/https, no path/query/fragment,
-// length ≤256, host required).
+// apply identical rules (scheme http/https, no query/fragment,
+// length ≤256, host required). Path is allowed — the router strips
+// /v1 from client paths before appending.
 //
 // Emits 2016 invalid_base_url on any rule failure. The underlying
 // *domain.ValidationError's Message is preserved so operators see
-// the specific reason (e.g. "base_url must not contain a path").
+// the specific reason (e.g. "scheme must be http or https").
 func (v Validator) BaseURL(baseURL *string) *ValidationError {
 	if baseURL == nil || *baseURL == "" {
 		return nil

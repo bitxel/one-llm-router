@@ -35,7 +35,7 @@ const BaseURLMaxLen = 256
 //
 // It is not a full SSRF control — this is an operator-only admin API
 // on an internal network — but it catches typos and garbage (missing
-// scheme, relative URLs, paths, query strings) that would otherwise
+// scheme, relative URLs, query strings) that would otherwise
 // lead to confusing upstream failures.
 //
 // Returns nil on success; a *ValidationError with Field="base_url" on
@@ -50,9 +50,9 @@ const BaseURLMaxLen = 256
 //  3. URL must be absolute (IsAbs == true).
 //  4. Scheme must be "http" or "https" (case-insensitive).
 //  5. Host must be non-empty.
-//  6. Path must be empty or "/". The router's proxy rebuilds the
-//     target URL as `base_url + r.URL.Path` where r.URL.Path already
-//     starts with "/v1/…"; a stored path would double up.
+//  6. Path is allowed — the router strips the leading /v1 from client
+//     paths when constructing upstream URLs, so base_url can include
+//     a path segment (e.g. "/v1" or "/zen/v1") without doubling.
 //  7. Query string and fragment must be empty.
 //
 // Empty / nil input is the caller's responsibility — this function
@@ -78,12 +78,6 @@ func ValidateBaseURL(raw string) error {
 	}
 	if parsed.Host == "" {
 		return &ValidationError{Field: "base_url", Message: "host is required"}
-	}
-	if trimmed := strings.Trim(parsed.Path, "/"); trimmed != "" {
-		return &ValidationError{
-			Field:   "base_url",
-			Message: "base_url must not contain a path (got " + parsed.Path + "); client paths like /v1/... are appended by the router",
-		}
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
 		return &ValidationError{Field: "base_url", Message: "base_url must not contain query string or fragment"}

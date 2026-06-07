@@ -1032,6 +1032,15 @@ components:
             expires (derived from `id_token.exp` or, when missing,
             `last_refresh + expires_in`, else `last_refresh + 5 min`
             with a WARN). `null` for `auth_method == "api_key"` rows.
+        capabilities:
+          type: array
+          items: { type: string }
+          description: |
+            Capability OpID prefixes the account supports. An empty list
+            (or absent key) means the account supports NO governed
+            operations — it will be skipped for any capability-gated
+            route. OAuth accounts always skip capability checks.
+            Example: `["op.openai.chat_completions", "op.openai.responses"]`.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

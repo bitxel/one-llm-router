@@ -72,11 +72,12 @@ func (f *Fixture) SeedAPIKeyAccount(t *testing.T, name string) *domain.UpstreamA
 	t.Helper()
 
 	account := &domain.UpstreamAccount{
-		Name:       name,
-		Provider:   domain.ProviderOpenAI,
-		APIKey:     "sk_" + name + "_fixture_0123456789abcdef",
-		Status:     domain.AccountStatusActive,
-		AuthMethod: domain.AuthMethodAPIKey,
+		Name:         name,
+		Provider:     domain.ProviderOpenAI,
+		APIKey:       "sk_" + name + "_fixture_0123456789abcdef",
+		Status:       domain.AccountStatusActive,
+		AuthMethod:   domain.AuthMethodAPIKey,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}
 	if err := f.Repo.Create(context.Background(), account); err != nil {
 		t.Fatalf("SeedAPIKeyAccount(%s): %v", name, err)

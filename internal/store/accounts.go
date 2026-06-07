@@ -48,6 +48,8 @@ type AccountListItem struct {
 	LastRefresh      *time.Time `json:"last_refresh,omitempty"`
 	AccessExpiresAt  *time.Time `json:"access_expires_at,omitempty"`
 
+	Capabilities []string `json:"capabilities,omitempty"`
+
 	PrimaryUsedPercent   *float64   `json:"-"`
 	SecondaryUsedPercent *float64   `json:"-"`
 	UsageUpdatedAt       *time.Time `json:"-"`
@@ -362,7 +364,8 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			"base_url", "created_at", "updated_at",
 			"email", "plan_type", "chatgpt_account_id",
 			"last_refresh", "access_expires_at",
-			"primary_used_percent", "secondary_used_percent", "usage_updated_at").
+			"primary_used_percent", "secondary_used_percent", "usage_updated_at",
+			"capabilities").
 		Where("status != ?", domain.AccountStatusDeleted).
 		OrderBy("id ASC").
 		Find(&rows)
@@ -392,6 +395,7 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			BaseURL:    r.BaseURL,
 			CreatedAt:  r.CreatedAt,
 			UpdatedAt:  r.UpdatedAt,
+			Capabilities: r.Capabilities,
 		}
 		if method != domain.AuthMethodAPIKey {
 			it.Email = r.Email
@@ -612,7 +616,8 @@ func (r *AccountRepo) GetProjectionByID(_ context.Context, id int64) (*domain.Up
 			"created_at", "updated_at", "auth_method",
 			"email", "plan_type", "chatgpt_account_id",
 			"last_refresh", "access_expires_at",
-			"primary_used_percent", "secondary_used_percent", "usage_updated_at").
+			"primary_used_percent", "secondary_used_percent", "usage_updated_at",
+			"capabilities").
 		Get(account)
 	if err != nil {
 		return nil, fmt.Errorf("get account projection %d: %w", id, err)

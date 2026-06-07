@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -21,8 +22,8 @@ const (
 )
 
 var ProviderDefaultURLs = map[string]string{
-	ProviderOpenAI:    "https://api.openai.com",
-	ProviderAnthropic: "https://api.anthropic.com",
+	ProviderOpenAI:    "https://api.openai.com/v1",
+	ProviderAnthropic: "https://api.anthropic.com/v1",
 }
 
 // AuthMethod is the credential-shape discriminator added in 003. Kept
@@ -79,6 +80,12 @@ type UpstreamAccount struct {
 	PlanType         *string    `xorm:"'plan_type'" json:"plan_type,omitempty"`
 	ChatGPTAccountID *string    `xorm:"'chatgpt_account_id'" json:"chatgpt_account_id,omitempty"`
 
+	// Capabilities declares which API operations this account can handle.
+	// Stored as JSON text array. Only meaningful for api_key accounts.
+	// Empty/nil means the account supports no capability-governed operations.
+	// Known values this iteration: "op.openai.chat_completions", "op.openai.responses".
+	Capabilities []string `xorm:"json 'capabilities'" json:"capabilities,omitempty"`
+
 	PrimaryUsedPercent   *float64   `xorm:"'primary_used_percent'" json:"-"`
 	SecondaryUsedPercent *float64   `xorm:"'secondary_used_percent'" json:"-"`
 	UsageUpdatedAt       *time.Time `xorm:"'usage_updated_at'" json:"-"`
@@ -100,8 +107,8 @@ func (a UpstreamAccount) TableName() string {
 // closes it, delete this note and the test.
 func (a UpstreamAccount) String() string {
 	return fmt.Sprintf(
-		"UpstreamAccount{id=%d name=%q provider=%q auth_method=%q status=%q api_key=<redacted> access_token=<redacted len=%d> refresh_token=<redacted len=%d> id_token=<redacted len=%d>}",
-		a.ID, a.Name, a.Provider, a.AuthMethod, a.Status,
+		"UpstreamAccount{id=%d name=%q provider=%q auth_method=%q status=%q capabilities=%v api_key=<redacted> access_token=<redacted len=%d> refresh_token=<redacted len=%d> id_token=<redacted len=%d>}",
+		a.ID, a.Name, a.Provider, a.AuthMethod, a.Status, a.Capabilities,
 		len(a.AccessToken), len(a.RefreshToken), len(a.IDToken),
 	)
 }
@@ -127,6 +134,71 @@ func (a UpstreamAccount) IsOAuth() bool {
 	default:
 		return false
 	}
+}
+
+// capabilityGovernedPrefixes is the set of OpID prefixes subject to
+// capability-based filtering. Each entry must NOT include a trailing "."
+// so HasPrefix matching works.
+var capabilityGovernedPrefixes = []string{
+	"op.openai.chat_completions",
+	"op.openai.responses",
+}
+
+// ValidateCapabilities checks every entry in caps against the set of
+// recognized capability prefixes. Returns nil when all are valid.
+func ValidateCapabilities(caps []string) error {
+	for _, c := range caps {
+		valid := false
+		for _, p := range capabilityGovernedPrefixes {
+			if c == p {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("unknown capability: %q", c)
+		}
+	}
+	return nil
+}
+
+// HasCapabilityFor checks whether this account can handle an operation
+// identified by its OpID string. The caller converts provider.OpID to
+// string before calling (avoids a domain→provider import dependency).
+//
+// OAuth accounts are always capable — they go through the ChatGPT Codex
+// backend which supports all mapped operations uniformly.
+//
+// For api_key accounts: if the OpID belongs to a capability-governed
+// group (see capabilityGovernedPrefixes), at least one declared capability
+// must prefix-match. Unrestricted OpIDs (conversations, models, codex_native)
+// always pass.
+func (a *UpstreamAccount) HasCapabilityFor(opID string) bool {
+	if a.IsOAuth() {
+		return true
+	}
+
+	// Check if this OpID belongs to a governed group.
+	governed := false
+	for _, prefix := range capabilityGovernedPrefixes {
+		if strings.HasPrefix(opID, prefix+".") {
+			governed = true
+			break
+		}
+	}
+	if !governed {
+		return true
+	}
+
+	if len(a.Capabilities) == 0 {
+		return false
+	}
+	for _, cap := range a.Capabilities {
+		if strings.HasPrefix(opID, cap) {
+			return true
+		}
+	}
+	return false
 }
 
 // Validate enforces the per-shape invariants from data-model.md
@@ -201,6 +273,18 @@ func (a *UpstreamAccount) validateAPIKeyShape() error {
 	}
 	if a.ChatGPTAccountID != nil {
 		offenders = append(offenders, "chatgpt_account_id=non-nil")
+	}
+	for _, cap := range a.Capabilities {
+		valid := false
+		for _, p := range capabilityGovernedPrefixes {
+			if cap == p {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			offenders = append(offenders, fmt.Sprintf("capabilities=%q (unknown)", cap))
+		}
 	}
 	if a.PrimaryUsedPercent != nil {
 		offenders = append(offenders, "primary_used_percent=non-nil")

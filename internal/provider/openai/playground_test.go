@@ -139,7 +139,7 @@ func TestExtractPlaygroundChatOutputText(t *testing.T) {
 func TestRunPlayground(t *testing.T) {
 	t.Run("posts non-streaming responses request and returns parsed output", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/v1/responses", r.URL.Path)
+			assert.Equal(t, "/responses", r.URL.Path)
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "Bearer sk-playground", r.Header.Get("Authorization"))
 
@@ -187,7 +187,7 @@ func TestRunPlayground(t *testing.T) {
 
 	t.Run("posts chat completions request and returns parsed output", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+			assert.Equal(t, "/chat/completions", r.URL.Path)
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "Bearer sk-playground", r.Header.Get("Authorization"))
 
@@ -232,7 +232,7 @@ func TestRunPlayground(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, 200, result.StatusCode)
 		assert.Equal(t, domain.ResponseModeJSON, result.ResponseMode)
-		assert.Equal(t, "/v1/chat/completions", result.UpstreamEndpoint)
+		assert.Equal(t, "/chat/completions", result.UpstreamEndpoint)
 		assert.Equal(t, "Hello chat.", result.Text)
 		assert.True(t, result.TextAvailable)
 		assert.True(t, result.RawResponseAvailable)

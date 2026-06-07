@@ -144,7 +144,11 @@ func detailFromNativeBody(body []byte) map[string]any {
 		}
 	}
 	if shape.Field != "" {
-		return map[string]any{"field": shape.Field}
+		detail := map[string]any{"field": shape.Field}
+		if shape.Error != "" {
+			detail["error"] = shape.Error
+		}
+		return detail
 	}
 	if shape.Error == "" {
 		return map[string]any{}
@@ -197,6 +201,8 @@ func nativeAccountErrorCode(body []byte) int {
 	switch shape.Field {
 	case "api_key":
 		return errcode.InvalidAPIKey
+	case "capabilities":
+		return errcode.InvalidAccountPayload
 	default:
 		return errcode.InvalidAccountPayload
 	}

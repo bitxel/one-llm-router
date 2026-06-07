@@ -111,6 +111,7 @@ describe('AdminAccountsNewAPIKey', () => {
       auth_method: 'api_key',
       api_key: 'sk-admin-key',
       base_url: undefined,
+      capabilities: undefined,
     })
     expect(await screen.findByTestId('detail-route')).toHaveTextContent('88')
     expect(toastSuccessMock).toHaveBeenCalledWith('API-key account created')
@@ -140,6 +141,7 @@ describe('AdminAccountsNewAPIKey', () => {
       auth_method: 'api_key',
       api_key: 'sk-proxy-key',
       base_url: 'https://api.openai.com',
+      capabilities: undefined,
     })
   })
 
@@ -171,7 +173,7 @@ describe('AdminAccountsNewAPIKey', () => {
 
     await user.type(screen.getByTestId('apikey-name-input'), 'badurl')
     await user.type(screen.getByTestId('apikey-api-key-input'), 'sk-admin-key')
-    await user.type(screen.getByTestId('apikey-base-url-input'), 'https://api.openai.com/v1')
+    await user.type(screen.getByTestId('apikey-base-url-input'), 'https://api.openai.com?query=1')
     await user.click(screen.getByTestId('apikey-submit'))
 
     expect(await screen.findByText(/base_url must be an absolute/i)).toBeInTheDocument()

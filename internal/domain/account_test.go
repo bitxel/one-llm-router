@@ -41,12 +41,12 @@ func validOAuthRow(method AuthMethod) *UpstreamAccount {
 
 func TestEffectiveBaseURL_Default(t *testing.T) {
 	a := UpstreamAccount{Provider: ProviderOpenAI}
-	assert.Equal(t, "https://api.openai.com", a.EffectiveBaseURL())
+	assert.Equal(t, "https://api.openai.com/v1", a.EffectiveBaseURL())
 }
 
 func TestEffectiveBaseURL_CustomProvider(t *testing.T) {
 	a := UpstreamAccount{Provider: ProviderAnthropic}
-	assert.Equal(t, "https://api.anthropic.com", a.EffectiveBaseURL())
+	assert.Equal(t, "https://api.anthropic.com/v1", a.EffectiveBaseURL())
 }
 
 func TestEffectiveBaseURL_Override(t *testing.T) {
@@ -58,12 +58,12 @@ func TestEffectiveBaseURL_Override(t *testing.T) {
 func TestEffectiveBaseURL_EmptyOverride(t *testing.T) {
 	empty := ""
 	a := UpstreamAccount{Provider: ProviderOpenAI, BaseURL: &empty}
-	assert.Equal(t, "https://api.openai.com", a.EffectiveBaseURL())
+	assert.Equal(t, "https://api.openai.com/v1", a.EffectiveBaseURL())
 }
 
 func TestEffectiveBaseURL_UnknownProvider(t *testing.T) {
 	a := UpstreamAccount{Provider: "unknown"}
-	assert.Equal(t, "https://api.openai.com", a.EffectiveBaseURL())
+	assert.Equal(t, "https://api.openai.com/v1", a.EffectiveBaseURL())
 }
 
 // --- 003: AuthMethod discriminator + Validate() -----------------------------

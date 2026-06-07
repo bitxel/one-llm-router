@@ -92,8 +92,9 @@ func TestValidator_BaseURL(t *testing.T) {
 	if err := v.BaseURL(&empty); err != nil {
 		t.Fatalf("empty base_url rejected: %v", err)
 	}
-	// Shared validator (domain.ValidateBaseURL) rejects paths on
-	// purpose; the router appends client paths like /v1/... itself.
+	// base_url can include a path segment — the router strips /v1 from
+	// client paths before appending them, so base_url like /v1 or /zen/v1
+	// won't double up.
 	ok := "https://upstream.example.com"
 	if err := v.BaseURL(&ok); err != nil {
 		t.Fatalf("valid base_url rejected: %v", err)
@@ -112,8 +113,8 @@ func TestValidator_BaseURL(t *testing.T) {
 		t.Fatalf("relative base_url: want %d, got %v", errcode.InvalidBaseURL, err)
 	}
 	withPath := "https://upstream.example.com/v1"
-	if err := v.BaseURL(&withPath); err == nil || err.Code != errcode.InvalidBaseURL {
-		t.Fatalf("base_url with path: want %d, got %v", errcode.InvalidBaseURL, err)
+	if err := v.BaseURL(&withPath); err != nil {
+		t.Fatalf("base_url with path unexpectedly rejected: %v", err)
 	}
 	ftp := "ftp://upstream.example.com"
 	if err := v.BaseURL(&ftp); err == nil || err.Code != errcode.InvalidBaseURL {

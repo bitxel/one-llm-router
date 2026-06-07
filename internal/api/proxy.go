@@ -715,7 +715,13 @@ func proxyAccountEligible(route gatewayRoute) func(domain.UpstreamAccount) bool 
 		if account.IsOAuth() {
 			return route.OAuth.Eligible
 		}
-		return route.APIKey.Eligible
+		if !route.APIKey.Eligible {
+			return false
+		}
+		if route.OpID != "" {
+			return account.HasCapabilityFor(string(route.OpID))
+		}
+		return true
 	}
 }
 

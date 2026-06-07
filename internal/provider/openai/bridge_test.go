@@ -231,7 +231,7 @@ func TestDirectBridgeBuildUpstreamRequestPreservesRawRequest(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://api.example.test/root/v1/chat/completions?trace=true", upstreamReq.URL)
+	assert.Equal(t, "https://api.example.test/root/chat/completions?trace=true", upstreamReq.URL)
 	assert.Equal(t, http.MethodPost, upstreamReq.Method)
 	assert.Equal(t, []byte(`{"model":"gpt-5.4-mini","messages":[]}`), upstreamReq.RawBody)
 	assert.Equal(t, "Bearer sk-direct", upstreamReq.Headers.Get("Authorization"))

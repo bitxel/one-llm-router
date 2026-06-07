@@ -44,7 +44,7 @@ func TestForwardRequest_Success(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "/chat/completions", r.URL.Path)
 		assert.Equal(t, "stream=true&foo=bar", r.URL.RawQuery)
 		assert.Equal(t, "Bearer "+apiKey, r.Header.Get("Authorization"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
@@ -80,7 +80,7 @@ func TestForwardRequest_Success(t *testing.T) {
 
 func TestForwardAccountRequest_APIKeyKeepsPlatformPath(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/responses", r.URL.Path)
+		assert.Equal(t, "/responses", r.URL.Path)
 		assert.Empty(t, r.Header.Get("chatgpt-account-id"))
 		assert.Equal(t, "Bearer sk-platform", r.Header.Get("Authorization"))
 		assert.Equal(t, "curl/8.7.1", r.Header.Get("User-Agent"))

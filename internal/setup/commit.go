@@ -272,13 +272,14 @@ func Commit(
 			baseURL = &v
 		}
 		account = &domain.UpstreamAccount{
-			Name:      req.FirstAccount.Name,
-			Provider:  req.FirstAccount.Provider,
-			APIKey:    req.FirstAccount.APIKey,
-			BaseURL:   baseURL,
-			Status:    domain.AccountStatusActive,
-			CreatedAt: now,
-			UpdatedAt: now,
+			Name:         req.FirstAccount.Name,
+			Provider:     req.FirstAccount.Provider,
+			APIKey:       req.FirstAccount.APIKey,
+			BaseURL:      baseURL,
+			Status:       domain.AccountStatusActive,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+			Capabilities: []string{"op.openai.chat_completions", "op.openai.responses"},
 		}
 		if err := creator.CreateAccount(ctx, req.DB.Driver, req.DB.URL, account); err != nil {
 			return nil, &CommitFailure{

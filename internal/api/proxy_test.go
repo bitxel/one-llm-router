@@ -40,11 +40,12 @@ func setupProxyTest(t *testing.T, upstream *httptest.Server) (*ProxyHandler, *st
 	recordRepo := store.NewRequestRecordRepo(engine)
 
 	acct := &domain.UpstreamAccount{
-		Name:     "test-account",
-		Provider: "openai",
-		APIKey:   "sk-test",
-		BaseURL:  &upstream.URL,
-		Status:   domain.AccountStatusActive,
+		Name:         "test-account",
+		Provider:     "openai",
+		APIKey:       "sk-test",
+		BaseURL:      &upstream.URL,
+		Status:       domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}
 	require.NoError(t, accountRepo.Create(context.Background(), acct))
 
@@ -256,7 +257,7 @@ func TestClassifySSEForwardFailure(t *testing.T) {
 func TestProxyHandler_JSONResponse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
-		assert.Equal(t, "/v1/responses", r.URL.Path)
+		assert.Equal(t, "/responses", r.URL.Path)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -307,7 +308,7 @@ func TestProxyHandler_ModelRenameRewritesUpstreamBodyAndRecordsMetadata(t *testi
 	recordRepo := store.NewRequestRecordRepo(engine)
 
 	url := upstream.URL
-	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &url, Status: domain.AccountStatusActive}
+	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &url, Status: domain.AccountStatusActive, Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"}}
 	require.NoError(t, accountRepo.Create(context.Background(), acct))
 
 	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
@@ -444,7 +445,7 @@ func TestProxyHandler_SessionStickiness(t *testing.T) {
 
 	url := upstream.URL
 	for _, name := range []string{"acct-1", "acct-2", "acct-3"} {
-		acct := &domain.UpstreamAccount{Name: name, Provider: "openai", APIKey: "sk-" + name, BaseURL: &url, Status: domain.AccountStatusActive}
+		acct := &domain.UpstreamAccount{Name: name, Provider: "openai", APIKey: "sk-" + name, BaseURL: &url, Status: domain.AccountStatusActive, Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"}}
 		require.NoError(t, accountRepo.Create(context.Background(), acct))
 	}
 
@@ -502,7 +503,7 @@ func TestProxyHandler_BodyLogging(t *testing.T) {
 	recordRepo := store.NewRequestRecordRepo(engine)
 
 	url := upstream.URL
-	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &url, Status: domain.AccountStatusActive}
+	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &url, Status: domain.AccountStatusActive, Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"}}
 	require.NoError(t, accountRepo.Create(context.Background(), acct))
 
 	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
@@ -580,7 +581,7 @@ func TestProxyHandler_UpstreamTimeout(t *testing.T) {
 	recordRepo := store.NewRequestRecordRepo(engine)
 
 	url := upstream.URL
-	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &url, Status: domain.AccountStatusActive}
+	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &url, Status: domain.AccountStatusActive, Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"}}
 	require.NoError(t, accountRepo.Create(context.Background(), acct))
 
 	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
@@ -608,7 +609,7 @@ func TestProxyHandler_UpstreamConnectFailed(t *testing.T) {
 	recordRepo := store.NewRequestRecordRepo(engine)
 
 	badURL := "http://127.0.0.1:1"
-	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &badURL, Status: domain.AccountStatusActive}
+	acct := &domain.UpstreamAccount{Name: "test", Provider: "openai", APIKey: "sk-test", BaseURL: &badURL, Status: domain.AccountStatusActive, Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"}}
 	require.NoError(t, accountRepo.Create(context.Background(), acct))
 
 	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
@@ -641,11 +642,12 @@ func TestProxyHandler_UpstreamConnectFailedRecordsRequestBodiesWhenEnabled(t *te
 	require.NoError(t, listener.Close())
 
 	acct := &domain.UpstreamAccount{
-		Name:     "connect-fail",
-		Provider: "openai",
-		APIKey:   "sk-test",
-		BaseURL:  &badURL,
-		Status:   domain.AccountStatusActive,
+		Name:         "connect-fail",
+		Provider:     "openai",
+		APIKey:       "sk-test",
+		BaseURL:      &badURL,
+		Status:       domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}
 	require.NoError(t, accountRepo.Create(context.Background(), acct))
 
@@ -860,7 +862,7 @@ func TestProxyHandler_ModelsUnionMergesAPIKeyAndOAuthAccounts(t *testing.T) {
 	var apiHits atomic.Int32
 	apiUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiHits.Add(1)
-		assert.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "/models", r.URL.Path)
 		assert.Equal(t, "Bearer sk-api", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"object":"list","data":[
@@ -887,11 +889,12 @@ func TestProxyHandler_ModelsUnionMergesAPIKeyAndOAuthAccounts(t *testing.T) {
 	h := newProxyHarness(t, 5*time.Second)
 	apiBaseURL := apiUpstream.URL
 	require.NoError(t, h.repo.Create(context.Background(), &domain.UpstreamAccount{
-		Name:     "api",
-		Provider: domain.ProviderOpenAI,
-		APIKey:   "sk-api",
-		BaseURL:  &apiBaseURL,
-		Status:   domain.AccountStatusActive,
+		Name:         "api",
+		Provider:     domain.ProviderOpenAI,
+		APIKey:       "sk-api",
+		BaseURL:      &apiBaseURL,
+		Status:       domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}))
 	h.client.SetCodexBackendBaseURLForTest(oauthUpstream.URL)
 	insertOAuthProxyAccount(t, h.repo, oauthUpstream.URL, now, "oauth-access", "oauth-refresh", now.Add(2*time.Hour))
@@ -1505,12 +1508,13 @@ func TestRefreshIntegration_APIKeyPassthroughWithHookInstalled(t *testing.T) {
 	h := newProxyHarness(t, 5*time.Second)
 	url := upstream.URL
 	require.NoError(t, h.repo.Create(context.Background(), &domain.UpstreamAccount{
-		Name:       "api-key-account",
-		Provider:   domain.ProviderOpenAI,
-		APIKey:     "sk-live",
-		BaseURL:    &url,
-		Status:     domain.AccountStatusActive,
-		AuthMethod: domain.AuthMethodAPIKey,
+		Name:         "api-key-account",
+		Provider:     domain.ProviderOpenAI,
+		APIKey:       "sk-live",
+		BaseURL:      &url,
+		Status:       domain.AccountStatusActive,
+		AuthMethod:   domain.AuthMethodAPIKey,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}))
 
 	provider := &proxyRefreshProvider{}
@@ -1533,13 +1537,14 @@ func TestRefreshIntegration_APIKeyPassthroughWithHookInstalled(t *testing.T) {
 
 func TestProxyMixedAccounts_NonResponsesPathsUseAPIKeyAccounts(t *testing.T) {
 	tests := []struct {
-		name   string
-		method string
-		path   string
-		body   string
+		name         string
+		method       string
+		path         string
+		upstreamPath string
+		body         string
 	}{
-		{name: "model retrieve", method: http.MethodGet, path: "/v1/models/gpt-4o-mini"},
-		{name: "stored chat messages", method: http.MethodGet, path: "/v1/chat/completions/chatcmpl_123/messages"},
+		{name: "model retrieve", method: http.MethodGet, path: "/v1/models/gpt-4o-mini", upstreamPath: "/models/gpt-4o-mini"},
+		{name: "stored chat messages", method: http.MethodGet, path: "/v1/chat/completions/chatcmpl_123/messages", upstreamPath: "/chat/completions/chatcmpl_123/messages"},
 	}
 
 	for _, tc := range tests {
@@ -1550,7 +1555,7 @@ func TestProxyMixedAccounts_NonResponsesPathsUseAPIKeyAccounts(t *testing.T) {
 
 			apiUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				apiHits.Add(1)
-				assert.Equal(t, tc.path, r.URL.Path)
+				assert.Equal(t, tc.upstreamPath, r.URL.Path)
 				assert.Equal(t, "Bearer sk-platform", r.Header.Get("Authorization"))
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"object":"ok"}`))
@@ -1568,12 +1573,13 @@ func TestProxyMixedAccounts_NonResponsesPathsUseAPIKeyAccounts(t *testing.T) {
 			insertOAuthProxyAccount(t, h.repo, oauthUpstream.URL, now, "oauth-access", "oauth-refresh", now.Add(2*time.Hour))
 			apiBaseURL := apiUpstream.URL
 			require.NoError(t, h.repo.Create(context.Background(), &domain.UpstreamAccount{
-				Name:       "api-key-account",
-				Provider:   domain.ProviderOpenAI,
-				APIKey:     "sk-platform",
-				BaseURL:    &apiBaseURL,
-				Status:     domain.AccountStatusActive,
-				AuthMethod: domain.AuthMethodAPIKey,
+				Name:         "api-key-account",
+				Provider:     domain.ProviderOpenAI,
+				APIKey:       "sk-platform",
+				BaseURL:      &apiBaseURL,
+				Status:       domain.AccountStatusActive,
+				AuthMethod:   domain.AuthMethodAPIKey,
+				Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 			}))
 
 			w := httptest.NewRecorder()

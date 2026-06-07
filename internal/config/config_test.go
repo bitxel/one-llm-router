@@ -145,9 +145,10 @@ func TestDefaultRuntimeConfig_MatchesDataModel(t *testing.T) {
 		LogClientRequestBody:    false,
 		LogUpstreamRequestBody:  false,
 		LogUpstreamResponseBody: false,
-		LogRetentionDays:        30,
-		LogLevel:                "info",
-		ModelRenames:            []ModelRenameRule{},
+		LogRetentionDays:            30,
+		LogLevel:                    "info",
+		UsageRefreshIntervalSeconds: 300,
+		ModelRenames:                []ModelRenameRule{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("default runtime mismatch: got %+v, want %+v", got, want)

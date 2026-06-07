@@ -150,11 +150,12 @@ func TestProxyWebSocketIsOAuthOnly(t *testing.T) {
 			h := newProxyHarness(t, 5*time.Second)
 			h.client.SetCodexBackendBaseURLForTest(upstream.URL)
 			require.NoError(t, h.repo.Create(context.Background(), &domain.UpstreamAccount{
-				Name:     "api-key",
-				Provider: domain.ProviderOpenAI,
-				APIKey:   "sk-test",
-				BaseURL:  &upstream.URL,
-				Status:   domain.AccountStatusActive,
+				Name:         "api-key",
+				Provider:     domain.ProviderOpenAI,
+				APIKey:       "sk-test",
+				BaseURL:      &upstream.URL,
+				Status:       domain.AccountStatusActive,
+				Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 			}))
 
 			proxyServer := httptest.NewServer(h.handler)

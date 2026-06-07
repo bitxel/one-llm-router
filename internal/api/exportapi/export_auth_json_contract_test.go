@@ -268,11 +268,12 @@ func (h *exportHarness) seedAPIKeyAccount(t *testing.T, key string) *domain.Upst
 	t.Helper()
 
 	account := &domain.UpstreamAccount{
-		Name:       "api-key-export",
-		Provider:   domain.ProviderOpenAI,
-		APIKey:     key,
-		Status:     domain.AccountStatusActive,
-		AuthMethod: domain.AuthMethodAPIKey,
+		Name:         "api-key-export",
+		Provider:     domain.ProviderOpenAI,
+		APIKey:       key,
+		Status:       domain.AccountStatusActive,
+		AuthMethod:   domain.AuthMethodAPIKey,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}
 	require.NoError(t, h.repo.Create(context.Background(), account))
 	return account

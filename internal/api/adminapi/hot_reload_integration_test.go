@@ -91,6 +91,7 @@ func TestHotReload_BodyLogging_TogglesNextProxyRequest(t *testing.T) {
 	acct := &domain.UpstreamAccount{
 		Name: "hot-reload", Provider: "openai", APIKey: "sk-test",
 		BaseURL: &upstream.URL, Status: domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}
 	if err := accountRepo.Create(context.Background(), acct); err != nil {
 		t.Fatalf("create acct: %v", err)

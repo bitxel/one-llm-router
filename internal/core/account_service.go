@@ -17,7 +17,7 @@ func NewAccountService(repo AccountRepository, logger *slog.Logger) *AccountServ
 	return &AccountService{repo: repo, logger: logger}
 }
 
-func (s *AccountService) Create(ctx context.Context, name, provider, apiKey string, baseURL *string) (*domain.UpstreamAccount, error) {
+func (s *AccountService) Create(ctx context.Context, name, provider, apiKey string, baseURL *string, capabilities []string) (*domain.UpstreamAccount, error) {
 	if name == "" {
 		return nil, &domain.ValidationError{Field: "name", Message: "account name is required"}
 	}
@@ -35,13 +35,19 @@ func (s *AccountService) Create(ctx context.Context, name, provider, apiKey stri
 			return nil, err
 		}
 	}
+	if len(capabilities) > 0 {
+		if err := domain.ValidateCapabilities(capabilities); err != nil {
+			return nil, &domain.ValidationError{Field: "capabilities", Message: err.Error()}
+		}
+	}
 
 	account := &domain.UpstreamAccount{
-		Name:     name,
-		Provider: provider,
-		APIKey:   apiKey,
-		BaseURL:  baseURL,
-		Status:   domain.AccountStatusActive,
+		Name:         name,
+		Provider:     provider,
+		APIKey:       apiKey,
+		BaseURL:      baseURL,
+		Status:       domain.AccountStatusActive,
+		Capabilities: capabilities,
 	}
 
 	if err := s.repo.Create(ctx, account); err != nil {
@@ -52,6 +58,7 @@ func (s *AccountService) Create(ctx context.Context, name, provider, apiKey stri
 		"account_id", account.ID,
 		"name", account.Name,
 		"provider", account.Provider,
+		"capabilities", account.Capabilities,
 	)
 	return account, nil
 }

@@ -1,7 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { KeyRound } from 'lucide-react'
 import { useState } from 'react'
 import { type SubmitHandler, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -9,12 +8,17 @@ import { z } from 'zod'
 
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api-client'
 import { strings } from './new-apikey.strings'
 import { invalidateAdminAccountQueries } from './query-keys'
+
+const CAPABILITY_OPTIONS = [
+  { value: 'op.openai.chat_completions', label: 'Chat Completions' },
+  { value: 'op.openai.responses', label: 'Responses' },
+] as const
 
 const BASE_URL_MAX_LEN = 256
 
@@ -35,6 +39,7 @@ const APIKeyAccountSchema = z.object({
     .trim()
     .max(BASE_URL_MAX_LEN, strings.validation.baseURLMax)
     .refine((value) => value === '' || isValidBaseURL(value), strings.validation.baseURLShape),
+  capabilities: z.array(z.string()).default([]),
 })
 
 type APIKeyAccountForm = z.infer<typeof APIKeyAccountSchema>
@@ -59,6 +64,7 @@ export function AdminAccountsNewAPIKey() {
       name: '',
       api_key: '',
       base_url: '',
+      capabilities: [],
     },
     mode: 'onTouched',
   })
@@ -72,6 +78,7 @@ export function AdminAccountsNewAPIKey() {
         auth_method: 'api_key',
         api_key: values.api_key,
         base_url: values.base_url || undefined,
+        capabilities: values.capabilities.length > 0 ? values.capabilities : undefined,
       })
       if (!Number.isInteger(account.id) || account.id <= 0) {
         throw new Error(strings.validation.missingAccountID)
@@ -105,7 +112,7 @@ export function AdminAccountsNewAPIKey() {
       ) : null}
 
       <form onSubmit={form.handleSubmit(submit)} data-testid="apikey-create-form">
-        <PanelCard title={strings.panelTitle} meta={strings.panelMeta}>
+        <PanelCard title={strings.panelTitle}>
           <Field htmlFor="apikey-name" label={strings.labels.name} hint={strings.hints.name}>
             <Input
               id="apikey-name"
@@ -177,11 +184,35 @@ export function AdminAccountsNewAPIKey() {
             ) : null}
           </Field>
 
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
-            <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-              <KeyRound className="h-4 w-4 text-[var(--accent)]" />
-              <Badge variant="outline">auth_method=api_key</Badge>
+          <Field label="Capabilities" hint="API operations this account can handle. Leave empty for none.">
+            <div className="flex flex-col gap-2">
+              {CAPABILITY_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-2 text-[13px] cursor-pointer"
+                >
+                  <Checkbox
+                    data-testid={`capability-${opt.value}`}
+                    checked={form.watch('capabilities')?.includes(opt.value)}
+                    onCheckedChange={(checked: boolean) => {
+                      const current = form.getValues('capabilities') || []
+                      if (checked) {
+                        form.setValue('capabilities', [...current, opt.value])
+                      } else {
+                        form.setValue(
+                          'capabilities',
+                          current.filter((v) => v !== opt.value),
+                        )
+                      }
+                    }}
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
             </div>
+          </Field>
+
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
             <Button
               type="submit"
               disabled={form.formState.isSubmitting}
@@ -201,7 +232,6 @@ function isValidBaseURL(value: string): boolean {
     const parsed = new URL(value)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
     if (!parsed.host) return false
-    if (parsed.pathname !== '' && parsed.pathname !== '/') return false
     return parsed.search === '' && parsed.hash === ''
   } catch {
     return false

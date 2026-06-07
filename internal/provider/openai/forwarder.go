@@ -229,7 +229,8 @@ func (c *Client) ForwardRequest(ctx context.Context, upstreamBaseURL, apiKey str
 }
 
 func (c *Client) ForwardRequestWithCapture(ctx context.Context, upstreamBaseURL, apiKey string, original *http.Request) (*http.Response, ForwardCapture, error) {
-	targetURL := strings.TrimRight(upstreamBaseURL, "/") + original.URL.Path
+	upstreamPath := stripV1Prefix(original.URL.Path)
+	targetURL := strings.TrimRight(upstreamBaseURL, "/") + upstreamPath
 	if original.URL.RawQuery != "" {
 		targetURL += "?" + original.URL.RawQuery
 	}
