@@ -194,7 +194,6 @@ func TestForwardAccountRequest_OAuthNonStreamingReturnsCollectedJSON(t *testing.
 		assert.Equal(t, "user", item["role"])
 
 		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Set-Cookie", "chatgpt=secret")
 		_, _ = w.Write([]byte(strings.Join([]string{
 			`event: response.output_text.delta`,

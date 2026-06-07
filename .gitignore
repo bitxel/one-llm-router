@@ -67,3 +67,6 @@ coverage.html
 # pnpm cache
 .pnpm-store/
 pnpm-debug.log*
+
+# Logs
+/logs/

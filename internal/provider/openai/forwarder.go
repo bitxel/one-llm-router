@@ -3,6 +3,7 @@ package openai
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -140,6 +141,11 @@ func (c *Client) ForwardBridgeRequestWithCapture(ctx context.Context, upstream U
 		}
 		return nil, capture, fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err)
 	}
+	resp, err = decompressResponse(resp)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, capture, fmt.Errorf("%w: %w", ErrUpstreamResponseInvalid, err)
+	}
 	return adaptBridgeResponse(resp, capture, upstream, adapter)
 }
 
@@ -261,6 +267,11 @@ func (c *Client) ForwardRequestWithCapture(ctx context.Context, upstreamBaseURL,
 		}
 		return nil, ForwardCapture{UpstreamRequestBody: bodyBytes}, fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err)
 	}
+	resp, err = decompressResponse(resp)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, ForwardCapture{UpstreamRequestBody: bodyBytes}, fmt.Errorf("%w: %w", ErrUpstreamResponseInvalid, err)
+	}
 	return resp, ForwardCapture{UpstreamRequestBody: bodyBytes}, nil
 }
 
@@ -330,6 +341,11 @@ func (c *Client) ForwardCodexRouteWithCapture(ctx context.Context, account domai
 			return nil, ForwardCapture{UpstreamRequestBody: body.upstreamBody}, ErrUpstreamTimeout
 		}
 		return nil, ForwardCapture{UpstreamRequestBody: body.upstreamBody}, fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err)
+	}
+	resp, err = decompressResponse(resp)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, ForwardCapture{UpstreamRequestBody: body.upstreamBody}, fmt.Errorf("%w: %w", ErrUpstreamResponseInvalid, err)
 	}
 	capture := ForwardCapture{UpstreamRequestBody: body.upstreamBody}
 	if body.collectSSE {
@@ -433,6 +449,62 @@ func copyTranscribeHeaders(dst http.Header, src http.Header) {
 
 func forceIdentityAcceptEncoding(headers http.Header) {
 	headers.Set("Accept-Encoding", "identity")
+}
+
+// decompressResponse transparently decompresses the response body if the upstream
+// returned gzip-compressed content. It removes Content-Encoding: gzip and the
+// stale Content-Length so downstream consumers see plain data.
+// SSE streams are also decompressed when gzipped — gzip decompression is
+// streaming-safe and does not buffer the entire response.
+func decompressResponse(resp *http.Response) (*http.Response, error) {
+	if resp == nil || resp.Body == nil {
+		return resp, nil
+	}
+	ce := resp.Header.Get("Content-Encoding")
+	if !hasGzipContentEncoding(ce) {
+		return resp, nil
+	}
+	reader, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return resp, fmt.Errorf("decompress gzip response: %w", err)
+	}
+	resp.Body = &gzipReadCloser{Reader: reader, raw: resp.Body}
+	stripGzipContentEncoding(resp.Header, ce)
+	resp.ContentLength = -1
+	resp.Header.Del("Content-Length")
+	return resp, nil
+}
+
+type gzipReadCloser struct {
+	*gzip.Reader
+	raw io.ReadCloser
+}
+
+func (g *gzipReadCloser) Close() error {
+	return errors.Join(g.Reader.Close(), g.raw.Close())
+}
+
+func hasGzipContentEncoding(ce string) bool {
+	for _, enc := range strings.Split(ce, ",") {
+		if strings.TrimSpace(strings.ToLower(enc)) == "gzip" {
+			return true
+		}
+	}
+	return false
+}
+
+func stripGzipContentEncoding(h http.Header, ce string) {
+	var remaining []string
+	for _, enc := range strings.Split(ce, ",") {
+		if e := strings.TrimSpace(strings.ToLower(enc)); e != "" && e != "gzip" {
+			remaining = append(remaining, strings.TrimSpace(enc))
+		}
+	}
+	if len(remaining) == 0 {
+		h.Del("Content-Encoding")
+	} else {
+		h.Set("Content-Encoding", strings.Join(remaining, ", "))
+	}
 }
 
 func (c *Client) codexBaseURL() string {

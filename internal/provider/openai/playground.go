@@ -144,6 +144,15 @@ func (c *Client) RunPlayground(ctx context.Context, account domain.UpstreamAccou
 			Cause:               fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err),
 		}
 	}
+	resp, err = decompressResponse(resp)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, &core.PlaygroundUpstreamConnectError{
+			UpstreamEndpoint:    upstreamEndpoint,
+			UpstreamRequestBody: body,
+			Cause:               fmt.Errorf("%w: %w", ErrUpstreamResponseInvalid, err),
+		}
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	responseBody, err := readPlaygroundResponseBody(resp.Body)

@@ -84,6 +84,11 @@ func (c *Client) FetchUsage(ctx context.Context, accessToken string, chatGPTAcco
 	if err != nil {
 		return nil, fmt.Errorf("do usage request: %w", err)
 	}
+	resp, err = decompressResponse(resp)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("decompress usage response: %w", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
