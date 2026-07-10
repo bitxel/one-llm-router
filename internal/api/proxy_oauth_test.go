@@ -94,7 +94,7 @@ func TestProxyOAuthCodexExplicitMappings(t *testing.T) {
 				assert.Equal(t, tc.upstreamPath, r.URL.Path)
 				assert.Equal(t, "Bearer oauth-access", r.Header.Get("Authorization"))
 				assert.Equal(t, "acct-oauth-access", r.Header.Get("chatgpt-account-id"))
-				assert.Equal(t, "codex_cli_rs/0.120.0 (Mac OS 26.2; arm64) dumb", r.Header.Get("User-Agent"))
+				assert.Equal(t, openai.CodexCLIUserAgent, r.Header.Get("User-Agent"))
 				assert.Equal(t, tc.wantAcceptEncoding, r.Header.Get("Accept-Encoding"))
 				data, err := io.ReadAll(r.Body)
 				require.NoError(t, err)

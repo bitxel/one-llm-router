@@ -48,7 +48,7 @@ func TestForwardGatewayRequest_OAuthCodexExplicitMappings(t *testing.T) {
 		{
 			name:         "backend codex models",
 			method:       http.MethodGet,
-			clientPath:   "/backend-api/codex/models?client_version=0.120.0",
+			clientPath:   "/backend-api/codex/models?client_version=" + CodexClientVersion,
 			upstreamPath: "/codex/models",
 		},
 	}

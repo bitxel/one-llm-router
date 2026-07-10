@@ -695,7 +695,15 @@ func registerSteadyStateRoutes(
 	accountModelRepo := store.NewAccountModelRepo(st.Engine())
 	recordRepo := store.NewRequestRecordRepo(st.Engine())
 
+	modelRefresher := core.NewModelRefresher(
+		&http.Client{Timeout: 30 * time.Second},
+		deps.CodexBackendBaseURL,
+		openai.CodexClientVersion,
+		a.logger,
+	)
+
 	accountSvc := core.NewAccountService(accountRepo, a.logger)
+	accountSvc.SetModelRefresher(modelRefresher, accountModelRepo)
 	requestSvc := core.NewRequestService(recordRepo)
 	healthSvc := core.NewHealthService(accountRepo)
 	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
@@ -706,6 +714,7 @@ func registerSteadyStateRoutes(
 		oauthCoord = oauth.NewCoordinator(nil, a.logger)
 	}
 	oauthCoord.SetAccountStore(accountRepo)
+	oauthCoord.SetModelRefresher(modelRefresher, accountModelRepo)
 	selector.PreForward = oauthCoord.RefreshIfStale
 	a.oauthCoordinator = oauthCoord
 
@@ -731,8 +740,7 @@ func registerSteadyStateRoutes(
 	modelsHandler := adminapi.NewAccountModelHandler(
 		accountRepo,
 		accountModelRepo,
-		&http.Client{Timeout: 30 * time.Second},
-		deps.CodexBackendBaseURL,
+		modelRefresher,
 		a.logger,
 	)
 
@@ -742,9 +750,11 @@ func registerSteadyStateRoutes(
 	// admin-auth plugin can wrap them uniformly with one chain.
 	oauthapi.RegisterBrowserHandlers(mux, oauthCoord, oauthChain)
 	oauthapi.RegisterDeviceHandlers(mux, oauthCoord, oauthChain)
+	importHandler := adminapi.NewImportAuthJSONHandler(oauth.NewAuthJSONImportService(accountRepo, oauthCoord.Now), a.logger)
+	importHandler.SetModelRefresher(modelRefresher, accountModelRepo)
 	adminapi.RegisterImportAuthJSONHandler(
 		mux,
-		adminapi.NewImportAuthJSONHandler(oauth.NewAuthJSONImportService(accountRepo, oauthCoord.Now), a.logger),
+		importHandler,
 		oauthChain,
 	)
 	adminapi.RegisterRequestLogsHandler(

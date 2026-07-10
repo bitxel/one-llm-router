@@ -8,6 +8,7 @@ import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
 import { type DeviceStartEnvelope, oauthCancel, oauthDeviceStart } from '@/generated/openapi'
+import { copyToClipboard } from '@/lib/clipboard'
 import {
   Err003DeviceAuthUnavailable,
   Err003FlowExpired,
@@ -265,7 +266,7 @@ export function AdminAccountsNewOAuthDevice() {
 
   async function handleCopy(kind: keyof CopyState, value: string) {
     try {
-      await navigator.clipboard.writeText(value)
+      await copyToClipboard(value)
       setCopyState((prev) => ({ ...prev, [kind]: true }))
       clearCopyTimer(kind, copyResetTimers)
       copyResetTimers.current[kind] = window.setTimeout(() => {

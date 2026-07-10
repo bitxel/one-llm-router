@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	ChatGPTBackendBaseURL = "https://chatgpt.com/backend-api"
-	CodexCLIUserAgent     = "codex_cli_rs/0.120.0 (Mac OS 26.2; arm64) dumb"
+	ChatGPTBackendBaseURL = domain.ChatGPTBackendBaseURL
+	CodexClientVersion    = "0.160.0"
+	CodexCLIUserAgent     = "codex_cli_rs/" + CodexClientVersion + " (Mac OS 26.2; arm64) dumb"
 	codexSSECollectLimit  = 16 << 20
 )
 

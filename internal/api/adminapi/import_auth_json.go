@@ -12,6 +12,7 @@ import (
 
 	"github.com/user/one-llm-router/internal/api"
 	"github.com/user/one-llm-router/internal/api/errcode"
+	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/oauth"
 	"github.com/user/one-llm-router/internal/presentation"
@@ -31,8 +32,10 @@ const (
 )
 
 type ImportAuthJSONHandler struct {
-	importer authJSONImporter
-	logger   *slog.Logger
+	importer       authJSONImporter
+	modelRefresher *core.ModelRefresher
+	modelRepo      core.ModelRefresherRepo
+	logger         *slog.Logger
 }
 
 type authJSONImporter interface {
@@ -47,6 +50,11 @@ func NewImportAuthJSONHandler(importer authJSONImporter, logger *slog.Logger) *I
 		importer: importer,
 		logger:   logger,
 	}
+}
+
+func (h *ImportAuthJSONHandler) SetModelRefresher(refresher *core.ModelRefresher, modelRepo core.ModelRefresherRepo) {
+	h.modelRefresher = refresher
+	h.modelRepo = modelRepo
 }
 
 func RegisterImportAuthJSONHandler(mux *http.ServeMux, handler *ImportAuthJSONHandler, chain func(http.Handler) http.Handler) {
@@ -106,6 +114,10 @@ func (h *ImportAuthJSONHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		"name", account.Name,
 		"provider", account.Provider,
 	)
+
+	if h.modelRefresher != nil && h.modelRepo != nil && account.Status == domain.AccountStatusActive {
+		go func() { _, _, _, _ = h.modelRefresher.Refresh(context.Background(), account, h.modelRepo) }()
+	}
 
 	api.WriteOK(w, reqID, importAuthJSONSuccessData(account))
 }

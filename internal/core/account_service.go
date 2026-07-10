@@ -9,12 +9,19 @@ import (
 )
 
 type AccountService struct {
-	repo   AccountRepository
-	logger *slog.Logger
+	repo           AccountRepository
+	modelRefresher *ModelRefresher
+	modelRepo      ModelRefresherRepo
+	logger         *slog.Logger
 }
 
 func NewAccountService(repo AccountRepository, logger *slog.Logger) *AccountService {
 	return &AccountService{repo: repo, logger: logger}
+}
+
+func (s *AccountService) SetModelRefresher(refresher *ModelRefresher, modelRepo ModelRefresherRepo) {
+	s.modelRefresher = refresher
+	s.modelRepo = modelRepo
 }
 
 func (s *AccountService) Create(ctx context.Context, name, provider, apiKey string, baseURL *string, capabilities []string) (*domain.UpstreamAccount, error) {
@@ -60,6 +67,9 @@ func (s *AccountService) Create(ctx context.Context, name, provider, apiKey stri
 		"provider", account.Provider,
 		"capabilities", account.Capabilities,
 	)
+	if s.modelRefresher != nil && s.modelRepo != nil && account.Status == domain.AccountStatusActive {
+		go func() { _, _, _, _ = s.modelRefresher.Refresh(context.Background(), account, s.modelRepo) }()
+	}
 	return account, nil
 }
 

@@ -348,6 +348,34 @@ func TestExchange(t *testing.T) {
 		}
 	})
 
+	t.Run("device poll nested pending keeps polling with deviceauth_authorization_pending", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method)
+			assert.Equal(t, "/api/accounts/deviceauth/token", r.URL.Path)
+			assert.Equal(t, jsonContentType, r.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"message":"Device authorization is pending. Please try again.","type":"invalid_request_error","param":null,"code":"deviceauth_authorization_pending"}}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		provider := &openAIProvider{
+			deviceTokenURL: srv.URL + "/api/accounts/deviceauth/token",
+			logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		}
+
+		_, err := provider.PollDeviceCode(context.Background(), "device-auth-id", "ABCD-1234")
+		if !assert.Error(t, err) {
+			return
+		}
+
+		var exchangeErr *TokenExchangeError
+		if assert.True(t, errors.As(err, &exchangeErr)) {
+			assert.Equal(t, "authorization_pending", exchangeErr.Code())
+			assert.Equal(t, "Device authorization is pending. Please try again.", exchangeErr.Message())
+			assert.Equal(t, 0, exchangeErr.HTTPStatus())
+		}
+	})
+
 	t.Run("device poll nested access denied is terminal", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusForbidden)

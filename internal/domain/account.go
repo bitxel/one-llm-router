@@ -26,6 +26,8 @@ var ProviderDefaultURLs = map[string]string{
 	ProviderAnthropic: "https://api.anthropic.com/v1",
 }
 
+const ChatGPTBackendBaseURL = "https://chatgpt.com/backend-api"
+
 // AuthMethod is the credential-shape discriminator added in 003. Kept
 // as a named string (not an int enum) because (a) the DB column is
 // TEXT, so a string trip-through avoids a mapping table, and (b) every

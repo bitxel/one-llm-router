@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/user/one-llm-router/internal/api/errcode"
+	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 )
 
@@ -86,7 +87,13 @@ func (f *fakeModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID int
 	return 0, 0, nil
 }
 
-func newFakeHandler() *AccountModelHandler {
+func newFakeHandler(client *http.Client) *AccountModelHandler {
+	modelRefresher := core.NewModelRefresher(
+		client,
+		"",
+		"0.160.0",
+		slog.Default(),
+	)
 	return &AccountModelHandler{
 		accountRepo: &fakeAccountReader{
 			accounts: map[int64]*domain.UpstreamAccount{
@@ -100,8 +107,8 @@ func newFakeHandler() *AccountModelHandler {
 				},
 			},
 		},
-		client:  http.DefaultClient,
-		logger:  slog.Default(),
+		modelRefresher: modelRefresher,
+		logger:         slog.Default(),
 	}
 }
 
@@ -125,7 +132,7 @@ func decodeAMEnvelope(t *testing.T, body []byte) envelopeData {
 }
 
 func TestListModels_Success(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodGet, "/api/admin/accounts/1/models", "", "1")
 	h.ListModels(rec, req)
@@ -137,7 +144,7 @@ func TestListModels_Success(t *testing.T) {
 }
 
 func TestListModels_AccountNotFound(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodGet, "/api/admin/accounts/999/models", "", "999")
 	h.ListModels(rec, req)
@@ -147,7 +154,7 @@ func TestListModels_AccountNotFound(t *testing.T) {
 }
 
 func TestAddModel_Success(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/add", `{"model_id":"gpt-4o-mini"}`, "1")
 	h.AddModel(rec, req)
@@ -159,7 +166,7 @@ func TestAddModel_Success(t *testing.T) {
 }
 
 func TestAddModel_Duplicate(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	h.modelRepo.(*fakeModelRepo).insertErr = domain.ErrAccountModelDuplicate
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/add", `{"model_id":"gpt-4o"}`, "1")
@@ -170,7 +177,7 @@ func TestAddModel_Duplicate(t *testing.T) {
 }
 
 func TestAddModel_AccountNotFound(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/999/models/add", `{"model_id":"gpt-4o"}`, "999")
 	h.AddModel(rec, req)
@@ -180,7 +187,7 @@ func TestAddModel_AccountNotFound(t *testing.T) {
 }
 
 func TestAddModel_EmptyModelID(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/add", `{"model_id":""}`, "1")
 	h.AddModel(rec, req)
@@ -190,7 +197,7 @@ func TestAddModel_EmptyModelID(t *testing.T) {
 }
 
 func TestRemoveModel_Success(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/remove", `{"model_id":"gpt-4o"}`, "1")
 	h.RemoveModel(rec, req)
@@ -200,7 +207,7 @@ func TestRemoveModel_Success(t *testing.T) {
 }
 
 func TestRemoveModel_NotFound(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/remove", `{"model_id":"nonexistent"}`, "1")
 	h.RemoveModel(rec, req)
@@ -210,7 +217,7 @@ func TestRemoveModel_NotFound(t *testing.T) {
 }
 
 func TestRemoveModel_AccountNotFound(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/999/models/remove", `{"model_id":"gpt-4o"}`, "999")
 	h.RemoveModel(rec, req)
@@ -220,7 +227,7 @@ func TestRemoveModel_AccountNotFound(t *testing.T) {
 }
 
 func TestRemoveModel_EmptyModelID(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/remove", `{"model_id":""}`, "1")
 	h.RemoveModel(rec, req)
@@ -230,7 +237,7 @@ func TestRemoveModel_EmptyModelID(t *testing.T) {
 }
 
 func TestRefreshModels_AccountNotFound(t *testing.T) {
-	h := newFakeHandler()
+	h := newFakeHandler(http.DefaultClient)
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/999/models/refresh", "", "999")
 	h.RefreshModels(rec, req)
@@ -240,10 +247,10 @@ func TestRefreshModels_AccountNotFound(t *testing.T) {
 }
 
 func TestRefreshModels_UpstreamFetchError(t *testing.T) {
-	h := newFakeHandler()
-	h.client = &http.Client{Transport: roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
+	transport := roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
 		return nil, errors.New("connection refused")
-	})}
+	})
+	h := newFakeHandler(&http.Client{Transport: transport})
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/refresh", "", "1")
 	h.RefreshModels(rec, req)
@@ -253,18 +260,17 @@ func TestRefreshModels_UpstreamFetchError(t *testing.T) {
 }
 
 func TestRefreshModels_ReplaceError(t *testing.T) {
-	h := newFakeHandler()
-	h.modelRepo.(*fakeModelRepo).replaceFn = func(_ context.Context, _ int64, _ []string) (int, int, error) {
-		return 0, 0, errors.New("replace failed")
-	}
-	rec := httptest.NewRecorder()
-	h.client = &http.Client{Transport: roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
+	h := newFakeHandler(&http.Client{Transport: roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"gpt-4o"}]}`)),
 			Header:     http.Header{},
 		}, nil
-	})}
+	})})
+	h.modelRepo.(*fakeModelRepo).replaceFn = func(_ context.Context, _ int64, _ []string) (int, int, error) {
+		return 0, 0, errors.New("replace failed")
+	}
+	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/refresh", "", "1")
 	h.RefreshModels(rec, req)
 
@@ -279,14 +285,13 @@ func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func TestRefreshModels_EmptyBodyResponse(t *testing.T) {
-	h := newFakeHandler()
-	h.client = &http.Client{Transport: roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
+	h := newFakeHandler(&http.Client{Transport: roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       http.NoBody,
 			Header:     http.Header{},
 		}, nil
-	})}
+	})})
 	rec := httptest.NewRecorder()
 	req := amRequest(http.MethodPost, "/api/admin/accounts/1/models/refresh", "", "1")
 	h.RefreshModels(rec, req)

@@ -141,7 +141,7 @@ func (b operationBridge) upstreamURL(clientReq ClientRequest, baseURL string) st
 		q = append(q, clientReq.RawQuery)
 	}
 	if b.credential == CredentialClassOAuth {
-		q = append(q, "client_version=0.120.0")
+		q = append(q, "client_version="+CodexClientVersion)
 	}
 	if len(q) > 0 {
 		target += "?" + strings.Join(q, "&")

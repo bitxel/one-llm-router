@@ -92,6 +92,8 @@ export const strings = {
   toasts: {
     success: 'Playground run complete',
     failed: 'Playground run failed',
+    copyDone: 'Copied',
+    copyFailed: 'Copy failed',
   },
   errorTitle: 'Playground run failed',
   errors: {

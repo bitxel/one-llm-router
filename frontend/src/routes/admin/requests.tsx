@@ -66,6 +66,7 @@ import {
   requestsList,
   requestsOptions,
 } from '@/generated/openapi'
+import { copyToClipboard } from '@/lib/clipboard'
 import { callAdmin } from '@/lib/router-api'
 import { adminRequestsRouteApi } from '@/router'
 import { strings } from './requests.strings'
@@ -2408,10 +2409,7 @@ function formatTokenCount(value: number): string {
 
 async function copyText(value: string) {
   try {
-    if (!navigator.clipboard) {
-      throw new Error('clipboard unavailable')
-    }
-    await navigator.clipboard.writeText(value)
+    await copyToClipboard(value)
     toast.success(strings.copyDone)
   } catch {
     toast.error(strings.copyFailed)

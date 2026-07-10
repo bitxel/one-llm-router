@@ -28,6 +28,7 @@ import {
   playgroundRun,
 } from '@/generated/openapi'
 import { api } from '@/lib/api-client'
+import { copyToClipboard } from '@/lib/clipboard'
 import { callAdmin, RouterApiError } from '@/lib/router-api'
 import { adminAccountsListQueryKey } from './accounts/query-keys'
 import { strings } from './playground.strings'
@@ -1118,8 +1119,13 @@ function pythonLiteral(value: unknown, indent: number): string {
   return 'None'
 }
 
-function copyText(value: string) {
-  void navigator.clipboard?.writeText(value)
+async function copyText(value: string) {
+  try {
+    await copyToClipboard(value)
+    toast.success(strings.toasts.copyDone)
+  } catch {
+    toast.error(strings.toasts.copyFailed)
+  }
 }
 
 function countUnicode(value: string): number {

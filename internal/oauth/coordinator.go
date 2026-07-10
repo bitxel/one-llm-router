@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/requestid"
 	"github.com/user/one-llm-router/internal/store"
@@ -67,6 +68,8 @@ type Coordinator struct {
 	sf                   singleflight.Group
 	provider             Provider
 	accounts             accountStore
+	modelRefresher       *core.ModelRefresher
+	modelRepo            core.ModelRefresherRepo
 	logger               *slog.Logger
 	clock                Clock
 	bindLoopback         func(http.Handler) (*http.Server, bool, int, error)
@@ -122,6 +125,11 @@ func (c *Coordinator) SetCallbackHandler(factory func(*Flow) http.Handler) {
 
 func (c *Coordinator) SetAccountStore(accounts accountStore) {
 	c.accounts = accounts
+}
+
+func (c *Coordinator) SetModelRefresher(refresher *core.ModelRefresher, modelRepo core.ModelRefresherRepo) {
+	c.modelRefresher = refresher
+	c.modelRepo = modelRepo
 }
 
 func (c *Coordinator) StartBrowser(ctx context.Context, provider string) (*Flow, error) {
@@ -607,6 +615,10 @@ func (c *Coordinator) ConsumeCode(ctx context.Context, flowID, code, state strin
 		return nil, c.failFlow(ctx, flow, rail, err)
 	}
 
+	if c.modelRefresher != nil && c.modelRepo != nil {
+		go func() { _, _, _, _ = c.modelRefresher.Refresh(context.Background(), account, c.modelRepo) }()
+	}
+
 	reqID := requestIDForFlow(ctx, flow)
 	flow.mu.Lock()
 	flow.Status = FlowStatusSuccess
@@ -688,6 +700,10 @@ func (c *Coordinator) finishDeviceSuccess(ctx context.Context, flow *Flow, token
 	if err != nil {
 		_ = c.failFlow(ctx, flow, RailUnknown, err)
 		return
+	}
+
+	if c.modelRefresher != nil && c.modelRepo != nil {
+		go func() { _, _, _, _ = c.modelRefresher.Refresh(context.Background(), account, c.modelRepo) }()
 	}
 
 	reqID := requestIDForFlow(ctx, flow)

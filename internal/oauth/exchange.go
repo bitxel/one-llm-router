@@ -483,7 +483,7 @@ func classifyPendingDevicePoll(payload devicePollResponse) *TokenExchangeError {
 
 func isPendingDeviceStatus(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "pending", "authorization_pending", "deviceauth_authorization_unknown":
+	case "pending", "authorization_pending", "deviceauth_authorization_unknown", "deviceauth_authorization_pending":
 		return true
 	default:
 		return false
