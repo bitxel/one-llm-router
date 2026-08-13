@@ -103,6 +103,10 @@ describe('AdminAccountsList', () => {
           plan_type: 'chatgpt-plus',
           primary_used_percent: 18,
           secondary_used_percent: 42,
+          primary_reset_at: '2026-04-22T14:30:00Z',
+          secondary_reset_at: '2026-04-22T15:30:00Z',
+          primary_window_seconds: 7200,
+          secondary_window_seconds: 86400,
         },
         {
           id: 3,
@@ -157,6 +161,8 @@ describe('AdminAccountsList', () => {
     expect(plusRow.getByText('Secondary used')).toBeInTheDocument()
     expect(plusRow.getByText('18%')).toBeInTheDocument()
     expect(plusRow.getByText('42%')).toBeInTheDocument()
+    expect(plusRow.getByText('14:30:00 / 2h')).toBeInTheDocument()
+    expect(plusRow.getByText('15:30:00 / 1d')).toBeInTheDocument()
     expect(plusRow.getByText('Active')).toBeInTheDocument()
     expect(plusRow.getByTestId('account-status-active')).toHaveClass('text-[var(--ok)]')
     expect(

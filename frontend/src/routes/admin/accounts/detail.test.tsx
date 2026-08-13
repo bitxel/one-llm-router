@@ -124,6 +124,8 @@ describe('AdminAccountDetail', () => {
       plan_type: 'chatgpt-plus',
       primary_used_percent: 28,
       secondary_used_percent: null,
+      primary_reset_at: '2026-04-22T14:30:00Z',
+      primary_window_seconds: 7200,
       chatgpt_account_id: 'acct_detail_42',
       last_refresh: '2026-04-22T08:05:00Z',
       access_expires_at: '2026-04-22T09:05:00Z',
@@ -156,6 +158,7 @@ describe('AdminAccountDetail', () => {
     expect(screen.getByTestId('account-oauth-metadata')).toHaveTextContent('detail@example.com')
     expect(screen.getByTestId('account-oauth-metadata')).toHaveTextContent('ChatGPT Plus')
     expect(screen.getByTestId('account-oauth-metadata')).toHaveTextContent('28%')
+    expect(screen.getByTestId('account-oauth-metadata')).toHaveTextContent('14:30:00 / 2h')
     expect(screen.getByRole('button', { name: /export auth\.json/i })).toBeInTheDocument()
   })
 

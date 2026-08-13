@@ -742,7 +742,7 @@ func (s failingAccountStore) UpdateStatusIfCurrent(context.Context, int64, strin
 	return s.updateErr
 }
 
-func (s failingAccountStore) UpdateUsage(context.Context, int64, *float64, *float64) error {
+func (s failingAccountStore) UpdateUsage(context.Context, int64, store.UsageSnapshot) error {
 	return s.updateErr
 }
 

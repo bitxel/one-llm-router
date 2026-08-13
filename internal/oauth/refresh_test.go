@@ -1256,8 +1256,8 @@ func (s *refreshRaceStore) UpdateStatusIfCurrent(ctx context.Context, id int64, 
 	return s.repo.UpdateStatusIfCurrent(ctx, id, status, expectedLastRefresh)
 }
 
-func (s *refreshRaceStore) UpdateUsage(ctx context.Context, id int64, primary, secondary *float64) error {
-	return s.repo.UpdateUsage(ctx, id, primary, secondary)
+func (s *refreshRaceStore) UpdateUsage(ctx context.Context, id int64, snapshot store.UsageSnapshot) error {
+	return s.repo.UpdateUsage(ctx, id, snapshot)
 }
 
 func (s *refreshRaceStore) ListActive(ctx context.Context) ([]domain.UpstreamAccount, error) {
@@ -1305,8 +1305,8 @@ func (s *refreshRepeatedConflictStore) UpdateStatusIfCurrent(ctx context.Context
 	return s.repo.UpdateStatusIfCurrent(ctx, id, status, expectedLastRefresh)
 }
 
-func (s *refreshRepeatedConflictStore) UpdateUsage(ctx context.Context, id int64, primary, secondary *float64) error {
-	return s.repo.UpdateUsage(ctx, id, primary, secondary)
+func (s *refreshRepeatedConflictStore) UpdateUsage(ctx context.Context, id int64, snapshot store.UsageSnapshot) error {
+	return s.repo.UpdateUsage(ctx, id, snapshot)
 }
 
 func (s *refreshRepeatedConflictStore) ListActive(ctx context.Context) ([]domain.UpstreamAccount, error) {
@@ -1343,8 +1343,8 @@ func (s *refreshDeletedReloadStore) UpdateStatusIfCurrent(ctx context.Context, i
 	return s.repo.UpdateStatusIfCurrent(ctx, id, status, expectedLastRefresh)
 }
 
-func (s *refreshDeletedReloadStore) UpdateUsage(ctx context.Context, id int64, primary, secondary *float64) error {
-	return s.repo.UpdateUsage(ctx, id, primary, secondary)
+func (s *refreshDeletedReloadStore) UpdateUsage(ctx context.Context, id int64, snapshot store.UsageSnapshot) error {
+	return s.repo.UpdateUsage(ctx, id, snapshot)
 }
 
 func (s *refreshDeletedReloadStore) ListActive(ctx context.Context) ([]domain.UpstreamAccount, error) {

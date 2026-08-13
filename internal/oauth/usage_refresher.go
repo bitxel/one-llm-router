@@ -7,6 +7,7 @@ import (
 
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/provider/openai"
+	"github.com/user/one-llm-router/internal/store"
 )
 
 type UsageRefresher struct {
@@ -87,21 +88,35 @@ func (r *UsageRefresher) refreshOne(ctx context.Context, acc domain.UpstreamAcco
 		return
 	}
 
-	var primary *float64
-	var secondary *float64
+	var snapshot store.UsageSnapshot
 	if rateLimit := usage.RateLimit; rateLimit != nil {
 		if window := rateLimit.PrimaryWindow; window != nil {
 			used := window.UsedPercent
-			primary = &used
+			snapshot.PrimaryUsedPercent = &used
+			snapshot.PrimaryResetAt = unixToTime(window.ResetAt)
+			snapshot.PrimaryWindowSeconds = window.LimitWindowSeconds
 		}
 		if window := rateLimit.SecondaryWindow; window != nil {
 			used := window.UsedPercent
-			secondary = &used
+			snapshot.SecondaryUsedPercent = &used
+			snapshot.SecondaryResetAt = unixToTime(window.ResetAt)
+			snapshot.SecondaryWindowSeconds = window.LimitWindowSeconds
 		}
 	}
 
-	err = r.accounts.UpdateUsage(ctx, acc.ID, primary, secondary)
+	err = r.accounts.UpdateUsage(ctx, acc.ID, snapshot)
 	if err != nil {
 		r.logger.Error("usage refresher: failed to update store", "account_id", acc.ID, "error", err)
 	}
+}
+
+// unixToTime converts a unix epoch seconds pointer to a UTC time.Time.
+// A nil input yields nil so a window that omitted reset_at stays NULL
+// on the row instead of being fabricated.
+func unixToTime(epochSeconds *int64) *time.Time {
+	if epochSeconds == nil {
+		return nil
+	}
+	t := time.Unix(*epochSeconds, 0).UTC()
+	return &t
 }

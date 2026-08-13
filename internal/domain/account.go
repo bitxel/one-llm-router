@@ -88,9 +88,13 @@ type UpstreamAccount struct {
 	// Known values this iteration: "op.openai.chat_completions", "op.openai.responses".
 	Capabilities []string `xorm:"json 'capabilities'" json:"capabilities,omitempty"`
 
-	PrimaryUsedPercent   *float64   `xorm:"'primary_used_percent'" json:"-"`
-	SecondaryUsedPercent *float64   `xorm:"'secondary_used_percent'" json:"-"`
-	UsageUpdatedAt       *time.Time `xorm:"'usage_updated_at'" json:"-"`
+	PrimaryUsedPercent     *float64   `xorm:"'primary_used_percent'" json:"-"`
+	SecondaryUsedPercent   *float64   `xorm:"'secondary_used_percent'" json:"-"`
+	UsageUpdatedAt         *time.Time `xorm:"'usage_updated_at'" json:"-"`
+	PrimaryResetAt         *time.Time `xorm:"'primary_reset_at'" json:"-"`
+	SecondaryResetAt       *time.Time `xorm:"'secondary_reset_at'" json:"-"`
+	PrimaryWindowSeconds   *int64     `xorm:"'primary_window_seconds'" json:"-"`
+	SecondaryWindowSeconds *int64     `xorm:"'secondary_window_seconds'" json:"-"`
 }
 
 func (a UpstreamAccount) TableName() string {
@@ -296,6 +300,18 @@ func (a *UpstreamAccount) validateAPIKeyShape() error {
 	}
 	if a.UsageUpdatedAt != nil {
 		offenders = append(offenders, "usage_updated_at=non-nil")
+	}
+	if a.PrimaryResetAt != nil {
+		offenders = append(offenders, "primary_reset_at=non-nil")
+	}
+	if a.SecondaryResetAt != nil {
+		offenders = append(offenders, "secondary_reset_at=non-nil")
+	}
+	if a.PrimaryWindowSeconds != nil {
+		offenders = append(offenders, "primary_window_seconds=non-nil")
+	}
+	if a.SecondaryWindowSeconds != nil {
+		offenders = append(offenders, "secondary_window_seconds=non-nil")
 	}
 	if len(offenders) == 0 {
 		return nil

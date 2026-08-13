@@ -44,5 +44,10 @@ export default defineConfig({
     globals: true,
     css: false,
     exclude: ['node_modules', 'dist', 'tests/e2e'],
+    // Pin the test runtime to UTC so assertions on local-time formatting
+    // (quota-format formatDeadline) are deterministic on any machine.
+    env: {
+      TZ: 'UTC',
+    },
   },
 })

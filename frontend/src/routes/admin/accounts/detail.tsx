@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { Download, Pause, Play, RefreshCw, Trash2, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
@@ -14,6 +14,7 @@ import { planTypeLabel } from '@/lib/plan-label'
 import { callAdminAttachment } from '@/lib/router-api'
 import { strings } from './detail.strings'
 import { adminAccountDetailQueryKey, invalidateAdminAccountQueries } from './query-keys'
+import { formatQuotaDetail } from './quota-format'
 
 type AuthMethod = 'api_key' | 'oauth_browser' | 'oauth_device' | 'oauth_import'
 
@@ -35,6 +36,10 @@ interface AccountDetail {
   primary_used_percent?: number | null
   secondary_used_percent?: number | null
   usage_updated_at?: string | null
+  primary_reset_at?: string | null
+  secondary_reset_at?: string | null
+  primary_window_seconds?: number | null
+  secondary_window_seconds?: number | null
 }
 
 interface AccountModel {
@@ -374,8 +379,24 @@ export function AdminAccountDetail() {
                 rows={[
                   [strings.labels.email, account.email ?? strings.empty],
                   [strings.labels.plan, planLabel],
-                  [strings.labels.primaryUsage, formatPercent(account.primary_used_percent)],
-                  [strings.labels.secondaryUsage, formatPercent(account.secondary_used_percent)],
+                  [
+                    strings.labels.primaryUsage,
+                    <QuotaUsageValue
+                      key="primary"
+                      percent={account.primary_used_percent}
+                      resetAt={account.primary_reset_at}
+                      windowSeconds={account.primary_window_seconds}
+                    />,
+                  ],
+                  [
+                    strings.labels.secondaryUsage,
+                    <QuotaUsageValue
+                      key="secondary"
+                      percent={account.secondary_used_percent}
+                      resetAt={account.secondary_reset_at}
+                      windowSeconds={account.secondary_window_seconds}
+                    />,
+                  ],
                   [strings.labels.quotaUpdatedAt, formatTimestamp(account.usage_updated_at)],
                   [strings.labels.chatgptAccountID, account.chatgpt_account_id ?? strings.empty],
                   [strings.labels.lastRefresh, formatTimestamp(account.last_refresh)],
@@ -498,7 +519,7 @@ function MetadataPanel({
   title: string
   meta?: string
   metaClassName?: string
-  rows: Array<[label: string, value: string]>
+  rows: Array<[label: string, value: ReactNode]>
   testID?: string
 }) {
   return (
@@ -516,6 +537,29 @@ function MetadataPanel({
 
 function renderAuthMethodLabel(method: AuthMethod): string {
   return strings.authMethod[method] ?? method
+}
+
+function QuotaUsageValue({
+  percent,
+  resetAt,
+  windowSeconds,
+}: {
+  percent?: number | null
+  resetAt?: string | null
+  windowSeconds?: number | null
+}) {
+  const detailLine = formatQuotaDetail(resetAt, windowSeconds)
+  return (
+    <>
+      <div className="text-[13px] leading-[1.6] text-[var(--text)]">{formatPercent(percent)}</div>
+      {detailLine ? (
+        <div className="flex items-center gap-1 text-[11.5px] leading-[1.5] text-[var(--text-dim)]">
+          <RefreshCw aria-hidden="true" className="size-3 shrink-0" />
+          <span>{detailLine}</span>
+        </div>
+      ) : null}
+    </>
+  )
 }
 
 function accountIdentity(account: AccountDetail): string {

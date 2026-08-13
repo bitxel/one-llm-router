@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, Pause, Play, Settings } from 'lucide-react'
+import { ArrowRight, Pause, Play, RefreshCw, Settings } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -12,6 +12,7 @@ import { api } from '@/lib/api-client'
 import { planTypeLabel } from '@/lib/plan-label'
 import { strings } from './list.strings'
 import { adminAccountsListQueryKey, invalidateAdminAccountQueries } from './query-keys'
+import { formatQuotaDetail } from './quota-format'
 
 type AuthMethod = 'api_key' | 'oauth_browser' | 'oauth_device' | 'oauth_import'
 
@@ -33,6 +34,10 @@ interface AccountListItem {
   primary_used_percent?: number | null
   secondary_used_percent?: number | null
   usage_updated_at?: string | null
+  primary_reset_at?: string | null
+  secondary_reset_at?: string | null
+  primary_window_seconds?: number | null
+  secondary_window_seconds?: number | null
 }
 
 interface AccountsListPayload {
@@ -220,8 +225,12 @@ export function AdminAccountsList() {
                     {showOAuthMetadata ? (
                       <OAuthAccountFacts
                         plan={planLabel}
-                        primaryUsage={quotaSnapshot.primary}
-                        secondaryUsage={quotaSnapshot.secondary}
+                        primaryPercent={quotaSnapshot.primary}
+                        secondaryPercent={quotaSnapshot.secondary}
+                        primaryResetAt={account.primary_reset_at}
+                        secondaryResetAt={account.secondary_reset_at}
+                        primaryWindowSeconds={account.primary_window_seconds}
+                        secondaryWindowSeconds={account.secondary_window_seconds}
                       />
                     ) : (
                       <AccountFact label={strings.labels.baseURL} value={account.base_url} mono />
@@ -239,19 +248,37 @@ export function AdminAccountsList() {
 
 function OAuthAccountFacts({
   plan,
-  primaryUsage,
-  secondaryUsage,
+  primaryPercent,
+  secondaryPercent,
+  primaryResetAt,
+  secondaryResetAt,
+  primaryWindowSeconds,
+  secondaryWindowSeconds,
 }: {
   plan: string
-  primaryUsage: string
-  secondaryUsage: string
+  primaryPercent: string
+  secondaryPercent: string
+  primaryResetAt?: string | null
+  secondaryResetAt?: string | null
+  primaryWindowSeconds?: number | null
+  secondaryWindowSeconds?: number | null
 }) {
   return (
     <>
       <AccountFact label={strings.labels.plan} value={plan} />
       <div className="grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-3">
-        <QuotaCell label={strings.labels.primaryUsage} value={primaryUsage} />
-        <QuotaCell label={strings.labels.secondaryUsage} value={secondaryUsage} />
+        <QuotaCell
+          label={strings.labels.primaryUsage}
+          value={primaryPercent}
+          resetAt={primaryResetAt}
+          windowSeconds={primaryWindowSeconds}
+        />
+        <QuotaCell
+          label={strings.labels.secondaryUsage}
+          value={secondaryPercent}
+          resetAt={secondaryResetAt}
+          windowSeconds={secondaryWindowSeconds}
+        />
       </div>
     </>
   )
@@ -283,7 +310,18 @@ function AccountFact({
   )
 }
 
-function QuotaCell({ label, value }: { label: string; value: string }) {
+function QuotaCell({
+  label,
+  value,
+  resetAt,
+  windowSeconds,
+}: {
+  label: string
+  value: string
+  resetAt?: string | null
+  windowSeconds?: number | null
+}) {
+  const detailLine = formatQuotaDetail(resetAt, windowSeconds)
   return (
     <div className="min-w-0">
       <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -292,6 +330,12 @@ function QuotaCell({ label, value }: { label: string; value: string }) {
       <div className="mt-1 truncate font-mono text-[14px] leading-[1.35] text-[var(--text)]">
         {value}
       </div>
+      {detailLine ? (
+        <div className="mt-0.5 flex items-center gap-1 font-mono text-[10.5px] leading-[1.4] text-[var(--text-dim)]">
+          <RefreshCw aria-hidden="true" className="size-2.5 shrink-0" />
+          <span className="min-w-0 truncate">{detailLine}</span>
+        </div>
+      ) : null}
     </div>
   )
 }

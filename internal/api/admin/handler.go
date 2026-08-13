@@ -353,14 +353,14 @@ type accountCreateResponse struct {
 }
 
 type accountListItemResponse struct {
-	ID           int64             `json:"id"`
-	Name         string            `json:"name"`
-	Provider     string            `json:"provider"`
-	AuthMethod   domain.AuthMethod `json:"auth_method"`
-	Status       string            `json:"status"`
-	BaseURL      *string           `json:"base_url,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	ID         int64             `json:"id"`
+	Name       string            `json:"name"`
+	Provider   string            `json:"provider"`
+	AuthMethod domain.AuthMethod `json:"auth_method"`
+	Status     string            `json:"status"`
+	BaseURL    *string           `json:"base_url,omitempty"`
+	CreatedAt  time.Time         `json:"created_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
 
 	Email            *string    `json:"email,omitempty"`
 	PlanType         *string    `json:"plan_type,omitempty"`
@@ -371,9 +371,13 @@ type accountListItemResponse struct {
 
 	Capabilities []string `json:"capabilities,omitempty"`
 
-	PrimaryUsedPercent   *float64   `json:"primary_used_percent,omitempty"`
-	SecondaryUsedPercent *float64   `json:"secondary_used_percent,omitempty"`
-	UsageUpdatedAt       *time.Time `json:"usage_updated_at,omitempty"`
+	PrimaryUsedPercent     *float64   `json:"primary_used_percent,omitempty"`
+	SecondaryUsedPercent   *float64   `json:"secondary_used_percent,omitempty"`
+	UsageUpdatedAt         *time.Time `json:"usage_updated_at,omitempty"`
+	PrimaryResetAt         *time.Time `json:"primary_reset_at,omitempty"`
+	SecondaryResetAt       *time.Time `json:"secondary_reset_at,omitempty"`
+	PrimaryWindowSeconds   *int64     `json:"primary_window_seconds,omitempty"`
+	SecondaryWindowSeconds *int64     `json:"secondary_window_seconds,omitempty"`
 }
 
 func normaliseRequestedAuthMethod(raw string) domain.AuthMethod {
@@ -448,6 +452,10 @@ func newAccountListItemResponse(account domain.UpstreamAccount) accountListItemR
 	resp.PrimaryUsedPercent = usedPercent(account.PrimaryUsedPercent)
 	resp.SecondaryUsedPercent = usedPercent(account.SecondaryUsedPercent)
 	resp.UsageUpdatedAt = account.UsageUpdatedAt
+	resp.PrimaryResetAt = account.PrimaryResetAt
+	resp.SecondaryResetAt = account.SecondaryResetAt
+	resp.PrimaryWindowSeconds = account.PrimaryWindowSeconds
+	resp.SecondaryWindowSeconds = account.SecondaryWindowSeconds
 	return resp
 }
 
@@ -479,6 +487,10 @@ func newAccountListProjectionResponse(account store.AccountListItem) accountList
 	resp.PrimaryUsedPercent = usedPercent(account.PrimaryUsedPercent)
 	resp.SecondaryUsedPercent = usedPercent(account.SecondaryUsedPercent)
 	resp.UsageUpdatedAt = account.UsageUpdatedAt
+	resp.PrimaryResetAt = account.PrimaryResetAt
+	resp.SecondaryResetAt = account.SecondaryResetAt
+	resp.PrimaryWindowSeconds = account.PrimaryWindowSeconds
+	resp.SecondaryWindowSeconds = account.SecondaryWindowSeconds
 	return resp
 }
 
@@ -537,5 +549,3 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
-
-

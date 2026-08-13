@@ -638,8 +638,8 @@ func TestFetchUsageParsesNestedRateLimitUsage(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"user_id":"user-1",
 			"rate_limit":{
-				"primary_window":{"used_percent":28},
-				"secondary_window":null
+				"primary_window":{"used_percent":28,"limit_window_seconds":7200,"reset_at":1755123456},
+				"secondary_window":{"used_percent":10,"limit_window_seconds":86400,"reset_at":1755163056}
 			}
 		}`))
 	}))
@@ -654,5 +654,35 @@ func TestFetchUsageParsesNestedRateLimitUsage(t *testing.T) {
 	require.NotNil(t, usage.RateLimit)
 	require.NotNil(t, usage.RateLimit.PrimaryWindow)
 	assert.Equal(t, 28.0, usage.RateLimit.PrimaryWindow.UsedPercent)
+	require.NotNil(t, usage.RateLimit.PrimaryWindow.LimitWindowSeconds)
+	assert.Equal(t, int64(7200), *usage.RateLimit.PrimaryWindow.LimitWindowSeconds)
+	require.NotNil(t, usage.RateLimit.PrimaryWindow.ResetAt)
+	assert.Equal(t, int64(1755123456), *usage.RateLimit.PrimaryWindow.ResetAt)
+	require.NotNil(t, usage.RateLimit.SecondaryWindow)
+	assert.Equal(t, 10.0, usage.RateLimit.SecondaryWindow.UsedPercent)
+	require.NotNil(t, usage.RateLimit.SecondaryWindow.ResetAt)
+	assert.Equal(t, int64(1755163056), *usage.RateLimit.SecondaryWindow.ResetAt)
+}
+
+func TestFetchUsageSparseWindowKeepsOptionalFieldsNil(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"rate_limit":{
+				"primary_window":{"used_percent":28},
+				"secondary_window":null
+			}
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(30 * time.Second)
+	c.codexBackendBaseURL = srv.URL
+
+	usage, err := c.FetchUsage(context.Background(), "access-token", "")
+	require.NoError(t, err)
+	require.NotNil(t, usage.RateLimit.PrimaryWindow)
+	assert.Nil(t, usage.RateLimit.PrimaryWindow.LimitWindowSeconds)
+	assert.Nil(t, usage.RateLimit.PrimaryWindow.ResetAt)
 	assert.Nil(t, usage.RateLimit.SecondaryWindow)
 }

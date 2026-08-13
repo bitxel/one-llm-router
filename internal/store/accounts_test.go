@@ -189,6 +189,110 @@ func TestAccountsStore_InsertUpstreamAccount_OAuthRoundTrip(t *testing.T) {
 	require.NotNil(t, it.AccessExpiresAt)
 }
 
+func TestAccountsStore_UpdateUsage_RoundTripPersistsWindowDeadline(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	id, err := repo.InsertUpstreamAccount(context.Background(), oauthRow("o1"))
+	require.NoError(t, err)
+
+	primaryReset := time.Unix(1755123456, 0).UTC()
+	secondaryReset := time.Unix(1755163056, 0).UTC()
+	primaryPct := 28.0
+	secondaryPct := 10.0
+	primaryWin := int64(7200)
+	secondaryWin := int64(86400)
+
+	require.NoError(t, repo.UpdateUsage(context.Background(), id, UsageSnapshot{
+		PrimaryUsedPercent:     &primaryPct,
+		SecondaryUsedPercent:   &secondaryPct,
+		PrimaryResetAt:         &primaryReset,
+		SecondaryResetAt:       &secondaryReset,
+		PrimaryWindowSeconds:   &primaryWin,
+		SecondaryWindowSeconds: &secondaryWin,
+	}))
+
+	projected, err := repo.GetProjectionByID(context.Background(), id)
+	require.NoError(t, err)
+	require.NotNil(t, projected.PrimaryResetAt)
+	assert.Equal(t, primaryReset, projected.PrimaryResetAt.UTC())
+	require.NotNil(t, projected.SecondaryResetAt)
+	assert.Equal(t, secondaryReset, projected.SecondaryResetAt.UTC())
+	require.NotNil(t, projected.PrimaryWindowSeconds)
+	assert.Equal(t, int64(7200), *projected.PrimaryWindowSeconds)
+	require.NotNil(t, projected.SecondaryWindowSeconds)
+	assert.Equal(t, int64(86400), *projected.SecondaryWindowSeconds)
+	require.NotNil(t, projected.PrimaryUsedPercent)
+	assert.Equal(t, 28.0, *projected.PrimaryUsedPercent)
+	require.NotNil(t, projected.UsageUpdatedAt)
+
+	items, err := repo.ListForAdminAPI(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.NotNil(t, items[0].PrimaryResetAt)
+	assert.Equal(t, primaryReset, items[0].PrimaryResetAt.UTC())
+	require.NotNil(t, items[0].SecondaryResetAt)
+	assert.Equal(t, secondaryReset, items[0].SecondaryResetAt.UTC())
+	require.NotNil(t, items[0].PrimaryWindowSeconds)
+	assert.Equal(t, int64(7200), *items[0].PrimaryWindowSeconds)
+	require.NotNil(t, items[0].SecondaryWindowSeconds)
+	assert.Equal(t, int64(86400), *items[0].SecondaryWindowSeconds)
+}
+
+func TestAccountsStore_UpdateUsage_SparseSnapshotClearsWindowFields(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	id, err := repo.InsertUpstreamAccount(context.Background(), oauthRow("o1"))
+	require.NoError(t, err)
+
+	fullReset := time.Unix(1755123456, 0).UTC()
+	fullPct := 28.0
+	fullWin := int64(7200)
+	require.NoError(t, repo.UpdateUsage(context.Background(), id, UsageSnapshot{
+		PrimaryUsedPercent:   &fullPct,
+		PrimaryResetAt:       &fullReset,
+		PrimaryWindowSeconds: &fullWin,
+	}))
+
+	sparsePct := 30.0
+	require.NoError(t, repo.UpdateUsage(context.Background(), id, UsageSnapshot{
+		PrimaryUsedPercent: &sparsePct,
+	}))
+
+	projected, err := repo.GetProjectionByID(context.Background(), id)
+	require.NoError(t, err)
+	require.NotNil(t, projected.PrimaryUsedPercent)
+	assert.Equal(t, 30.0, *projected.PrimaryUsedPercent)
+	assert.Nil(t, projected.PrimaryResetAt, "sparse snapshot must clear stale primary reset_at")
+	assert.Nil(t, projected.PrimaryWindowSeconds, "sparse snapshot must clear stale primary window_seconds")
+	assert.Nil(t, projected.SecondaryUsedPercent)
+	assert.Nil(t, projected.SecondaryResetAt)
+	assert.Nil(t, projected.SecondaryWindowSeconds)
+}
+
+func TestAccountsStore_ListForAdminAPI_APIKeyRowsCarryNoUsageFields(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	_, err := repo.InsertUpstreamAccount(context.Background(), apiKeyRow("k1"))
+	require.NoError(t, err)
+
+	items, err := repo.ListForAdminAPI(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Nil(t, items[0].PrimaryUsedPercent)
+	assert.Nil(t, items[0].SecondaryUsedPercent)
+	assert.Nil(t, items[0].UsageUpdatedAt)
+	assert.Nil(t, items[0].PrimaryResetAt)
+	assert.Nil(t, items[0].SecondaryResetAt)
+	assert.Nil(t, items[0].PrimaryWindowSeconds)
+	assert.Nil(t, items[0].SecondaryWindowSeconds)
+}
+
 func TestAccountsStore_InsertUpstreamAccount_ValidateRejects(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()

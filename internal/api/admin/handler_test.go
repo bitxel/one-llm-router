@@ -537,13 +537,27 @@ func TestGetAccount_Cases(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
+		resetAt := time.Unix(1755123456, 0).UTC()
+		windowSeconds := int64(7200)
 		ar := &fakeAccountRepo{
 			getByIDFn: func(context.Context, int64) (*domain.UpstreamAccount, error) {
 				return &domain.UpstreamAccount{
-					ID:       1,
-					Name:     "a",
-					Provider: domain.ProviderOpenAI,
-					Status:   domain.AccountStatusActive,
+					ID:                     1,
+					Name:                   "a",
+					Provider:               domain.ProviderOpenAI,
+					Status:                 domain.AccountStatusActive,
+					AuthMethod:             domain.AuthMethodOAuthBrowser,
+					AccessToken:            []byte("at"),
+					RefreshToken:           []byte("rt"),
+					IDToken:                []byte("it"),
+					LastRefresh:            &resetAt,
+					AccessExpiresAt:        &resetAt,
+					PrimaryResetAt:         &resetAt,
+					PrimaryWindowSeconds:   &windowSeconds,
+					PrimaryUsedPercent:     f64ptr(28),
+					SecondaryUsedPercent:   f64ptr(10),
+					SecondaryResetAt:       &resetAt,
+					SecondaryWindowSeconds: &windowSeconds,
 				}, nil
 			},
 		}
@@ -552,7 +566,18 @@ func TestGetAccount_Cases(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/admin/accounts/1", nil)
 		mux.ServeHTTP(w, r)
 		assert.Equal(t, http.StatusOK, w.Code)
+		body := w.Body.String()
+		assert.Contains(t, body, `"primary_reset_at"`)
+		assert.Contains(t, body, `"secondary_reset_at"`)
+		assert.Contains(t, body, `"primary_window_seconds":7200`)
+		assert.Contains(t, body, `"secondary_window_seconds":7200`)
+		assert.Contains(t, body, `"primary_used_percent":28`)
+		assert.Contains(t, body, `"secondary_used_percent":10`)
 	})
+}
+
+func f64ptr(v float64) *float64 {
+	return &v
 }
 
 func TestDisableAccount_Cases(t *testing.T) {

@@ -50,9 +50,13 @@ type AccountListItem struct {
 
 	Capabilities []string `json:"capabilities,omitempty"`
 
-	PrimaryUsedPercent   *float64   `json:"-"`
-	SecondaryUsedPercent *float64   `json:"-"`
-	UsageUpdatedAt       *time.Time `json:"-"`
+	PrimaryUsedPercent     *float64   `json:"-"`
+	SecondaryUsedPercent   *float64   `json:"-"`
+	UsageUpdatedAt         *time.Time `json:"-"`
+	PrimaryResetAt         *time.Time `json:"-"`
+	SecondaryResetAt       *time.Time `json:"-"`
+	PrimaryWindowSeconds   *int64     `json:"-"`
+	SecondaryWindowSeconds *int64     `json:"-"`
 
 	// PlanTypeLabel is DELIBERATELY absent from the store DTO. It is
 	// a UI-only presentation of PlanType — the handler in
@@ -365,6 +369,8 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			"email", "plan_type", "chatgpt_account_id",
 			"last_refresh", "access_expires_at",
 			"primary_used_percent", "secondary_used_percent", "usage_updated_at",
+			"primary_reset_at", "secondary_reset_at",
+			"primary_window_seconds", "secondary_window_seconds",
 			"capabilities").
 		Where("status != ?", domain.AccountStatusDeleted).
 		OrderBy("id ASC").
@@ -387,14 +393,14 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			method = domain.AuthMethodAPIKey
 		}
 		it := AccountListItem{
-			ID:         r.ID,
-			Name:       r.Name,
-			Provider:   r.Provider,
-			AuthMethod: method,
-			Status:     r.Status,
-			BaseURL:    r.BaseURL,
-			CreatedAt:  r.CreatedAt,
-			UpdatedAt:  r.UpdatedAt,
+			ID:           r.ID,
+			Name:         r.Name,
+			Provider:     r.Provider,
+			AuthMethod:   method,
+			Status:       r.Status,
+			BaseURL:      r.BaseURL,
+			CreatedAt:    r.CreatedAt,
+			UpdatedAt:    r.UpdatedAt,
 			Capabilities: r.Capabilities,
 		}
 		if method != domain.AuthMethodAPIKey {
@@ -406,6 +412,10 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			it.PrimaryUsedPercent = r.PrimaryUsedPercent
 			it.SecondaryUsedPercent = r.SecondaryUsedPercent
 			it.UsageUpdatedAt = r.UsageUpdatedAt
+			it.PrimaryResetAt = r.PrimaryResetAt
+			it.SecondaryResetAt = r.SecondaryResetAt
+			it.PrimaryWindowSeconds = r.PrimaryWindowSeconds
+			it.SecondaryWindowSeconds = r.SecondaryWindowSeconds
 		}
 		items = append(items, it)
 	}
@@ -617,6 +627,8 @@ func (r *AccountRepo) GetProjectionByID(_ context.Context, id int64) (*domain.Up
 			"email", "plan_type", "chatgpt_account_id",
 			"last_refresh", "access_expires_at",
 			"primary_used_percent", "secondary_used_percent", "usage_updated_at",
+			"primary_reset_at", "secondary_reset_at",
+			"primary_window_seconds", "secondary_window_seconds",
 			"capabilities").
 		Get(account)
 	if err != nil {
@@ -668,16 +680,39 @@ func (r *AccountRepo) UpdateStatus(_ context.Context, id int64, status string) e
 	return nil
 }
 
-func (r *AccountRepo) UpdateUsage(_ context.Context, id int64, primary, secondary *float64) error {
+// UsageSnapshot is the per-refresh quota payload the usage refresher
+// persists onto an OAuth account row. Each field is a pointer so an
+// upstream window that omitted the field keeps its DB NULL (never a
+// fabricated zero value).
+type UsageSnapshot struct {
+	PrimaryUsedPercent     *float64
+	SecondaryUsedPercent   *float64
+	PrimaryResetAt         *time.Time
+	SecondaryResetAt       *time.Time
+	PrimaryWindowSeconds   *int64
+	SecondaryWindowSeconds *int64
+}
+
+// UpdateUsage persists the latest observed quota windows for an OAuth
+// account. reset_at is converted from the upstream unix epoch by the
+// refresher; window_seconds is the rolling window duration.
+func (r *AccountRepo) UpdateUsage(_ context.Context, id int64, snapshot UsageSnapshot) error {
 	now := time.Now().UTC()
 	row := &domain.UpstreamAccount{
-		PrimaryUsedPercent:   primary,
-		SecondaryUsedPercent: secondary,
-		UsageUpdatedAt:       &now,
+		PrimaryUsedPercent:     snapshot.PrimaryUsedPercent,
+		SecondaryUsedPercent:   snapshot.SecondaryUsedPercent,
+		UsageUpdatedAt:         &now,
+		PrimaryResetAt:         snapshot.PrimaryResetAt,
+		SecondaryResetAt:       snapshot.SecondaryResetAt,
+		PrimaryWindowSeconds:   snapshot.PrimaryWindowSeconds,
+		SecondaryWindowSeconds: snapshot.SecondaryWindowSeconds,
 	}
 	_, err := r.engine.
 		ID(id).
-		Cols("primary_used_percent", "secondary_used_percent", "usage_updated_at", "updated_at").
+		Cols("primary_used_percent", "secondary_used_percent", "usage_updated_at",
+			"primary_reset_at", "secondary_reset_at",
+			"primary_window_seconds", "secondary_window_seconds",
+			"updated_at").
 		Update(row)
 	if err != nil {
 		return fmt.Errorf("update account %d usage: %w", id, err)

@@ -412,7 +412,7 @@ func (*manualCallbackStore) UpdateStatusIfCurrent(context.Context, int64, string
 	return errors.New("manualCallbackStore.UpdateStatusIfCurrent: not implemented")
 }
 
-func (*manualCallbackStore) UpdateUsage(context.Context, int64, *float64, *float64) error {
+func (*manualCallbackStore) UpdateUsage(context.Context, int64, store.UsageSnapshot) error {
 	return errors.New("manualCallbackStore.UpdateUsage: not implemented")
 }
 

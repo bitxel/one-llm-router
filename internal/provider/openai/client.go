@@ -25,6 +25,12 @@ type Client struct {
 
 type UsageWindow struct {
 	UsedPercent float64 `json:"used_percent"`
+	// LimitWindowSeconds is the rolling window duration in seconds.
+	// Absent on sparse upstream payloads, hence a pointer.
+	LimitWindowSeconds *int64 `json:"limit_window_seconds,omitempty"`
+	// ResetAt is the unix epoch seconds when the window resets.
+	// Absent on sparse upstream payloads, hence a pointer.
+	ResetAt *int64 `json:"reset_at,omitempty"`
 }
 
 type UsageRateLimit struct {

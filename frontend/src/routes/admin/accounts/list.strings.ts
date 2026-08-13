@@ -2,7 +2,8 @@ export const strings = {
   eyebrow: 'Accounts overview',
   stripe: '',
   title: 'All Accounts',
-  intro: 'OAuth cards surface email, plan label, and observed primary or secondary usage only.',
+  intro:
+    'OAuth cards surface email, plan label, and observed primary or secondary usage and window reset times.',
   loading: 'Loading accounts',
   empty: 'No accounts registered yet.',
   summaryTitle: 'Registered accounts',
