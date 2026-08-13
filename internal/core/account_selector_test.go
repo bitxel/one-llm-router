@@ -30,6 +30,9 @@ func (m *mockAccountRepo) ListActive(_ context.Context) ([]domain.UpstreamAccoun
 	return m.active, nil
 }
 func (m *mockAccountRepo) UpdateStatus(_ context.Context, _ int64, _ string) error { return nil }
+func (m *mockAccountRepo) UpdateDetails(_ context.Context, _ int64, _ AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	return nil, domain.ErrAccountNotFound
+}
 
 type listActiveFailsRepo struct {
 	mockAccountRepo

@@ -256,6 +256,11 @@ func (ww *WrappedHandler) GetAccount(w http.ResponseWriter, r *http.Request) {
 	ww.wrap(w, r, ww.inner.GetAccount, defaultAccountErrMap)
 }
 
+// UpdateAccount wraps POST /api/admin/accounts/{id}/update.
+func (ww *WrappedHandler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
+	ww.wrap(w, r, ww.inner.UpdateAccount, defaultAccountErrMap)
+}
+
 // EnableAccount wraps POST /api/admin/accounts/{id}/enable.
 func (ww *WrappedHandler) EnableAccount(w http.ResponseWriter, r *http.Request) {
 	ww.wrap(w, r, ww.inner.EnableAccount, defaultAccountErrMap)

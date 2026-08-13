@@ -306,6 +306,10 @@ func (r rollbackLegacyRepo) UpdateStatus(context.Context, int64, string) error {
 	return errors.New("rollbackLegacyRepo.UpdateStatus not implemented")
 }
 
+func (r rollbackLegacyRepo) UpdateDetails(context.Context, int64, core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	return nil, errors.New("rollbackLegacyRepo.UpdateDetails not implemented")
+}
+
 func (r rollbackLegacyRepo) List(_ context.Context, statusFilter []string) ([]domain.UpstreamAccount, error) {
 	if len(statusFilter) == 0 {
 		return r.queryActiveRows()

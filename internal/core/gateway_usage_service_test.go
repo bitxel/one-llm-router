@@ -224,5 +224,8 @@ func (r *gatewayUsageAccountRepo) ListActive(context.Context) ([]domain.Upstream
 	return r.accounts, nil
 }
 func (r *gatewayUsageAccountRepo) UpdateStatus(context.Context, int64, string) error { return nil }
+func (r *gatewayUsageAccountRepo) UpdateDetails(context.Context, int64, AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	return nil, domain.ErrAccountNotFound
+}
 
 func stringPtrCore(value string) *string { return &value }

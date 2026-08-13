@@ -32,7 +32,6 @@ package setup
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 
 	"github.com/user/one-llm-router/internal/api/errcode"
@@ -103,10 +102,6 @@ const (
 // BaseURLMaxLen bounds first_account.base_url; 256 mirrors the upstream
 // proxy's base URL cap.
 const BaseURLMaxLen = 256
-
-// accountNameRE is the canonical regex for first_account.name — also
-// consumed by the admin CRUD endpoints that 003 ships.
-var accountNameRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 // CommitRequest is the typed shape the setup-commit handler decodes.
 // Every field is exported so the HTTP handler can initialize it from
@@ -284,12 +279,13 @@ func (v Validator) DSN(url string) *ValidationError {
 	return nil
 }
 
-// AccountName validates first_account.name against the regex.
+// AccountName validates first_account.name via the shared
+// domain.ValidAccountName rule.
 func (v Validator) AccountName(name string) *ValidationError {
-	if !accountNameRE.MatchString(name) {
+	if !domain.ValidAccountName(name) {
 		return &ValidationError{
 			Code:  errcode.InvalidAccountName,
-			Msg:   "account name must match ^[A-Za-z0-9_-]{1,64}$",
+			Msg:   "account name must be 1-64 characters (after trimming) and free of control characters",
 			Field: "first_account.name",
 		}
 	}

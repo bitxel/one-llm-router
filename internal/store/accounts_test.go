@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 )
 
@@ -291,6 +292,123 @@ func TestAccountsStore_ListForAdminAPI_APIKeyRowsCarryNoUsageFields(t *testing.T
 	assert.Nil(t, items[0].SecondaryResetAt)
 	assert.Nil(t, items[0].PrimaryWindowSeconds)
 	assert.Nil(t, items[0].SecondaryWindowSeconds)
+}
+
+func TestAccountsStore_UpdateDetails_FullPatchRoundTrip(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	row := apiKeyRow("k1")
+	base := "https://api.openai.com"
+	row.BaseURL = &base
+	id, err := repo.InsertUpstreamAccount(context.Background(), row)
+	require.NoError(t, err)
+
+	name := "renamed-账户"
+	newKey := "sk-rotated"
+	newBase := "https://gateway.example.com"
+	_, err = repo.UpdateDetails(context.Background(), id, core.AccountDetailsPatch{
+		Name:         &name,
+		APIKey:       &newKey,
+		BaseURL:      &newBase,
+		Capabilities: []string{"op.openai.responses"},
+	})
+	require.NoError(t, err)
+
+	got, err := repo.GetByID(context.Background(), id)
+	require.NoError(t, err)
+	assert.Equal(t, "renamed-账户", got.Name)
+	assert.Equal(t, "sk-rotated", got.APIKey)
+	require.NotNil(t, got.BaseURL)
+	assert.Equal(t, "https://gateway.example.com", *got.BaseURL)
+	assert.Equal(t, []string{"op.openai.responses"}, got.Capabilities)
+}
+
+func TestAccountsStore_UpdateDetails_PartialPatchKeepsOtherFields(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	row := apiKeyRow("k1")
+	row.Capabilities = []string{"op.openai.responses", "op.openai.chat_completions"}
+	id, err := repo.InsertUpstreamAccount(context.Background(), row)
+	require.NoError(t, err)
+
+	name := "only-name"
+	_, err = repo.UpdateDetails(context.Background(), id, core.AccountDetailsPatch{
+		Name: &name,
+	})
+	require.NoError(t, err)
+
+	got, err := repo.GetByID(context.Background(), id)
+	require.NoError(t, err)
+	assert.Equal(t, "only-name", got.Name)
+	assert.Equal(t, "sk-live-k1", got.APIKey, "untouched api_key must survive a partial patch")
+	assert.Equal(t, []string{"op.openai.responses", "op.openai.chat_completions"}, got.Capabilities)
+}
+
+func TestAccountsStore_UpdateDetails_ClearsBaseURL(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	row := apiKeyRow("k1")
+	base := "https://api.openai.com"
+	row.BaseURL = &base
+	id, err := repo.InsertUpstreamAccount(context.Background(), row)
+	require.NoError(t, err)
+
+	empty := ""
+	_, err = repo.UpdateDetails(context.Background(), id, core.AccountDetailsPatch{BaseURL: &empty})
+	require.NoError(t, err)
+
+	got, err := repo.GetByID(context.Background(), id)
+	require.NoError(t, err)
+	assert.Nil(t, got.BaseURL, "empty base_url in patch must clear the column to NULL")
+}
+
+func TestAccountsStore_UpdateDetails_RejectsOAuthAndDeletedRows(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	oauthID, err := repo.InsertUpstreamAccount(context.Background(), oauthRow("o1"))
+	require.NoError(t, err)
+	name := "x"
+	_, err = repo.UpdateDetails(context.Background(), oauthID, core.AccountDetailsPatch{Name: &name})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrInvalidAccountShape)
+
+	apiID, err := repo.InsertUpstreamAccount(context.Background(), apiKeyRow("k1"))
+	require.NoError(t, err)
+	require.NoError(t, repo.UpdateStatus(context.Background(), apiID, domain.AccountStatusDeleted))
+	_, err = repo.UpdateDetails(context.Background(), apiID, core.AccountDetailsPatch{Name: &name})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrAccountDeleted)
+
+	_, err = repo.UpdateDetails(context.Background(), 99999, core.AccountDetailsPatch{Name: &name})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrAccountNotFound)
+}
+
+func TestAccountsStore_UpdateDetails_EmptyPatchIsNoop(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	row := apiKeyRow("k1")
+	id, err := repo.InsertUpstreamAccount(context.Background(), row)
+	require.NoError(t, err)
+
+	before, err := repo.GetByID(context.Background(), id)
+	require.NoError(t, err)
+
+	got, err := repo.UpdateDetails(context.Background(), id, core.AccountDetailsPatch{})
+	require.NoError(t, err)
+	assert.Equal(t, before.UpdatedAt, got.UpdatedAt, "empty patch must not bump updated_at")
+	assert.Equal(t, "sk-live-k1", got.APIKey)
+	assert.Equal(t, before.Name, got.Name)
 }
 
 func TestAccountsStore_InsertUpstreamAccount_ValidateRejects(t *testing.T) {

@@ -13,6 +13,7 @@ type AccountRepository interface {
 	List(ctx context.Context, statusFilter []string) ([]domain.UpstreamAccount, error)
 	ListActive(ctx context.Context) ([]domain.UpstreamAccount, error)
 	UpdateStatus(ctx context.Context, id int64, status string) error
+	UpdateDetails(ctx context.Context, id int64, patch AccountDetailsPatch) (*domain.UpstreamAccount, error)
 }
 
 // AccountModelRepository manages per-account model associations.
@@ -23,6 +24,7 @@ type AccountModelRepository interface {
 	Delete(ctx context.Context, accountID int64, modelID string) error
 	ReplaceUpstreamModels(ctx context.Context, accountID int64, modelIDs []string) (added int, keptManual int, err error)
 	AccountsWithModel(ctx context.Context, modelID string) ([]int64, error)
+	AccountsWithoutModels(ctx context.Context) ([]int64, error)
 	DistinctModelsForAccounts(ctx context.Context, accountIDs []int64) ([]string, error)
 }
 

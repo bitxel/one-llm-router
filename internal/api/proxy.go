@@ -238,10 +238,10 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					ErrCodeModelNotSupported,
 					"No active account supports the requested model",
 					requestID)
-			h.recordProxyError(requestID, start, r, nil,
-				http.StatusBadRequest, ErrCodeModelNotSupported, "No active account supports the requested model",
-				domain.OutcomeNoAvailableAccount,
-				proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
+				h.recordProxyError(requestID, start, r, nil,
+					http.StatusBadRequest, ErrCodeModelNotSupported, "No active account supports the requested model",
+					domain.OutcomeNoAvailableAccount,
+					proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: renameMetadata})
 				return
 			}
 			h.writeError(w, requestID, start, r, nil,
@@ -785,6 +785,17 @@ func (h *ProxyHandler) buildModelEligibleSet(ctx context.Context, model *string)
 	}
 	eligible := make(map[int64]struct{}, len(ids))
 	for _, id := range ids {
+		eligible[id] = struct{}{}
+	}
+	// Accounts with no configured models are model-agnostic: they carry
+	// no explicit restriction, so they stay eligible for any model
+	// request. This keeps a freshly created account routable even before
+	// (or without) a successful upstream model refresh.
+	agnostic, err := h.accountModelRepo.AccountsWithoutModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("accounts without models: %w", err)
+	}
+	for _, id := range agnostic {
 		eligible[id] = struct{}{}
 	}
 	return eligible, nil

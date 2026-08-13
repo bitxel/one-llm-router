@@ -160,6 +160,38 @@ func (r *AccountModelRepo) AccountsWithModel(_ context.Context, modelID string) 
 	return accountIDs, nil
 }
 
+// AccountsWithoutModels returns the account IDs that have NO rows in
+// account_models at all. Such accounts carry no explicit model
+// restriction, so the router treats them as model-agnostic — eligible
+// for any model request until an upstream refresh (or manual add)
+// populates a list that constrains them.
+func (r *AccountModelRepo) AccountsWithoutModels(ctx context.Context) ([]int64, error) {
+	var withModels []int64
+	if err := r.engine.Table("account_models").
+		Distinct("account_id").
+		Find(&withModels); err != nil {
+		return nil, fmt.Errorf("find accounts with models: %w", err)
+	}
+	var accounts []domain.UpstreamAccount
+	if err := r.engine.
+		Where("status != ?", domain.AccountStatusDeleted).
+		Cols("id").
+		Find(&accounts); err != nil {
+		return nil, fmt.Errorf("list accounts for model-agnostic set: %w", err)
+	}
+	withSet := make(map[int64]struct{}, len(withModels))
+	for _, id := range withModels {
+		withSet[id] = struct{}{}
+	}
+	out := make([]int64, 0, len(accounts))
+	for _, a := range accounts {
+		if _, ok := withSet[a.ID]; !ok {
+			out = append(out, a.ID)
+		}
+	}
+	return out, nil
+}
+
 // DistinctModelsForAccounts returns the distinct model IDs declared by the given accounts.
 func (r *AccountModelRepo) DistinctModelsForAccounts(_ context.Context, accountIDs []int64) ([]string, error) {
 	if len(accountIDs) == 0 {

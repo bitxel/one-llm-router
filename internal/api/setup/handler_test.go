@@ -372,7 +372,7 @@ func TestCommit_InvalidAccountName(t *testing.T) {
 	h, _, _, _, _ := newHandler(t, &fakeGate{open: false})
 	body := []byte(`{
 	  "db":{"driver":"sqlite3","url":"x.db"},
-	  "first_account":{"name":"bad name","provider":"openai","api_key":"sk-x"},
+	  "first_account":{"name":"ctrl\u0001name","provider":"openai","api_key":"sk-x"},
 	  "plugins":{"admin_auth":{"enabled":false},"client_keys":{"enabled":false}}
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/commit", bytes.NewReader(body))

@@ -47,7 +47,7 @@ type SetupAuthMethod = AccountAuthMethod
 // Validation caps MUST match `internal/setup/validator.go` so the
 // wizard and the commit handler agree on what they accept:
 //   - DSN length: DSNMaxLen = 4096
-//   - Account name: accountNameRE = ^[A-Za-z0-9_-]{1,64}$
+//   - Account name: ValidAccountName (1-64 chars after trim, no control chars)
 //   - Base URL length: BaseURLMaxLen = 256
 const WizardSchema = z.object({
   db: z.object({
@@ -59,8 +59,7 @@ const WizardSchema = z.object({
       .string()
       .trim()
       .min(1, 'name is required')
-      .max(64)
-      .regex(/^[A-Za-z0-9_-]+$/, 'letters, digits, dashes, underscores only'),
+      .max(64, 'name must be at most 64 characters'),
     provider: z.literal('openai'),
     api_key: z.string().trim().min(1, 'API key is required'),
     base_url: z.string().trim().max(256).optional().or(z.literal('')),
@@ -788,11 +787,7 @@ function AccountStep({
 
       {authMethod === 'api_key' ? (
         <PanelCard title="Upstream">
-          <Field
-            htmlFor="account.name"
-            label="Nickname"
-            hint="Letters, digits, `-`, `_`. 1–64 chars."
-          >
+          <Field htmlFor="account.name" label="Nickname" hint="1–64 characters.">
             <Input
               id="account.name"
               data-testid="account.name"

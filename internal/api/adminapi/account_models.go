@@ -224,9 +224,9 @@ func (h *AccountModelHandler) RefreshModels(w http.ResponseWriter, r *http.Reque
 		"kept_manual", keptManual,
 	)
 	api.WriteOK(w, reqID, map[string]any{
-		"account_id":   accountID,
-		"added":        added,
-		"kept_manual":  keptManual,
+		"account_id":    accountID,
+		"added":         added,
+		"kept_manual":   keptManual,
 		"total_fetched": totalFetched,
 	})
 }

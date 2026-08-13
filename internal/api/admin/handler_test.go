@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,6 +260,8 @@ type fakeAccountRepo struct {
 	listActiveFn func(ctx context.Context) ([]domain.UpstreamAccount, error)
 
 	updateStatusErr error
+
+	updateDetailsFn func(ctx context.Context, id int64, patch core.AccountDetailsPatch) (*domain.UpstreamAccount, error)
 }
 
 func (f *fakeAccountRepo) Create(ctx context.Context, account *domain.UpstreamAccount) error {
@@ -292,6 +295,13 @@ func (f *fakeAccountRepo) ListActive(ctx context.Context) ([]domain.UpstreamAcco
 
 func (f *fakeAccountRepo) UpdateStatus(ctx context.Context, id int64, status string) error {
 	return f.updateStatusErr
+}
+
+func (f *fakeAccountRepo) UpdateDetails(ctx context.Context, id int64, patch core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	if f.updateDetailsFn != nil {
+		return f.updateDetailsFn(ctx, id, patch)
+	}
+	return nil, domain.ErrAccountNotFound
 }
 
 type fakeRequestRepo struct {
@@ -578,6 +588,82 @@ func TestGetAccount_Cases(t *testing.T) {
 
 func f64ptr(v float64) *float64 {
 	return &v
+}
+
+func TestUpdateAccount_Cases(t *testing.T) {
+	t.Run("bad id", func(t *testing.T) {
+		mux := setupHandlerWithRepos(t, &fakeAccountRepo{}, &fakeRequestRepo{})
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/admin/accounts/not-a-number/update", strings.NewReader(`{}`))
+		mux.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid body", func(t *testing.T) {
+		mux := setupHandlerWithRepos(t, &fakeAccountRepo{}, &fakeRequestRepo{})
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/admin/accounts/1/update", strings.NewReader(`{`))
+		mux.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		mux := setupHandlerWithRepos(t, &fakeAccountRepo{}, &fakeRequestRepo{})
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/admin/accounts/404/update", strings.NewReader(`{"name":"x"}`))
+		mux.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		ar := &fakeAccountRepo{
+			updateDetailsFn: func(_ context.Context, id int64, _ core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+				return &domain.UpstreamAccount{
+					ID:           id,
+					Name:         "renamed",
+					Provider:     domain.ProviderOpenAI,
+					Status:       domain.AccountStatusActive,
+					AuthMethod:   domain.AuthMethodAPIKey,
+					Capabilities: []string{"op.openai.responses"},
+				}, nil
+			},
+		}
+		mux := setupHandlerWithRepos(t, ar, &fakeRequestRepo{})
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/admin/accounts/1/update",
+			strings.NewReader(`{"name":"renamed","base_url":"https://api.openai.com"}`))
+		mux.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), `"renamed"`)
+		assert.Contains(t, w.Body.String(), `"op.openai.responses"`)
+	})
+
+	t.Run("validation error surfaces field", func(t *testing.T) {
+		ar := &fakeAccountRepo{
+			updateDetailsFn: func(context.Context, int64, core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+				return nil, &domain.ValidationError{Field: "name", Message: "account name must be 1-64 characters (after trimming) and free of control characters"}
+			},
+		}
+		mux := setupHandlerWithRepos(t, ar, &fakeRequestRepo{})
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/admin/accounts/1/update", strings.NewReader(`{"name":"\u0001bad"}`))
+		mux.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), `"field":"name"`)
+	})
+
+	t.Run("oauth row rejected", func(t *testing.T) {
+		ar := &fakeAccountRepo{
+			updateDetailsFn: func(context.Context, int64, core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+				return nil, fmt.Errorf("update details 1: %w: only api_key rows are editable (got %q)", domain.ErrInvalidAccountShape, domain.AuthMethodOAuthBrowser)
+			},
+		}
+		mux := setupHandlerWithRepos(t, ar, &fakeRequestRepo{})
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/admin/accounts/1/update", strings.NewReader(`{"name":"x"}`))
+		mux.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }
 
 func TestDisableAccount_Cases(t *testing.T) {

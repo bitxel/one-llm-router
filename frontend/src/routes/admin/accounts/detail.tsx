@@ -13,6 +13,7 @@ import { api } from '@/lib/api-client'
 import { planTypeLabel } from '@/lib/plan-label'
 import { callAdminAttachment } from '@/lib/router-api'
 import { strings } from './detail.strings'
+import { ApiKeyEditPanel } from './detail-edit'
 import { adminAccountDetailQueryKey, invalidateAdminAccountQueries } from './query-keys'
 import { formatQuotaDetail } from './quota-format'
 
@@ -40,6 +41,7 @@ interface AccountDetail {
   secondary_reset_at?: string | null
   primary_window_seconds?: number | null
   secondary_window_seconds?: number | null
+  capabilities?: string[] | null
 }
 
 interface AccountModel {
@@ -405,6 +407,8 @@ export function AdminAccountDetail() {
               />
             ) : null}
           </div>
+
+          {!showOAuthMetadata ? <ApiKeyEditPanel account={account} /> : null}
 
           <PanelCard title={strings.deleteTitle}>
             <div className="flex flex-wrap items-center justify-between gap-3">

@@ -3,9 +3,15 @@ package core
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +86,27 @@ func (r *inMemoryAccountRepo) UpdateStatus(_ context.Context, id int64, status s
 	return domain.ErrAccountNotFound
 }
 
+func (r *inMemoryAccountRepo) UpdateDetails(_ context.Context, id int64, patch AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	a, ok := r.accounts[id]
+	if !ok {
+		return nil, domain.ErrAccountNotFound
+	}
+	if patch.Name != nil {
+		a.Name = *patch.Name
+	}
+	if patch.APIKey != nil {
+		a.APIKey = *patch.APIKey
+	}
+	if patch.BaseURL != nil {
+		a.BaseURL = patch.BaseURL
+	}
+	if patch.Capabilities != nil {
+		a.Capabilities = patch.Capabilities
+	}
+	clone := *a
+	return &clone, nil
+}
+
 func newTestService() (*AccountService, *inMemoryAccountRepo) {
 	repo := newInMemoryAccountRepo()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -99,6 +126,22 @@ func TestAccountService_Create_EmptyName(t *testing.T) {
 	_, err := svc.Create(context.Background(), "", "openai", "sk-key", nil, nil)
 	require.Error(t, err)
 	assert.True(t, domain.IsValidationError(err))
+}
+
+func TestAccountService_Create_InvalidNameRejected(t *testing.T) {
+	svc, _ := newTestService()
+	for _, bad := range []string{"   ", "ctrl\x01name", "tab\there"} {
+		_, err := svc.Create(context.Background(), bad, "openai", "sk-key", nil, nil)
+		require.Error(t, err, bad)
+		assert.True(t, domain.IsValidationError(err), bad)
+	}
+}
+
+func TestAccountService_Create_TrimsAndAllowsMultiByteName(t *testing.T) {
+	svc, _ := newTestService()
+	acct, err := svc.Create(context.Background(), "  中文账户  ", "openai", "sk-key", nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "中文账户", acct.Name)
 }
 
 func TestAccountService_Create_EmptyAPIKey(t *testing.T) {
@@ -375,4 +418,145 @@ func TestAccountService_Delete_NotFound(t *testing.T) {
 	svc, _ := newTestService()
 	err := svc.Delete(context.Background(), 999)
 	assert.ErrorIs(t, err, domain.ErrAccountNotFound)
+}
+
+func TestAccountService_UpdateDetails_Success(t *testing.T) {
+	svc, _ := newTestService()
+	acct, err := svc.Create(context.Background(), "before", "openai", "sk-old", nil, []string{"op.openai.responses"})
+	require.NoError(t, err)
+
+	name := "中文名称"
+	key := "sk-new"
+	base := "https://api.openai.com"
+	updated, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{
+		Name:         &name,
+		APIKey:       &key,
+		BaseURL:      &base,
+		Capabilities: []string{"op.openai.chat_completions"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "中文名称", updated.Name)
+	assert.Equal(t, "sk-new", updated.APIKey)
+	require.NotNil(t, updated.BaseURL)
+	assert.Equal(t, "https://api.openai.com", *updated.BaseURL)
+	assert.Equal(t, []string{"op.openai.chat_completions"}, updated.Capabilities)
+}
+
+func TestAccountService_UpdateDetails_TrimsNameAndKey(t *testing.T) {
+	svc, _ := newTestService()
+	acct, err := svc.Create(context.Background(), "before", "openai", "sk-old", nil, nil)
+	require.NoError(t, err)
+
+	name := "  padded name  "
+	key := " sk-key-2 "
+	updated, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{
+		Name:   &name,
+		APIKey: &key,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "padded name", updated.Name)
+	assert.Equal(t, "sk-key-2", updated.APIKey)
+}
+
+func TestAccountService_UpdateDetails_BlankKeyKeepsExisting(t *testing.T) {
+	svc, _ := newTestService()
+	acct, err := svc.Create(context.Background(), "before", "openai", "sk-keep", nil, nil)
+	require.NoError(t, err)
+
+	blank := "   "
+	updated, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{APIKey: &blank})
+	require.NoError(t, err)
+	assert.Equal(t, "sk-keep", updated.APIKey, "blank api_key must keep the existing key")
+}
+
+func TestAccountService_UpdateDetails_ValidationErrors(t *testing.T) {
+	svc, _ := newTestService()
+	acct, err := svc.Create(context.Background(), "before", "openai", "sk-old", nil, nil)
+	require.NoError(t, err)
+
+	t.Run("control-character name", func(t *testing.T) {
+		bad := "ctrl\x01name"
+		_, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{Name: &bad})
+		require.Error(t, err)
+		assert.True(t, domain.IsValidationError(err))
+		assert.Contains(t, err.Error(), "name")
+	})
+
+	t.Run("blank name", func(t *testing.T) {
+		bad := "   "
+		_, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{Name: &bad})
+		require.Error(t, err)
+		assert.True(t, domain.IsValidationError(err))
+	})
+
+	t.Run("over-length key", func(t *testing.T) {
+		long := "sk-" + strings.Repeat("x", 300)
+		_, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{APIKey: &long})
+		require.Error(t, err)
+		assert.True(t, domain.IsValidationError(err))
+	})
+
+	t.Run("invalid base_url", func(t *testing.T) {
+		bad := "not-a-url"
+		_, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{BaseURL: &bad})
+		require.Error(t, err)
+		assert.True(t, domain.IsValidationError(err))
+	})
+
+	t.Run("unknown capability", func(t *testing.T) {
+		_, err := svc.UpdateDetails(context.Background(), acct.ID, AccountDetailsPatch{
+			Capabilities: []string{"op.openai.foo"},
+		})
+		require.Error(t, err)
+		assert.True(t, domain.IsValidationError(err))
+	})
+}
+
+func TestAccountService_UpdateDetails_NotFound(t *testing.T) {
+	svc, _ := newTestService()
+	name := "x"
+	_, err := svc.UpdateDetails(context.Background(), 999, AccountDetailsPatch{Name: &name})
+	assert.ErrorIs(t, err, domain.ErrAccountNotFound)
+}
+
+type recordingModelRepo struct {
+	mu  sync.Mutex
+	got map[int64][]string
+	err error
+}
+
+func (r *recordingModelRepo) ReplaceUpstreamModels(_ context.Context, accountID int64, modelIDs []string) (int, int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.got[accountID] = append([]string(nil), modelIDs...)
+	return len(modelIDs), 0, r.err
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+}
+
+func TestAccountService_Create_AutoRefreshesModels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-4o"},{"id":"gpt-5.6-luna"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	baseURL := srv.URL + "/v1"
+	refresher := NewModelRefresher(&http.Client{Timeout: 2 * time.Second}, "", "", discardLogger())
+	modelRepo := &recordingModelRepo{got: map[int64][]string{}}
+	svc := NewAccountService(newInMemoryAccountRepo(), discardLogger())
+	svc.SetModelRefresher(refresher, modelRepo)
+
+	acct, err := svc.Create(context.Background(), "auto-refresh", "openai", "sk-test", &baseURL, nil)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		modelRepo.mu.Lock()
+		defer modelRepo.mu.Unlock()
+		return len(modelRepo.got[acct.ID]) == 2
+	}, 3*time.Second, 50*time.Millisecond)
+	assert.Equal(t, []string{"gpt-4o", "gpt-5.6-luna"}, modelRepo.got[acct.ID])
 }

@@ -788,6 +788,7 @@ func registerSteadyStateRoutes(
 	mux.HandleFunc("POST /api/admin/accounts", wrapped.CreateAccount)
 	mux.HandleFunc("GET /api/admin/accounts", wrapped.ListAccounts)
 	mux.HandleFunc("GET /api/admin/accounts/{id}", wrapped.GetAccount)
+	mux.HandleFunc("POST /api/admin/accounts/{id}/update", wrapped.UpdateAccount)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/enable", wrapped.EnableAccount)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/disable", wrapped.DisableAccount)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/delete", wrapped.DeleteAccount)

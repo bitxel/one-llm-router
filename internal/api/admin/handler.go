@@ -191,6 +191,48 @@ func (h *Handler) GetAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newAccountListItemResponse(*account))
 }
 
+// UpdateAccount handles POST /api/admin/accounts/{id}/update — the
+// api_key-row edit surface. Only api_key accounts are editable; OAuth
+// rows return a 400 via handleAccountError. Field errors surface with a
+// `field` key so the envelope adapter can map them onto
+// invalid_account_payload.
+func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromPath(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid account ID"})
+		return
+	}
+
+	var req updateAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	account, err := h.accounts.UpdateDetails(r.Context(), id, core.AccountDetailsPatch{
+		Name:         req.Name,
+		APIKey:       req.APIKey,
+		BaseURL:      req.BaseURL,
+		Capabilities: req.Capabilities,
+	})
+	if err != nil {
+		var validationErr *domain.ValidationError
+		if errors.As(err, &validationErr) {
+			h.logger.Warn("update account validation failed",
+				"account_id", id, "field", validationErr.Field, "error", validationErr.Error())
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": validationErr.Error(),
+				"field": validationErr.Field,
+			})
+			return
+		}
+		h.handleAccountError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, newAccountListItemResponse(*account))
+}
+
 func (h *Handler) EnableAccount(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r)
 	if err != nil {
@@ -350,6 +392,18 @@ type accountCreateResponse struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Capabilities []string  `json:"capabilities,omitempty"`
+}
+
+// updateAccountRequest is the optional-field edit payload for
+// POST /api/admin/accounts/{id}/update. A pointer field is nil when the
+// key is absent (keep current) and non-nil when present (set; api_key
+// "" and base_url "" clear / no-op per the service-layer rules). This is
+// the api_key-row edit surface — OAuth rows are rejected downstream.
+type updateAccountRequest struct {
+	Name         *string  `json:"name,omitempty"`
+	APIKey       *string  `json:"api_key,omitempty"`
+	BaseURL      *string  `json:"base_url,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 type accountListItemResponse struct {
@@ -533,6 +587,8 @@ func (h *Handler) handleAccountError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "account is deleted"})
 	case errors.Is(err, domain.ErrInvalidTransition):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+	case errors.Is(err, domain.ErrInvalidAccountShape):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 	default:
 		h.logger.Error("unexpected account error", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})

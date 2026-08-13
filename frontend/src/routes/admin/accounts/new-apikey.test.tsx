@@ -117,6 +117,32 @@ describe('AdminAccountsNewAPIKey', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('API-key account created')
   })
 
+  it('accepts a multi-byte name client-side', async () => {
+    apiPostMock.mockResolvedValue({
+      id: 90,
+      name: '中文账户',
+      provider: 'openai',
+      status: 'active',
+      created_at: '2026-04-23T00:00:00Z',
+      updated_at: '2026-04-23T00:00:00Z',
+    } as never)
+    const user = userEvent.setup()
+    await renderAPIKeyRoute()
+
+    await user.type(screen.getByTestId('apikey-name-input'), '中文账户')
+    await user.type(screen.getByTestId('apikey-api-key-input'), 'sk-admin-key')
+    await user.click(screen.getByTestId('apikey-submit'))
+
+    expect(apiPostMock).toHaveBeenCalledWith('/api/admin/accounts', {
+      name: '中文账户',
+      provider: 'openai',
+      auth_method: 'api_key',
+      api_key: 'sk-admin-key',
+      base_url: undefined,
+      capabilities: undefined,
+    })
+  })
+
   it('passes an optional base_url only when provided', async () => {
     apiPostMock.mockResolvedValue({
       id: 89,

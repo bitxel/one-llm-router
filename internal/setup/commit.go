@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -272,7 +273,7 @@ func Commit(
 			baseURL = &v
 		}
 		account = &domain.UpstreamAccount{
-			Name:         req.FirstAccount.Name,
+			Name:         strings.TrimSpace(req.FirstAccount.Name),
 			Provider:     req.FirstAccount.Provider,
 			APIKey:       req.FirstAccount.APIKey,
 			BaseURL:      baseURL,

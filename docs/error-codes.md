@@ -87,7 +87,7 @@ Each feature should prefer numbers toward the **low end** of its range and leave
 | `2001` | `setup_already_done` | 200 | `config.json` is present on disk; setup wizard POSTs are no-ops. Client SPA should hard-navigate to `/admin/`. |
 | `2002` | `invalid_driver` | 200 | DB driver must be one of `sqlite3`, `postgres`, `mysql`. |
 | `2003` | `invalid_dsn` | 200 | DSN failed parse/probe. `data.hint` is an object with driver-specific remediation keys (e.g. `timeout_ms`, `sqlstate`, `driver_message`); unknown keys are ignored by clients. Contracts that emit this code (currently `contracts/setup-api.md`) MUST set `data.hint` on every non-parse failure and MAY set it on parse failures. |
-| `2004` | `invalid_account_name` | 200 | Account name must match `^[A-Za-z0-9_-]{1,64}$`. |
+| `2004` | `invalid_account_name` | 200 | Account name must be 1..64 characters (after trimming) and free of control characters. |
 | `2005` | `invalid_api_key` | 200 | `api_key` must be 1..256 characters. |
 | `2006` | `invalid_plugin_flag` | 200 | `plugins.<id>.enabled` must be a boolean and `<id>` must be known at this feature level. |
 | `2007` | `invalid_retention` | 200 | `runtime.log_retention_days` must be an integer in `[1, 365]`. (Pre-Round-3 alias `retention_days` is the same key.) |

@@ -90,6 +90,10 @@ func (failingProxyAccountRepo) UpdateStatus(context.Context, int64, string) erro
 	return errors.New("not used")
 }
 
+func (failingProxyAccountRepo) UpdateDetails(context.Context, int64, core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	return nil, errors.New("not used")
+}
+
 func newProxyHarness(t *testing.T, clientTimeout time.Duration) *proxyHarness {
 	t.Helper()
 
@@ -1906,7 +1910,7 @@ func TestBuildModelEligibleSet_NilRepo(t *testing.T) {
 	require.Nil(t, got)
 }
 
-func TestBuildModelEligibleSet_NoMatches(t *testing.T) {
+func TestBuildModelEligibleSet_ModelLessAccountIsEligible(t *testing.T) {
 	s, err := store.New("sqlite3", ":memory:", 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, s.Migrate("sqlite3"))
@@ -1928,7 +1932,35 @@ func TestBuildModelEligibleSet_NoMatches(t *testing.T) {
 	got, err := handler.buildModelEligibleSet(context.Background(), &model)
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	require.Empty(t, got)
+	_, ok := got[acct.ID]
+	require.True(t, ok, "an account with no configured models must be eligible for any model")
+}
+
+func TestBuildModelEligibleSet_ConstrainedAccountExcludedForUnknownModel(t *testing.T) {
+	s, err := store.New("sqlite3", ":memory:", 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, s.Migrate("sqlite3"))
+	t.Cleanup(func() { _ = s.Close() })
+
+	modelRepo := store.NewAccountModelRepo(s.Engine())
+	accountRepo := store.NewAccountRepo(s.Engine())
+
+	acct := &domain.UpstreamAccount{
+		Name:     "test-account",
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Status:   domain.AccountStatusActive,
+	}
+	require.NoError(t, accountRepo.Create(context.Background(), acct))
+	require.NoError(t, modelRepo.Insert(context.Background(), acct.ID, "gpt-4o", domain.AccountModelSourceManual))
+
+	handler := &ProxyHandler{accountModelRepo: modelRepo}
+	model := "gpt-5.6-luna"
+	got, err := handler.buildModelEligibleSet(context.Background(), &model)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	_, ok := got[acct.ID]
+	require.False(t, ok, "an account with models but not the requested one must be excluded")
 }
 
 func TestBuildModelEligibleSet_WithMatches(t *testing.T) {

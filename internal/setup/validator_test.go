@@ -48,8 +48,8 @@ func TestValidator_DSN(t *testing.T) {
 func TestValidator_AccountName(t *testing.T) {
 	t.Parallel()
 	v := NewValidator()
-	ok := []string{"prod-01", "my_account", "a", "A-Z_0-9"}
-	bad := []string{"", "has space", "../bad", "tooooooooooooooooooooooooooooooooooooooooooooooooooooooooooolong65"}
+	ok := []string{"prod-01", "my_account", "a", "A-Z_0-9", "has space", "中文账户", "alice@example.com"}
+	bad := []string{"", "   ", "tooooooooooooooooooooooooooooooooooooooooooooooooooooooooooolong65", "tab\there", "ctrl\x01"}
 	for _, s := range ok {
 		if err := v.AccountName(s); err != nil {
 			t.Errorf("AccountName(%q) rejected: %v", s, err)
@@ -362,7 +362,7 @@ func TestValidator_Commit_EveryCodeReachable(t *testing.T) {
 		},
 		{
 			name:     "bad account name 2004",
-			mutate:   func(r *CommitRequest) { r.FirstAccount.Name = "has space" },
+			mutate:   func(r *CommitRequest) { r.FirstAccount.Name = "ctrl\x01name" },
 			wantCode: errcode.InvalidAccountName, wantField: "first_account.name",
 		},
 		{

@@ -3,6 +3,7 @@ package adminapi
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -56,6 +57,7 @@ func setupAccountsHarness(t *testing.T) *accountsHarness {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/admin/accounts", wrapped.CreateAccount)
 	mux.HandleFunc("GET /api/admin/accounts", wrapped.ListAccounts)
+	mux.HandleFunc("POST /api/admin/accounts/{id}/update", wrapped.UpdateAccount)
 
 	return &accountsHarness{
 		mux:  mux,
@@ -383,6 +385,10 @@ func (f *fakeAccountRepo) ListActive(ctx context.Context) ([]domain.UpstreamAcco
 
 func (f *fakeAccountRepo) UpdateStatus(context.Context, int64, string) error { return nil }
 
+func (f *fakeAccountRepo) UpdateDetails(context.Context, int64, core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	return nil, domain.ErrAccountNotFound
+}
+
 type fakeRequestRepo struct{}
 
 func (*fakeRequestRepo) Insert(context.Context, *domain.RequestRecord) error { return nil }
@@ -397,5 +403,60 @@ func (*fakeRequestRepo) GetByID(context.Context, int64) (*domain.RequestRecord, 
 }
 func (*fakeRequestRepo) FilterOptions(context.Context, core.QueryParams) (core.RequestFilterOptions, error) {
 	return core.RequestFilterOptions{}, nil
+}
+
+func TestAccountsUpdate(t *testing.T) {
+	t.Run("updates an api_key row and returns the fresh row in the envelope", func(t *testing.T) {
+		h := setupAccountsHarness(t)
+
+		create := doAccountsRequest(t, h.mux, http.MethodPost, "/api/admin/accounts", `{"name":"before","provider":"openai","api_key":"sk-old","base_url":"https://api.openai.com","capabilities":["op.openai.responses"]}`)
+		testutil.AssertEnvelopeDataShape(t, create, 0)
+
+		rec := doAccountsRequest(t, h.mux, http.MethodPost, "/api/admin/accounts/1/update", `{"name":"renamed 账户","base_url":"","api_key":"sk-new","capabilities":["op.openai.chat_completions"]}`)
+		data := testutil.AssertEnvelopeDataShape(t, rec, 0)
+		assert.Equal(t, "renamed 账户", data["name"])
+		assert.Equal(t, []any{"op.openai.chat_completions"}, data["capabilities"])
+
+		row, err := h.repo.GetByID(context.Background(), 1)
+		require.NoError(t, err)
+		assert.Equal(t, "renamed 账户", row.Name)
+		assert.Equal(t, "sk-new", row.APIKey)
+		assert.Nil(t, row.BaseURL, "empty base_url in the patch must clear the stored value")
+	})
+
+	t.Run("rejects edits to oauth rows with a business envelope", func(t *testing.T) {
+		h := setupAccountsHarness(t)
+
+		lastRefresh := time.Date(2026, 4, 15, 10, 2, 17, 0, time.UTC)
+		accessExpiresAt := lastRefresh.Add(59 * time.Minute)
+		oauth := &domain.UpstreamAccount{
+			Name:            "oauth-row",
+			Provider:        domain.ProviderOpenAI,
+			Status:          domain.AccountStatusActive,
+			AuthMethod:      domain.AuthMethodOAuthBrowser,
+			AccessToken:     []byte("tok"),
+			RefreshToken:    []byte("tok-r"),
+			IDToken:         []byte("tok-i"),
+			LastRefresh:     &lastRefresh,
+			AccessExpiresAt: &accessExpiresAt,
+		}
+		id, err := h.repo.InsertUpstreamAccount(context.Background(), oauth)
+		require.NoError(t, err)
+
+		rec := doAccountsRequest(t, h.mux, http.MethodPost, fmt.Sprintf("/api/admin/accounts/%d/update", id), `{"name":"hijack"}`)
+		data := testutil.AssertEnvelopeDataShape(t, rec, errcode.InvalidAccountPayload)
+		assert.Contains(t, data["detail"].(string), "only api_key rows are editable")
+	})
+
+	t.Run("field validation errors surface the offending field in the envelope", func(t *testing.T) {
+		h := setupAccountsHarness(t)
+
+		create := doAccountsRequest(t, h.mux, http.MethodPost, "/api/admin/accounts", `{"name":"before","provider":"openai","api_key":"sk-old"}`)
+		testutil.AssertEnvelopeDataShape(t, create, 0)
+
+		rec := doAccountsRequest(t, h.mux, http.MethodPost, "/api/admin/accounts/1/update", `{"name":"ctrl\u0001name"}`)
+		data := testutil.AssertEnvelopeDataShape(t, rec, errcode.InvalidAccountPayload)
+		assert.Equal(t, "name", data["field"])
+	})
 }
 func (*fakeRequestRepo) DeleteBefore(context.Context, time.Time) (int64, error) { return 0, nil }

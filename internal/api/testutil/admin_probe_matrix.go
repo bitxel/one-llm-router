@@ -891,6 +891,30 @@ func EnvelopeParityProbes(oauthAccountID, apiKeyAccountID int64) []ParityProbe {
 			ExpectedEnvelope:    true,
 			ExpectedContentType: "application/json; charset=utf-8",
 		},
+		{
+			Name:                "account_update_success_enveloped",
+			OperationID:         "accountUpdate",
+			Method:              http.MethodPost,
+			Path:                fmt.Sprintf("/api/admin/accounts/%d/update", apiKeyAccountID),
+			Body:                []byte(`{"name":"renamed-by-parity"}`),
+			Headers:             JSONHeaders(),
+			ExpectedStatus:      http.StatusOK,
+			ExpectedCode:        errcode.OK,
+			ExpectedEnvelope:    true,
+			ExpectedContentType: "application/json; charset=utf-8",
+		},
+		{
+			Name:                "account_update_oauth_row_rejected_enveloped",
+			OperationID:         "accountUpdate",
+			Method:              http.MethodPost,
+			Path:                fmt.Sprintf("/api/admin/accounts/%d/update", oauthAccountID),
+			Body:                []byte(`{"name":"hijack"}`),
+			Headers:             JSONHeaders(),
+			ExpectedStatus:      http.StatusOK,
+			ExpectedCode:        errcode.InvalidAccountPayload,
+			ExpectedEnvelope:    true,
+			ExpectedContentType: "application/json; charset=utf-8",
+		},
 	}
 }
 
@@ -914,6 +938,8 @@ func RequiredEnvelopeParityProbeNames() []string {
 		"requestsList_empty_success_enveloped",
 		"requestsOptions_empty_success_enveloped",
 		"requestsGet_missing_record_enveloped",
+		"account_update_success_enveloped",
+		"account_update_oauth_row_rejected_enveloped",
 	}
 }
 

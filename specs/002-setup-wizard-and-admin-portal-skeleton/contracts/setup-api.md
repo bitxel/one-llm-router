@@ -187,7 +187,7 @@ The `db.driver` pre-condition ("MUST match a previously successful `probe-dsn` r
 | `db.driver` | string | yes | one of `sqlite3`, `postgres`, `mysql`; MUST match a previously successful `probe-dsn` result (non-file drivers only — `sqlite3` exempts the probe prereq) |
 | `db.url` | string | yes | ≤4096 chars |
 | `first_account` | object | **no** (v2.4) | when omitted, upstream-account seeding is deferred; partial blocks are rejected per individual field rules |
-| `first_account.name` | string | yes (when `first_account` is present) | 1..64 chars, `^[A-Za-z0-9_-]+$` |
+| `first_account.name` | string | yes (when `first_account` is present) | 1..64 characters after trimming; free of control characters (charset otherwise unrestricted) |
 | `first_account.provider` | string | yes (when `first_account` is present) | `"openai"` in 002 |
 | `first_account.api_key` | string | yes (when `first_account` is present) | 1..256 chars; never echoed back |
 | `first_account.base_url` | string \| null | no | if non-null, must be HTTPS URL ≤256 chars |
@@ -238,7 +238,7 @@ Side effects observable after `code = 0`:
 |---|---|---|---|---|
 | 200 | `2002` | `invalid_driver` | as probe | same validation as probe-dsn |
 | 200 | `2003` | `invalid_dsn` | as probe | same |
-| 200 | `2004` | `invalid_account_name` | "account name must match ^[A-Za-z0-9_-]{1,64}$" | regex violation |
+| 200 | `2004` | `invalid_account_name` | "account name must be 1-64 characters (after trimming) and free of control characters" | empty, over-length, or control-character name |
 | 200 | `2005` | `invalid_api_key` | "api_key must be 1..256 characters" | length violation |
 | 200 | `2006` | `invalid_plugin_flag` | "plugins.<id>.enabled must be a boolean" | non-boolean or missing `enabled` under any known plugin key |
 | 200 | `2007` | `invalid_retention` | "log_retention_days must be an integer in [1, 365]" | out of range |

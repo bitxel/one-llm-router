@@ -8,6 +8,7 @@ import (
 
 	"xorm.io/xorm"
 
+	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 )
 
@@ -718,6 +719,75 @@ func (r *AccountRepo) UpdateUsage(_ context.Context, id int64, snapshot UsageSna
 		return fmt.Errorf("update account %d usage: %w", id, err)
 	}
 	return nil
+}
+
+// UpdateDetails applies an optional-field edit to an api_key account
+// row (name / api_key / base_url / capabilities). It is the admin
+// edit surface for api_key accounts only:
+//
+//   - OAuth rows are rejected — their tokens are flow-minted and their
+//     metadata is observed upstream facts, neither of which an operator
+//     should hand-edit. Re-auth/re-import is the OAuth edit path.
+//   - Each pointer field in the patch is "set" when non-nil and "keep
+//     current" when nil; a nil BaseURL pointer writes SQL NULL (clears).
+//   - The final merged shape runs domain.Validate() before the UPDATE so
+//     the api_key invariants (non-empty key, OAuth fields all nil) are
+//     enforced on the stored row, not just in the service layer.
+//
+// Returns the freshly re-read row, domain.ErrAccountNotFound when no row
+// matches, domain.ErrAccountDeleted for deleted rows, and a wrapped
+// domain.ErrInvalidAccountShape for OAuth rows.
+func (r *AccountRepo) UpdateDetails(ctx context.Context, id int64, patch core.AccountDetailsPatch) (*domain.UpstreamAccount, error) {
+	acct, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if acct.Status == domain.AccountStatusDeleted {
+		return nil, domain.ErrAccountDeleted
+	}
+	if acct.AuthMethod != domain.AuthMethodAPIKey {
+		return nil, fmt.Errorf("update details %d: %w: only api_key rows are editable (got %q)",
+			id, domain.ErrInvalidAccountShape, acct.AuthMethod)
+	}
+
+	applied := *acct
+	cols := []string{"updated_at"}
+	if patch.Name != nil {
+		applied.Name = *patch.Name
+		cols = append(cols, "name")
+	}
+	if patch.APIKey != nil {
+		applied.APIKey = *patch.APIKey
+		cols = append(cols, "api_key")
+	}
+	if patch.BaseURL != nil {
+		if *patch.BaseURL == "" {
+			// Empty base_url clears the column to SQL NULL — xorm
+			// writes '' (not NULL) for a non-nil pointer, so drop the
+			// pointer to get a real NULL.
+			applied.BaseURL = nil
+		} else {
+			applied.BaseURL = patch.BaseURL
+		}
+		cols = append(cols, "base_url")
+	}
+	if patch.Capabilities != nil {
+		applied.Capabilities = patch.Capabilities
+		cols = append(cols, "capabilities")
+	}
+	if len(cols) == 1 {
+		// Empty patch (all fields kept) — do not bump updated_at or
+		// emit a meaningless UPDATE.
+		return acct, nil
+	}
+	if err := applied.Validate(); err != nil {
+		return nil, fmt.Errorf("update details %d: validate: %w", id, err)
+	}
+
+	if _, err := r.engine.ID(id).Cols(cols...).Update(&applied); err != nil {
+		return nil, fmt.Errorf("update details %d: %w", id, err)
+	}
+	return r.GetByID(ctx, id)
 }
 
 // UpdateStatusIfCurrent conditionally updates status only when the row

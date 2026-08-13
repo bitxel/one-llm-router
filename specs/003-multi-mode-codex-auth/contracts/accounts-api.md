@@ -102,6 +102,47 @@ All other errors identical to 002 (the envelope translation happens inside `admi
 
 ---
 
+## POST `/api/admin/accounts/{id}/update` — api_key-row edit
+
+Edit an existing **api_key** upstream account. OAuth rows are rejected (`ErrInvalidAccountShape` → `1008 invalid_account_payload`): their tokens are flow-minted and their metadata is observed upstream fact, neither of which the operator hand-edits — re-auth/re-import is the OAuth edit path.
+
+**Auth**: admin-auth plugin (same as every other `/api/admin/*` mutation).
+**Semantics**: optional-field patch — a field **omitted** (or `null`) keeps the current value; a field **present** is set. This is a POST (project RPC verb convention), not PATCH.
+
+### Request
+
+```json
+{
+  "name":         "renamed-account",
+  "api_key":      "sk-…",
+  "base_url":     "https://api.openai.com",
+  "capabilities": ["op.openai.responses"]
+}
+```
+
+| Field | Type | Semantics |
+|---|---|---|
+| `name` | string | optional; if present must be 1..64 characters after trimming (charset unrestricted; control characters rejected — see `domain.ValidAccountName`). Stored trimmed. |
+| `api_key` | string | optional; `""` (or absent) keeps the existing key; a non-empty value must be 1..256 characters and replaces the stored key. Never echoed back. |
+| `base_url` | string \| null | optional; `""` clears the stored override to NULL; a non-empty value must be an absolute http(s) URL ≤256 chars without query/fragment. |
+| `capabilities` | string[] | optional; absent/`null` keeps the current set; an array (incl. `[]`) replaces the whole set. Values restricted to known capability prefixes. |
+
+An entirely-empty request body (`{}`) is a no-op: the server returns the current row without touching `updated_at`.
+
+### Response (Success)
+
+HTTP 200 with the updated account row in `data` — same shape as `GET /api/admin/accounts/{id}` (`id`, `name`, `provider`, `base_url`, `status`, `created_at`, `updated_at`, `capabilities`; OAuth-only metadata absent for api_key rows).
+
+### Response (Errors)
+
+| HTTP | `code` | `msg` | When | `data` shape |
+|---|---|---|---|---|
+| 200 | 1003 | `invalid_account_payload` | Field validation failed (name/key/base_url/capabilities) or the target row is an OAuth account. | `{ "field": "name", "detail": "<server message>" }` |
+| 200 | 1001 | `account_not_found` | No row matches `{id}`. | `{}` |
+| 200 | 1004 | `account_already_in_state` | The row is deleted. | `{}` |
+
+---
+
 ## POST `/api/admin/accounts/import-auth-json` (NEW in 003)
 
 Import a local Codex CLI `~/.codex/auth.json` as a new OAuth upstream account (US-6).

@@ -21,7 +21,7 @@ export const strings = {
     baseURL: 'Base URL',
   },
   hints: {
-    name: 'Letters, digits, dashes, and underscores. 1-64 chars.',
+    name: '1-64 characters.',
     provider: '003 keeps direct API-key creation OpenAI-only.',
     apiKey:
       '1-256 characters. Stored verbatim in upstream_accounts; encryption-at-rest is deferred to the key-vault plugin.',
@@ -35,7 +35,7 @@ export const strings = {
   },
   validation: {
     nameRequired: 'name is required',
-    nameShape: 'letters, digits, dashes, underscores only',
+    nameMax: 'name must be at most 64 characters',
     apiKeyRequired: 'API key is required',
     apiKeyMax: 'API key must be 1-256 characters',
     baseURLMax: 'base_url must be <=256 characters',

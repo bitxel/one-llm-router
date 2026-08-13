@@ -11,24 +11,17 @@ import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { BASE_URL_MAX_LEN, CAPABILITY_OPTIONS, isValidBaseURL } from '@/lib/account-form'
 import { api } from '@/lib/api-client'
 import { strings } from './new-apikey.strings'
 import { invalidateAdminAccountQueries } from './query-keys'
-
-const CAPABILITY_OPTIONS = [
-  { value: 'op.openai.chat_completions', label: 'Chat Completions' },
-  { value: 'op.openai.responses', label: 'Responses' },
-] as const
-
-const BASE_URL_MAX_LEN = 256
 
 const APIKeyAccountSchema = z.object({
   name: z
     .string()
     .trim()
     .min(1, strings.validation.nameRequired)
-    .max(64)
-    .regex(/^[A-Za-z0-9_-]+$/, strings.validation.nameShape),
+    .max(64, strings.validation.nameMax),
   api_key: z
     .string()
     .trim()
@@ -228,15 +221,4 @@ export function AdminAccountsNewAPIKey() {
       </form>
     </Canvas>
   )
-}
-
-function isValidBaseURL(value: string): boolean {
-  try {
-    const parsed = new URL(value)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
-    if (!parsed.host) return false
-    return parsed.search === '' && parsed.hash === ''
-  } catch {
-    return false
-  }
 }
