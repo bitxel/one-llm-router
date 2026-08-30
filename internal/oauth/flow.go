@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/user/one-llm-router/internal/domain"
+	"github.com/user/one-llm-router/internal/proxydial"
 )
 
 const (
@@ -95,7 +96,13 @@ type Flow struct {
 type Provider interface {
 	BuildAuthorizeURL(state, verifier string) (string, error)
 	ExchangeCode(ctx context.Context, code, verifier string) (Tokens, error)
-	Refresh(ctx context.Context, refreshToken []byte) (Tokens, error)
+	// Refresh exchanges a refresh token for a fresh token bundle.
+	// useProxy routes the call through the global outbound proxy when
+	// the account opted in (Feature 009); a true value with no
+	// configured proxy fails as a transient request_failed so the
+	// existing fallback keeps the old access token — never a silent
+	// direct dial and never a permanent disable (spec 009 US-4).
+	Refresh(ctx context.Context, refreshToken []byte, useProxy bool) (Tokens, error)
 	RequestDeviceCode(ctx context.Context) (DeviceCode, error)
 	PollDeviceCode(ctx context.Context, deviceAuthID, userCode string) (Tokens, error)
 }
@@ -308,6 +315,12 @@ func loopbackProviderErrorPageHTML(providerError, description string) string {
 }
 
 type openAIProvider struct {
+	// httpClient is the test-injected client; when non-nil it wins for
+	// every egress decision (tests point it at httptest servers).
+	// Production egress clients (direct + proxied pair) are shared at
+	// package level — see defaultEgressClients — so the zero-value
+	// provider (`&openAIProvider{}` fallback in NewCoordinator(nil))
+	// and value copies (WithRedirectURI) stay lock-free.
 	httpClient     *http.Client
 	logger         *slog.Logger
 	redirectURI    string
@@ -316,6 +329,29 @@ type openAIProvider struct {
 	deviceCodeURL  string
 	deviceTokenURL string
 	now            func() time.Time
+}
+
+var (
+	defaultEgressOnce  sync.Once
+	defaultDirectHTTP  *http.Client
+	defaultProxiedHTTP *http.Client
+)
+
+// defaultEgressClients lazily builds the shared production egress
+// pair by cloning DefaultTransport so production tuning is preserved
+// while the Proxy func is fully explicit: direct never consults
+// environment variables (Feature 009 D3) and proxied reads the atomic
+// proxydial slot.
+func defaultEgressClients() (direct, proxied *http.Client) {
+	defaultEgressOnce.Do(func() {
+		base := http.DefaultTransport.(*http.Transport).Clone()
+		base.Proxy = nil
+		proxiedT := http.DefaultTransport.(*http.Transport).Clone()
+		proxiedT.Proxy = proxydial.ProxyFunc()
+		defaultDirectHTTP = &http.Client{Timeout: oauthHTTPTimeout, Transport: base}
+		defaultProxiedHTTP = &http.Client{Timeout: oauthHTTPTimeout, Transport: proxiedT}
+	})
+	return defaultDirectHTTP, defaultProxiedHTTP
 }
 
 var _ Provider = (*openAIProvider)(nil)
@@ -345,6 +381,45 @@ func NewOpenAIProvider(cfg OpenAIProviderConfig) (Provider, error) {
 		deviceTokenURL: cfg.DeviceTokenURL,
 		now:            cfg.Now,
 	}, nil
+}
+
+// egressClients returns the (direct, proxied) pair for this provider.
+// An injected test client is returned for both — tests own the socket.
+func (p *openAIProvider) egressClients() (direct, proxied *http.Client) {
+	if p != nil && p.httpClient != nil {
+		return p.httpClient, p.httpClient
+	}
+	return defaultEgressClients()
+}
+
+// clientForBind resolves the client for pre-account bind traffic
+// (token exchange, device code request/poll): configured global proxy
+// → proxied, otherwise direct (spec 009 §3.2).
+func (p *openAIProvider) clientForBind() *http.Client {
+	direct, proxied := p.egressClients()
+	if proxydial.Configured() {
+		return proxied
+	}
+	return direct
+}
+
+// clientForRefresh resolves the client for token refresh following the
+// account row. A stale opt-in (useProxy=true, nothing configured)
+// fails as transient request_failed — the coordinator's existing
+// fallback keeps serving the old access token.
+func (p *openAIProvider) clientForRefresh(useProxy bool) (*http.Client, error) {
+	direct, proxied := p.egressClients()
+	if !useProxy {
+		return direct, nil
+	}
+	if _, err := proxydial.Decide(true); err != nil {
+		return nil, &TokenExchangeError{
+			code: "request_failed",
+			message: "account use_proxy=true but network.proxy_url is not configured (" +
+				proxydial.ProxyRequiredHint + ")",
+		}
+	}
+	return proxied, nil
 }
 
 func validateOpenAIProviderConfig(cfg OpenAIProviderConfig) error {

@@ -5,9 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
+
+	"github.com/user/one-llm-router/internal/domain"
+	"github.com/user/one-llm-router/internal/proxydial"
 )
 
 var (
@@ -19,7 +24,14 @@ var (
 )
 
 type Client struct {
-	httpClient          *http.Client
+	// httpClient is the DIRECT egress client: its Transport has no
+	// Proxy set, so it never consults environment variables either —
+	// egress is exclusively governed by proxydial (Feature 009).
+	httpClient *http.Client
+	// proxiedHTTP shares the same tuning but routes through the
+	// process-wide proxy URL; the Proxy closure reads the atomic slot
+	// so settings updates hot-swap egress without rebuilding anything.
+	proxiedHTTP         *http.Client
 	codexBackendBaseURL string
 }
 
@@ -45,24 +57,33 @@ type UsageResponse struct {
 // NewClient creates an upstream HTTP client. The timeout applies only to
 // connection and TLS handshake, NOT to the full response — this is critical
 // for long-running SSE streams that may take minutes.
+//
+// Two pre-built clients are created (direct + proxied) so the per-request
+// choice in clientFor is a pointer select, never an allocation.
 func NewClient(timeout time.Duration) *Client {
-	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   timeout,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: timeout,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
-		DisableCompression:    true,
+	newTransport := func(proxyFn func(*http.Request) (*url.URL, error)) *http.Transport {
+		return &http.Transport{
+			Proxy:                 proxyFn,
+			DialContext:           (&net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}).DialContext,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: timeout,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       90 * time.Second,
+			DisableCompression:    true,
+		}
 	}
 
 	return &Client{
 		codexBackendBaseURL: ChatGPTBackendBaseURL,
 		httpClient: &http.Client{
-			Transport: transport,
+			Transport: newTransport(nil),
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		proxiedHTTP: &http.Client{
+			Transport: newTransport(proxydial.ProxyFunc()),
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -70,11 +91,48 @@ func NewClient(timeout time.Duration) *Client {
 	}
 }
 
+// httpClientFor resolves the pre-built client for one account-scoped
+// egress decision (Feature 009). useProxy=false → direct; useProxy=true
+// with a configured global proxy → proxied; useProxy=true WITHOUT a
+// configured proxy → proxydial.ErrProxyRequired. Callers MUST surface
+// that error as an upstream failure — silently falling back to direct
+// would violate the fail-fast constitution (spec 009 US-4). The warn
+// line carries the account id + actionable hint because it is the ONLY
+// diagnostic for this state.
+func (c *Client) httpClientFor(account domain.UpstreamAccount) (*http.Client, error) {
+	return c.httpClientForUseProxy(account.UseProxy, account.ID)
+}
+
+// httpClientForUseProxy is the same decision for paths that only carry
+// the flattened flag (bridge UpstreamRequest, FetchUsage). accountID is
+// used only for the stale-opt-in diagnostic.
+func (c *Client) httpClientForUseProxy(useProxy bool, accountID int64) (*http.Client, error) {
+	if !useProxy {
+		return c.httpClient, nil
+	}
+	if _, err := proxydial.Decide(true); err != nil {
+		slog.Warn("outbound proxy required but not configured",
+			"account_id", accountID,
+			"error", err.Error(),
+			"hint", proxydial.ProxyRequiredHint)
+		return nil, err
+	}
+	return c.proxiedHTTP, nil
+}
+
 func (c *Client) SetCodexBackendBaseURLForTest(baseURL string) {
 	c.codexBackendBaseURL = baseURL
 }
 
-func (c *Client) FetchUsage(ctx context.Context, accessToken string, chatGPTAccountID string) (*UsageResponse, error) {
+// FetchUsage queries the ChatGPT backend usage endpoint for one OAuth
+// account. useProxy is the account's outbound-proxy opt-in; a stale
+// opt-in with no configured proxy fails with proxydial.ErrProxyRequired
+// (the refresher logs it with the row id — never silently direct).
+func (c *Client) FetchUsage(ctx context.Context, accessToken string, chatGPTAccountID string, useProxy bool, accountID int64) (*UsageResponse, error) {
+	client, err := c.httpClientForUseProxy(useProxy, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve egress: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.codexBackendBaseURL+"/wham/usage", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create usage request: %w", err)
@@ -86,16 +144,15 @@ func (c *Client) FetchUsage(ctx context.Context, accessToken string, chatGPTAcco
 		req.Header.Set("chatgpt-account-id", chatGPTAccountID)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("do usage request: %w", err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 	resp, err = decompressResponse(resp)
 	if err != nil {
-		_ = resp.Body.Close()
 		return nil, fmt.Errorf("decompress usage response: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("usage request failed with status %d", resp.StatusCode)

@@ -1072,7 +1072,7 @@ func (c *Coordinator) refreshIfStaleOnce(ctx context.Context, acct *domain.Upstr
 			}
 		}()
 
-		tokens, err := c.provider.Refresh(ctx, cloneBytes(acct.RefreshToken))
+		tokens, err := c.provider.Refresh(ctx, cloneBytes(acct.RefreshToken), acct.UseProxy)
 		if err != nil {
 			return c.handleRefreshFailure(ctx, acct, providerName, lastRefresh, err)
 		}

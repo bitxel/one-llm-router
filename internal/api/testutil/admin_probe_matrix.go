@@ -648,6 +648,36 @@ func AdminMalformedProbes(
 			ExpectedStatus: http.StatusOK,
 			ExpectedCode:   errcode.AccountNotFound,
 		},
+		{
+			Name:           "account_proxy_set_malformed_json",
+			OperationID:    "accountProxySet",
+			Method:         http.MethodPost,
+			Path:           "/api/admin/accounts/1/proxy/set",
+			Headers:        JSONHeaders(),
+			Body:           []byte(`{"use_proxy":`),
+			ExpectedStatus: http.StatusOK,
+			ExpectedCode:   errcode.MalformedBody,
+		},
+		{
+			Name:           "account_proxy_set_account_not_found",
+			OperationID:    "accountProxySet",
+			Method:         http.MethodPost,
+			Path:           "/api/admin/accounts/999/proxy/set",
+			Headers:        JSONHeaders(),
+			Body:           []byte(`{"use_proxy":false}`),
+			ExpectedStatus: http.StatusOK,
+			ExpectedCode:   errcode.AccountNotFound,
+		},
+		{
+			Name:           "settings_proxy_test_malformed_json",
+			OperationID:    "settingsProxyTest",
+			Method:         http.MethodPost,
+			Path:           "/api/admin/settings/proxy/test",
+			Headers:        JSONHeaders(),
+			Body:           []byte(`{"proxy_url":`),
+			ExpectedStatus: http.StatusOK,
+			ExpectedCode:   errcode.MalformedBody,
+		},
 	}
 }
 
@@ -915,6 +945,54 @@ func EnvelopeParityProbes(oauthAccountID, apiKeyAccountID int64) []ParityProbe {
 			ExpectedEnvelope:    true,
 			ExpectedContentType: "application/json; charset=utf-8",
 		},
+		{
+			Name:                "account_proxy_set_success_enveloped",
+			OperationID:         "accountProxySet",
+			Method:              http.MethodPost,
+			Path:                fmt.Sprintf("/api/admin/accounts/%d/proxy/set", apiKeyAccountID),
+			Body:                []byte(`{"use_proxy":false}`),
+			Headers:             JSONHeaders(),
+			ExpectedStatus:      http.StatusOK,
+			ExpectedCode:        errcode.OK,
+			ExpectedEnvelope:    true,
+			ExpectedContentType: "application/json; charset=utf-8",
+		},
+		{
+			Name:                "account_proxy_set_proxy_required_enveloped",
+			OperationID:         "accountProxySet",
+			Method:              http.MethodPost,
+			Path:                fmt.Sprintf("/api/admin/accounts/%d/proxy/set", apiKeyAccountID),
+			Body:                []byte(`{"use_proxy":true}`),
+			Headers:             JSONHeaders(),
+			ExpectedStatus:      http.StatusOK,
+			ExpectedCode:        errcode.ProxyURLRequired,
+			ExpectedEnvelope:    true,
+			ExpectedContentType: "application/json; charset=utf-8",
+		},
+		{
+			Name:                "account_proxy_set_oauth_row_enveloped",
+			OperationID:         "accountProxySet",
+			Method:              http.MethodPost,
+			Path:                fmt.Sprintf("/api/admin/accounts/%d/proxy/set", oauthAccountID),
+			Body:                []byte(`{"use_proxy":false}`),
+			Headers:             JSONHeaders(),
+			ExpectedStatus:      http.StatusOK,
+			ExpectedCode:        errcode.OK,
+			ExpectedEnvelope:    true,
+			ExpectedContentType: "application/json; charset=utf-8",
+		},
+		{
+			Name:                "settings_proxy_test_invalid_url_enveloped",
+			OperationID:         "settingsProxyTest",
+			Method:              http.MethodPost,
+			Path:                "/api/admin/settings/proxy/test",
+			Body:                []byte(`{"proxy_url":"ftp://nope"}`),
+			Headers:             JSONHeaders(),
+			ExpectedStatus:      http.StatusOK,
+			ExpectedCode:        errcode.InvalidProxyURL,
+			ExpectedEnvelope:    true,
+			ExpectedContentType: "application/json; charset=utf-8",
+		},
 	}
 }
 
@@ -940,6 +1018,10 @@ func RequiredEnvelopeParityProbeNames() []string {
 		"requestsGet_missing_record_enveloped",
 		"account_update_success_enveloped",
 		"account_update_oauth_row_rejected_enveloped",
+		"account_proxy_set_success_enveloped",
+		"account_proxy_set_proxy_required_enveloped",
+		"account_proxy_set_oauth_row_enveloped",
+		"settings_proxy_test_invalid_url_enveloped",
 	}
 }
 
@@ -982,5 +1064,7 @@ func RequiredMalformedProbeNames() []string {
 		"account_models_add_empty_model_id",
 		"account_models_remove_empty_model_id",
 		"account_models_refresh_account_not_found",
+		"account_proxy_set_malformed_json",
+		"settings_proxy_test_malformed_json",
 	}
 }

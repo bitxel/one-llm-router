@@ -94,12 +94,12 @@ func (c *Client) ForwardAccountRequestWithCapture(ctx context.Context, account d
 	if account.IsOAuth() {
 		return c.ForwardCodexRequestWithCapture(ctx, account, string(token), original)
 	}
-	return c.ForwardRequestWithCapture(ctx, account.EffectiveBaseURL(), string(token), original)
+	return c.forwardRequestWithCapture(ctx, account.EffectiveBaseURL(), string(token), account.UseProxy, account.ID, original)
 }
 
 func (c *Client) ForwardGatewayRequestWithCapture(ctx context.Context, account domain.UpstreamAccount, token []byte, original *http.Request, route GatewayRoute) (*http.Response, ForwardCapture, error) {
 	if !account.IsOAuth() {
-		return c.ForwardRequestWithCapture(ctx, account.EffectiveBaseURL(), string(token), original)
+		return c.forwardRequestWithCapture(ctx, account.EffectiveBaseURL(), string(token), account.UseProxy, account.ID, original)
 	}
 	switch route.OAuthBehavior {
 	case GatewayOAuthBehaviorModelsFacade:
@@ -131,7 +131,12 @@ func (c *Client) ForwardBridgeRequestWithCapture(ctx context.Context, upstream U
 		req.ContentLength = int64(len(upstream.RawBody))
 	}
 
-	resp, err := c.httpClient.Do(req)
+	httpClient, err := c.httpClientForUseProxy(upstream.UseProxy, upstream.AccountID)
+	if err != nil {
+		return nil, ForwardCapture{}, fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err)
+	}
+
+	resp, err := httpClient.Do(req)
 	capture := ForwardCapture{UpstreamRequestBody: append([]byte(nil), upstream.RawBody...)}
 	if err != nil {
 		if errors.Is(err, ErrRequestBodyTooLarge) {
@@ -230,12 +235,7 @@ func isChatGPTContract(contract Contract) bool {
 	return strings.HasPrefix(string(contract), "contract.chatgpt.")
 }
 
-func (c *Client) ForwardRequest(ctx context.Context, upstreamBaseURL, apiKey string, original *http.Request) (*http.Response, error) {
-	resp, _, err := c.ForwardRequestWithCapture(ctx, upstreamBaseURL, apiKey, original)
-	return resp, err
-}
-
-func (c *Client) ForwardRequestWithCapture(ctx context.Context, upstreamBaseURL, apiKey string, original *http.Request) (*http.Response, ForwardCapture, error) {
+func (c *Client) forwardRequestWithCapture(ctx context.Context, upstreamBaseURL, apiKey string, useProxy bool, accountID int64, original *http.Request) (*http.Response, ForwardCapture, error) {
 	upstreamPath := stripV1Prefix(original.URL.Path)
 	targetURL := strings.TrimRight(upstreamBaseURL, "/") + upstreamPath
 	if original.URL.RawQuery != "" {
@@ -261,7 +261,11 @@ func (c *Client) ForwardRequestWithCapture(ctx context.Context, upstreamBaseURL,
 	copyForwardHeaders(req.Header, original.Header)
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := c.httpClient.Do(req)
+	httpClient, err := c.httpClientForUseProxy(useProxy, accountID)
+	if err != nil {
+		return nil, ForwardCapture{UpstreamRequestBody: bodyBytes}, fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err)
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		if isTimeout(err) {
 			return nil, ForwardCapture{UpstreamRequestBody: bodyBytes}, ErrUpstreamTimeout
@@ -333,7 +337,11 @@ func (c *Client) ForwardCodexRouteWithCapture(ctx context.Context, account domai
 		req.Header.Set("Accept-Encoding", "identity")
 	}
 
-	resp, err := c.httpClient.Do(req)
+	httpClient, err := c.httpClientFor(account)
+	if err != nil {
+		return nil, ForwardCapture{UpstreamRequestBody: body.upstreamBody}, fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err)
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		if errors.Is(err, ErrRequestBodyTooLarge) {
 			return nil, ForwardCapture{UpstreamRequestBody: body.upstreamBody}, ErrRequestBodyTooLarge

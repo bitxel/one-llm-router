@@ -70,7 +70,7 @@ const pendingDeviceSnapshot: OAuthFlowSnapshot = {
   created_at: '2026-04-15T10:00:00Z',
   expires_at: '2026-04-15T10:15:00Z',
 }
-const successSnapshot: OAuthFlowSnapshot = {
+const successSnapshot: Extract<OAuthFlowSnapshot, { status: 'success' }> = {
   status: 'success',
   method: 'device',
   flow_id: 'fl_device_pending_1234567890',
@@ -80,6 +80,7 @@ const successSnapshot: OAuthFlowSnapshot = {
     provider: 'openai',
     auth_method: 'oauth_device',
     status: 'active',
+    use_proxy: false,
   },
 }
 const expiredSnapshot: OAuthFlowSnapshot = {

@@ -90,6 +90,7 @@ func (f *fakeModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID int
 func newFakeHandler(client *http.Client) *AccountModelHandler {
 	modelRefresher := core.NewModelRefresher(
 		client,
+		nil,
 		"",
 		"0.160.0",
 		slog.Default(),

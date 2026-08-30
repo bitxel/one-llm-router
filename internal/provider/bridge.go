@@ -108,6 +108,12 @@ type BuildInput struct {
 	// bridges. Provider-specific packages decide which keys they understand.
 	AccountMetadata domain.JSONMap
 	UpstreamBaseURL string
+	// UseProxy is the selected account's outbound-proxy opt-in (Feature
+	// 009). It is flattened onto UpstreamRequest because the bridge layer
+	// never sees the account row itself.
+	UseProxy bool
+	// AccountID identifies the selected row in diagnostic logs only.
+	AccountID int64
 }
 
 type UpstreamRequest struct {
@@ -124,6 +130,10 @@ type UpstreamRequest struct {
 	ContentLength int64
 	Headers       http.Header
 	Metadata      domain.JSONMap
+	// UseProxy + AccountID carry the 009 egress decision and the log
+	// identity to the transport layer (see openai.Client).
+	UseProxy  bool
+	AccountID int64
 }
 
 func (r UpstreamRequest) Contract() Contract {

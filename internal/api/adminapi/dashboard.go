@@ -130,7 +130,7 @@ func dashboardInvalidFilter(field, reason string) (generatedadminapi.DashboardGe
 func dashboardSystemError(error) generatedadminapi.DashboardGetResponseObject {
 	return generatedadminapi.DashboardGet500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N5900,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN5900,
 			Data: map[string]interface{}{},
 			Msg:  errcode.Symbol(errcode.DashboardInternalError),
 		},
@@ -159,6 +159,7 @@ func generatedDashboardAccountOptions(options []core.DashboardAccountOption) []g
 			LastRefresh:      option.LastRefresh,
 			AccessExpiresAt:  option.AccessExpiresAt,
 		}
+		account.UseProxy = option.UseProxy
 		if option.PlanType != nil {
 			label := PlanTypeLabel(*option.PlanType)
 			account.PlanTypeLabel = &label
@@ -293,7 +294,7 @@ func (h *DashboardHandler) SettingsUpdate(context.Context, generatedadminapi.Set
 func (h *DashboardHandler) AccountModelsList(ctx context.Context, request generatedadminapi.AccountModelsListRequestObject) (generatedadminapi.AccountModelsListResponseObject, error) {
 	return generatedadminapi.AccountModelsList500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -303,7 +304,27 @@ func (h *DashboardHandler) AccountModelsList(ctx context.Context, request genera
 func (h *DashboardHandler) AccountModelAdd(ctx context.Context, request generatedadminapi.AccountModelAddRequestObject) (generatedadminapi.AccountModelAddResponseObject, error) {
 	return generatedadminapi.AccountModelAdd500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *DashboardHandler) AccountProxySet(ctx context.Context, request generatedadminapi.AccountProxySetRequestObject) (generatedadminapi.AccountProxySetResponseObject, error) {
+	return generatedadminapi.AccountProxySet500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *DashboardHandler) SettingsProxyTest(ctx context.Context, request generatedadminapi.SettingsProxyTestRequestObject) (generatedadminapi.SettingsProxyTestResponseObject, error) {
+	return generatedadminapi.SettingsProxyTest500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -313,7 +334,7 @@ func (h *DashboardHandler) AccountModelAdd(ctx context.Context, request generate
 func (h *DashboardHandler) AccountModelRefresh(ctx context.Context, request generatedadminapi.AccountModelRefreshRequestObject) (generatedadminapi.AccountModelRefreshResponseObject, error) {
 	return generatedadminapi.AccountModelRefresh500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -323,7 +344,7 @@ func (h *DashboardHandler) AccountModelRefresh(ctx context.Context, request gene
 func (h *DashboardHandler) AccountModelRemove(ctx context.Context, request generatedadminapi.AccountModelRemoveRequestObject) (generatedadminapi.AccountModelRemoveResponseObject, error) {
 	return generatedadminapi.AccountModelRemove500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},

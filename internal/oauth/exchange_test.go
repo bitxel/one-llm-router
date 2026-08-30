@@ -106,7 +106,7 @@ func TestExchange(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		provider := newTestOpenAIProvider(srv.URL + "/oauth/token")
-		tokens, err := provider.Refresh(context.Background(), []byte("refresh-me"))
+		tokens, err := provider.Refresh(context.Background(), []byte("refresh-me"), false)
 		if !assert.NoError(t, err) {
 			return
 		}
@@ -191,7 +191,7 @@ func TestExchange(t *testing.T) {
 		var logs bytes.Buffer
 		provider := newTestOpenAIProvider(srv.URL + "/oauth/token")
 		provider.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-		_, err := provider.Refresh(context.Background(), []byte("refresh-secret"))
+		_, err := provider.Refresh(context.Background(), []byte("refresh-secret"), false)
 		if !assert.Error(t, err) {
 			return
 		}

@@ -55,6 +55,7 @@ type DashboardAccountOption struct {
 	ChatGPTAccountID *string
 	LastRefresh      *time.Time
 	AccessExpiresAt  *time.Time
+	UseProxy         bool
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
@@ -260,6 +261,7 @@ func dashboardAccountOption(account domain.UpstreamAccount) DashboardAccountOpti
 		Status:     account.Status,
 		CreatedAt:  account.CreatedAt,
 		UpdatedAt:  account.UpdatedAt,
+		UseProxy:   account.UseProxy,
 	}
 	if account.AuthMethod != domain.AuthMethodAPIKey {
 		option.Email = account.Email

@@ -217,7 +217,7 @@ func (*startDeviceProvider) ExchangeCode(context.Context, string, string) (oauth
 	return oauth.Tokens{}, errors.New("startDeviceProvider.ExchangeCode: not implemented")
 }
 
-func (*startDeviceProvider) Refresh(context.Context, []byte) (oauth.Tokens, error) {
+func (*startDeviceProvider) Refresh(context.Context, []byte, bool) (oauth.Tokens, error) {
 	return oauth.Tokens{}, errors.New("startDeviceProvider.Refresh: not implemented")
 }
 

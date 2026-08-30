@@ -126,7 +126,11 @@ func (c *Client) RunPlayground(ctx context.Context, account domain.UpstreamAccou
 		upstreamReq.Header.Set("chatgpt-account-id", *account.ChatGPTAccountID)
 	}
 
-	resp, err := c.httpClient.Do(upstreamReq)
+	httpClient, err := c.httpClientFor(account)
+	if err != nil {
+		return nil, fmt.Errorf("resolve playground egress: %w", err)
+	}
+	resp, err := httpClient.Do(upstreamReq)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()

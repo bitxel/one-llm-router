@@ -151,9 +151,24 @@ const (
 // code 8001 is registered here for operator observability and potential
 // admin API use.
 const (
-	AccountModelDuplicate    = 8002
+	AccountModelDuplicate     = 8002
 	AccountModelRefreshFailed = 8003
 	AccountModelInternalError = 8900
+)
+
+// Feature 009 — Outbound proxy.
+//
+// Business errors are served at HTTP 200 per the envelope policy. 9001
+// guards the settings write path, 9002 guards the per-account opt-in,
+// and 9003 reports a failed connectivity probe from
+// POST /api/admin/settings/proxy/test. The runtime stale-opt-in
+// defence deliberately does NOT mint a code: the data plane keeps its
+// native 502-class provider semantics and the refresh path reuses the
+// transient request_failed classification.
+const (
+	InvalidProxyURL  = 9001
+	ProxyURLRequired = 9002
+	ProxyTestFailed  = 9003
 )
 
 // legacyOK1000 is the pre-envelope success alias kept only so wrapped 001
@@ -244,6 +259,10 @@ var symbols = map[int]string{
 	AccountModelDuplicate:     "account_model_duplicate",
 	AccountModelRefreshFailed: "account_model_refresh_failed",
 	AccountModelInternalError: "account_model_internal_error",
+
+	InvalidProxyURL:  "invalid_proxy_url",
+	ProxyURLRequired: "proxy_url_required",
+	ProxyTestFailed:  "proxy_test_failed",
 }
 
 // Symbol returns the registered snake_case symbol for code, or the empty

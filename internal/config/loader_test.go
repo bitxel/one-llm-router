@@ -189,6 +189,7 @@ func TestLoad_HappyPath_AllFieldsFileSourced(t *testing.T) {
 		"runtime.model_renames":              "file",
 		"plugins.admin_auth.enabled":         "file",
 		"plugins.client_keys.enabled":        "file",
+		"network.proxy_url":                  "file",
 	}
 	if len(src) != len(wantSources) {
 		t.Errorf("source map size = %d, want %d; full=%#v", len(src), len(wantSources), src)
@@ -520,7 +521,7 @@ func TestLoad_SourceMap_HasExactlyTenKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	const wantKeys = 10
+	const wantKeys = 11
 	if got := len(src); got != wantKeys {
 		dump, _ := json.MarshalIndent(src, "", "  ")
 		t.Errorf("SourceMap has %d keys, want %d; dump=%s", got, wantKeys, dump)

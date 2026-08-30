@@ -714,7 +714,7 @@ func (p *consumeProvider) ExchangeCode(_ context.Context, _, _ string) (Tokens, 
 	return p.tokens, nil
 }
 
-func (*consumeProvider) Refresh(context.Context, []byte) (Tokens, error) {
+func (*consumeProvider) Refresh(context.Context, []byte, bool) (Tokens, error) {
 	return Tokens{}, errors.New("not used in consume tests")
 }
 

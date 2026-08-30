@@ -16,6 +16,36 @@ const (
 	AdminAuthScopes = "adminAuth.Scopes"
 )
 
+// Defines values for AccountAlreadyInStateEnvelopeCode.
+const (
+	N1004 AccountAlreadyInStateEnvelopeCode = 1004
+)
+
+// Valid indicates whether the value is a known member of the AccountAlreadyInStateEnvelopeCode enum.
+func (e AccountAlreadyInStateEnvelopeCode) Valid() bool {
+	switch e {
+	case N1004:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountAlreadyInStateEnvelopeMsg.
+const (
+	AccountAlreadyInState AccountAlreadyInStateEnvelopeMsg = "account_already_in_state"
+)
+
+// Valid indicates whether the value is a known member of the AccountAlreadyInStateEnvelopeMsg enum.
+func (e AccountAlreadyInStateEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountAlreadyInState:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AccountListItemAuthMethod.
 const (
 	AccountListItemAuthMethodApiKey       AccountListItemAuthMethod = "api_key"
@@ -310,6 +340,36 @@ const (
 func (e AccountNotFoundEnvelopeMsg) Valid() bool {
 	switch e {
 	case AccountNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountProxySetSuccessEnvelopeCode.
+const (
+	AccountProxySetSuccessEnvelopeCodeN0 AccountProxySetSuccessEnvelopeCode = 0
+)
+
+// Valid indicates whether the value is a known member of the AccountProxySetSuccessEnvelopeCode enum.
+func (e AccountProxySetSuccessEnvelopeCode) Valid() bool {
+	switch e {
+	case AccountProxySetSuccessEnvelopeCodeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountProxySetSuccessEnvelopeMsg.
+const (
+	AccountProxySetSuccessEnvelopeMsgOk AccountProxySetSuccessEnvelopeMsg = "ok"
+)
+
+// Valid indicates whether the value is a known member of the AccountProxySetSuccessEnvelopeMsg enum.
+func (e AccountProxySetSuccessEnvelopeMsg) Valid() bool {
+	switch e {
+	case AccountProxySetSuccessEnvelopeMsgOk:
 		return true
 	default:
 		return false
@@ -660,40 +720,40 @@ func (e EnvOverrideReadonlyEnvelopeMsg) Valid() bool {
 
 // Defines values for EnvelopeSystemErrorCode.
 const (
-	Minus1 EnvelopeSystemErrorCode = -1
-	N1900  EnvelopeSystemErrorCode = 1900
-	N1901  EnvelopeSystemErrorCode = 1901
-	N2903  EnvelopeSystemErrorCode = 2903
-	N3900  EnvelopeSystemErrorCode = 3900
-	N3901  EnvelopeSystemErrorCode = 3901
-	N3902  EnvelopeSystemErrorCode = 3902
-	N4900  EnvelopeSystemErrorCode = 4900
-	N5900  EnvelopeSystemErrorCode = 5900
-	N6900  EnvelopeSystemErrorCode = 6900
+	EnvelopeSystemErrorCodeMinus1 EnvelopeSystemErrorCode = -1
+	EnvelopeSystemErrorCodeN1900  EnvelopeSystemErrorCode = 1900
+	EnvelopeSystemErrorCodeN1901  EnvelopeSystemErrorCode = 1901
+	EnvelopeSystemErrorCodeN2903  EnvelopeSystemErrorCode = 2903
+	EnvelopeSystemErrorCodeN3900  EnvelopeSystemErrorCode = 3900
+	EnvelopeSystemErrorCodeN3901  EnvelopeSystemErrorCode = 3901
+	EnvelopeSystemErrorCodeN3902  EnvelopeSystemErrorCode = 3902
+	EnvelopeSystemErrorCodeN4900  EnvelopeSystemErrorCode = 4900
+	EnvelopeSystemErrorCodeN5900  EnvelopeSystemErrorCode = 5900
+	EnvelopeSystemErrorCodeN6900  EnvelopeSystemErrorCode = 6900
 )
 
 // Valid indicates whether the value is a known member of the EnvelopeSystemErrorCode enum.
 func (e EnvelopeSystemErrorCode) Valid() bool {
 	switch e {
-	case Minus1:
+	case EnvelopeSystemErrorCodeMinus1:
 		return true
-	case N1900:
+	case EnvelopeSystemErrorCodeN1900:
 		return true
-	case N1901:
+	case EnvelopeSystemErrorCodeN1901:
 		return true
-	case N2903:
+	case EnvelopeSystemErrorCodeN2903:
 		return true
-	case N3900:
+	case EnvelopeSystemErrorCodeN3900:
 		return true
-	case N3901:
+	case EnvelopeSystemErrorCodeN3901:
 		return true
-	case N3902:
+	case EnvelopeSystemErrorCodeN3902:
 		return true
-	case N4900:
+	case EnvelopeSystemErrorCodeN4900:
 		return true
-	case N5900:
+	case EnvelopeSystemErrorCodeN5900:
 		return true
-	case N6900:
+	case EnvelopeSystemErrorCodeN6900:
 		return true
 	default:
 		return false
@@ -949,6 +1009,36 @@ const (
 func (e ImportAuthJSONSuccessEnvelopeMsg) Valid() bool {
 	switch e {
 	case ImportAuthJSONSuccessEnvelopeMsgOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InternalErrorEnvelopeCode.
+const (
+	InternalErrorEnvelopeCodeN1901 InternalErrorEnvelopeCode = 1901
+)
+
+// Valid indicates whether the value is a known member of the InternalErrorEnvelopeCode enum.
+func (e InternalErrorEnvelopeCode) Valid() bool {
+	switch e {
+	case InternalErrorEnvelopeCodeN1901:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InternalErrorEnvelopeMsg.
+const (
+	InternalError InternalErrorEnvelopeMsg = "internal_error"
+)
+
+// Valid indicates whether the value is a known member of the InternalErrorEnvelopeMsg enum.
+func (e InternalErrorEnvelopeMsg) Valid() bool {
+	switch e {
+	case InternalError:
 		return true
 	default:
 		return false
@@ -1288,6 +1378,36 @@ const (
 func (e InvalidPluginFlagEnvelopeMsg) Valid() bool {
 	switch e {
 	case InvalidPluginFlag:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvalidProxyURLEnvelopeCode.
+const (
+	N9001 InvalidProxyURLEnvelopeCode = 9001
+)
+
+// Valid indicates whether the value is a known member of the InvalidProxyURLEnvelopeCode enum.
+func (e InvalidProxyURLEnvelopeCode) Valid() bool {
+	switch e {
+	case N9001:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvalidProxyURLEnvelopeMsg.
+const (
+	InvalidProxyUrl InvalidProxyURLEnvelopeMsg = "invalid_proxy_url"
+)
+
+// Valid indicates whether the value is a known member of the InvalidProxyURLEnvelopeMsg enum.
+func (e InvalidProxyURLEnvelopeMsg) Valid() bool {
+	switch e {
+	case InvalidProxyUrl:
 		return true
 	default:
 		return false
@@ -2191,6 +2311,96 @@ func (e PluginIntentId) Valid() bool {
 	}
 }
 
+// Defines values for ProxyTestFailedEnvelopeCode.
+const (
+	N9003 ProxyTestFailedEnvelopeCode = 9003
+)
+
+// Valid indicates whether the value is a known member of the ProxyTestFailedEnvelopeCode enum.
+func (e ProxyTestFailedEnvelopeCode) Valid() bool {
+	switch e {
+	case N9003:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProxyTestFailedEnvelopeMsg.
+const (
+	ProxyTestFailed ProxyTestFailedEnvelopeMsg = "proxy_test_failed"
+)
+
+// Valid indicates whether the value is a known member of the ProxyTestFailedEnvelopeMsg enum.
+func (e ProxyTestFailedEnvelopeMsg) Valid() bool {
+	switch e {
+	case ProxyTestFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProxyTestSuccessEnvelopeCode.
+const (
+	ProxyTestSuccessEnvelopeCodeN0 ProxyTestSuccessEnvelopeCode = 0
+)
+
+// Valid indicates whether the value is a known member of the ProxyTestSuccessEnvelopeCode enum.
+func (e ProxyTestSuccessEnvelopeCode) Valid() bool {
+	switch e {
+	case ProxyTestSuccessEnvelopeCodeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProxyTestSuccessEnvelopeMsg.
+const (
+	ProxyTestSuccessEnvelopeMsgOk ProxyTestSuccessEnvelopeMsg = "ok"
+)
+
+// Valid indicates whether the value is a known member of the ProxyTestSuccessEnvelopeMsg enum.
+func (e ProxyTestSuccessEnvelopeMsg) Valid() bool {
+	switch e {
+	case ProxyTestSuccessEnvelopeMsgOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProxyURLRequiredEnvelopeCode.
+const (
+	N9002 ProxyURLRequiredEnvelopeCode = 9002
+)
+
+// Valid indicates whether the value is a known member of the ProxyURLRequiredEnvelopeCode enum.
+func (e ProxyURLRequiredEnvelopeCode) Valid() bool {
+	switch e {
+	case N9002:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProxyURLRequiredEnvelopeMsg.
+const (
+	ProxyUrlRequired ProxyURLRequiredEnvelopeMsg = "proxy_url_required"
+)
+
+// Valid indicates whether the value is a known member of the ProxyURLRequiredEnvelopeMsg enum.
+func (e ProxyURLRequiredEnvelopeMsg) Valid() bool {
+	switch e {
+	case ProxyUrlRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RailName.
 const (
 	Loopback    RailName = "loopback"
@@ -2574,13 +2784,13 @@ func (e UnknownConfigKeyEnvelopeMsg) Valid() bool {
 
 // Defines values for UsageEnvelopeCode.
 const (
-	N0 UsageEnvelopeCode = 0
+	UsageEnvelopeCodeN0 UsageEnvelopeCode = 0
 )
 
 // Valid indicates whether the value is a known member of the UsageEnvelopeCode enum.
 func (e UsageEnvelopeCode) Valid() bool {
 	switch e {
-	case N0:
+	case UsageEnvelopeCodeN0:
 		return true
 	default:
 		return false
@@ -2589,18 +2799,31 @@ func (e UsageEnvelopeCode) Valid() bool {
 
 // Defines values for UsageEnvelopeMsg.
 const (
-	Ok UsageEnvelopeMsg = "ok"
+	UsageEnvelopeMsgOk UsageEnvelopeMsg = "ok"
 )
 
 // Valid indicates whether the value is a known member of the UsageEnvelopeMsg enum.
 func (e UsageEnvelopeMsg) Valid() bool {
 	switch e {
-	case Ok:
+	case UsageEnvelopeMsgOk:
 		return true
 	default:
 		return false
 	}
 }
+
+// AccountAlreadyInStateEnvelope defines model for AccountAlreadyInStateEnvelope.
+type AccountAlreadyInStateEnvelope struct {
+	Code AccountAlreadyInStateEnvelopeCode `json:"code"`
+	Data map[string]interface{}            `json:"data"`
+	Msg  AccountAlreadyInStateEnvelopeMsg  `json:"msg"`
+}
+
+// AccountAlreadyInStateEnvelopeCode defines model for AccountAlreadyInStateEnvelope.Code.
+type AccountAlreadyInStateEnvelopeCode int
+
+// AccountAlreadyInStateEnvelopeMsg defines model for AccountAlreadyInStateEnvelope.Msg.
+type AccountAlreadyInStateEnvelopeMsg string
 
 // AccountListItem Admin projection of an account row. Works for both API-key and
 // OAuth accounts; OAuth-only fields (`email`, `plan_type`,
@@ -2645,6 +2868,12 @@ type AccountListItem struct {
 	Provider  string                `json:"provider"`
 	Status    AccountListItemStatus `json:"status"`
 	UpdatedAt *time.Time            `json:"updated_at,omitempty"`
+
+	// UseProxy Feature 009 per-account outbound-proxy opt-in. Present on
+	// every auth_method. false (default) = direct egress; true =
+	// dial through the global `network.proxy_url` (fails fast as
+	// an upstream error when the proxy was later removed).
+	UseProxy bool `json:"use_proxy"`
 }
 
 // AccountListItemAuthMethod defines model for AccountListItem.AuthMethod.
@@ -2823,6 +3052,30 @@ type AccountNotFoundEnvelopeCode int
 
 // AccountNotFoundEnvelopeMsg defines model for AccountNotFoundEnvelope.Msg.
 type AccountNotFoundEnvelopeMsg string
+
+// AccountProxySetResponseBody defines model for AccountProxySetResponseBody.
+type AccountProxySetResponseBody struct {
+	union json.RawMessage
+}
+
+// AccountProxySetSuccessData defines model for AccountProxySetSuccessData.
+type AccountProxySetSuccessData struct {
+	Id       int64 `json:"id"`
+	UseProxy bool  `json:"use_proxy"`
+}
+
+// AccountProxySetSuccessEnvelope defines model for AccountProxySetSuccessEnvelope.
+type AccountProxySetSuccessEnvelope struct {
+	Code AccountProxySetSuccessEnvelopeCode `json:"code"`
+	Data AccountProxySetSuccessData         `json:"data"`
+	Msg  AccountProxySetSuccessEnvelopeMsg  `json:"msg"`
+}
+
+// AccountProxySetSuccessEnvelopeCode defines model for AccountProxySetSuccessEnvelope.Code.
+type AccountProxySetSuccessEnvelopeCode int
+
+// AccountProxySetSuccessEnvelopeMsg defines model for AccountProxySetSuccessEnvelope.Msg.
+type AccountProxySetSuccessEnvelopeMsg string
 
 // AddModelRequest defines model for AddModelRequest.
 type AddModelRequest struct {
@@ -3442,6 +3695,19 @@ type ImportAuthJSONSuccessEnvelopeCode int
 // ImportAuthJSONSuccessEnvelopeMsg defines model for ImportAuthJSONSuccessEnvelope.Msg.
 type ImportAuthJSONSuccessEnvelopeMsg string
 
+// InternalErrorEnvelope defines model for InternalErrorEnvelope.
+type InternalErrorEnvelope struct {
+	Code InternalErrorEnvelopeCode `json:"code"`
+	Data map[string]interface{}    `json:"data"`
+	Msg  InternalErrorEnvelopeMsg  `json:"msg"`
+}
+
+// InternalErrorEnvelopeCode defines model for InternalErrorEnvelope.Code.
+type InternalErrorEnvelopeCode int
+
+// InternalErrorEnvelopeMsg defines model for InternalErrorEnvelope.Msg.
+type InternalErrorEnvelopeMsg string
+
 // InvalidAPIKeyEnvelope defines model for InvalidAPIKeyEnvelope.
 type InvalidAPIKeyEnvelope struct {
 	Code InvalidAPIKeyEnvelopeCode `json:"code"`
@@ -3586,6 +3852,22 @@ type InvalidPluginFlagEnvelopeCode int
 // InvalidPluginFlagEnvelopeMsg defines model for InvalidPluginFlagEnvelope.Msg.
 type InvalidPluginFlagEnvelopeMsg string
 
+// InvalidProxyURLEnvelope defines model for InvalidProxyURLEnvelope.
+type InvalidProxyURLEnvelope struct {
+	Code InvalidProxyURLEnvelopeCode `json:"code"`
+	Data struct {
+		Detail *string `json:"detail,omitempty"`
+		Field  *string `json:"field,omitempty"`
+	} `json:"data"`
+	Msg InvalidProxyURLEnvelopeMsg `json:"msg"`
+}
+
+// InvalidProxyURLEnvelopeCode defines model for InvalidProxyURLEnvelope.Code.
+type InvalidProxyURLEnvelopeCode int
+
+// InvalidProxyURLEnvelopeMsg defines model for InvalidProxyURLEnvelope.Msg.
+type InvalidProxyURLEnvelopeMsg string
+
 // InvalidRequestFilterEnvelope defines model for InvalidRequestFilterEnvelope.
 type InvalidRequestFilterEnvelope struct {
 	Code InvalidRequestFilterEnvelopeCode `json:"code"`
@@ -3711,6 +3993,19 @@ type ModelRenameRule struct {
 
 	// To Upstream model id sent to the selected provider.
 	To string `json:"to"`
+}
+
+// NetworkSettings Non-secret outbound-proxy projection. The raw proxy_url is
+// never returned because it may carry credentials.
+type NetworkSettings struct {
+	// ProxyConfigured True when a proxy URL is configured (and egress is eligible to use it).
+	ProxyConfigured bool `json:"proxy_configured"`
+
+	// ProxyHasAuth True when the stored URL carries userinfo credentials.
+	ProxyHasAuth *bool `json:"proxy_has_auth,omitempty"`
+
+	// ProxyUrlMasked Masked URL (`socks5://user:*****@host:port` form) or "" when unset.
+	ProxyUrlMasked string `json:"proxy_url_masked"`
 }
 
 // NoFlowInProgressEnvelope defines model for NoFlowInProgressEnvelope.
@@ -4072,6 +4367,74 @@ type PluginSummary struct {
 	Label   string `json:"label"`
 }
 
+// ProxySetRequest defines model for ProxySetRequest.
+type ProxySetRequest struct {
+	// UseProxy Absolute assignment — true dials the global proxy, false dials direct.
+	UseProxy bool `json:"use_proxy"`
+}
+
+// ProxyTestFailedEnvelope defines model for ProxyTestFailedEnvelope.
+type ProxyTestFailedEnvelope struct {
+	Code ProxyTestFailedEnvelopeCode `json:"code"`
+	Data struct {
+		Detail *string `json:"detail,omitempty"`
+	} `json:"data"`
+	Msg ProxyTestFailedEnvelopeMsg `json:"msg"`
+}
+
+// ProxyTestFailedEnvelopeCode defines model for ProxyTestFailedEnvelope.Code.
+type ProxyTestFailedEnvelopeCode int
+
+// ProxyTestFailedEnvelopeMsg defines model for ProxyTestFailedEnvelope.Msg.
+type ProxyTestFailedEnvelopeMsg string
+
+// ProxyTestRequest Connectivity probe for a candidate outbound proxy URL. The
+// value may carry credentials and is never echoed back; it is
+// NOT persisted.
+type ProxyTestRequest struct {
+	// ProxyUrl Candidate proxy URL to probe (http/https/socks5/socks5h).
+	ProxyUrl string `json:"proxy_url"`
+}
+
+// ProxyTestResponseBody defines model for ProxyTestResponseBody.
+type ProxyTestResponseBody struct {
+	union json.RawMessage
+}
+
+// ProxyTestSuccessData defines model for ProxyTestSuccessData.
+type ProxyTestSuccessData struct {
+	Reachable bool `json:"reachable"`
+}
+
+// ProxyTestSuccessEnvelope defines model for ProxyTestSuccessEnvelope.
+type ProxyTestSuccessEnvelope struct {
+	Code ProxyTestSuccessEnvelopeCode `json:"code"`
+	Data ProxyTestSuccessData         `json:"data"`
+	Msg  ProxyTestSuccessEnvelopeMsg  `json:"msg"`
+}
+
+// ProxyTestSuccessEnvelopeCode defines model for ProxyTestSuccessEnvelope.Code.
+type ProxyTestSuccessEnvelopeCode int
+
+// ProxyTestSuccessEnvelopeMsg defines model for ProxyTestSuccessEnvelope.Msg.
+type ProxyTestSuccessEnvelopeMsg string
+
+// ProxyURLRequiredEnvelope defines model for ProxyURLRequiredEnvelope.
+type ProxyURLRequiredEnvelope struct {
+	Code ProxyURLRequiredEnvelopeCode `json:"code"`
+	Data struct {
+		Detail *string `json:"detail,omitempty"`
+		Field  *string `json:"field,omitempty"`
+	} `json:"data"`
+	Msg ProxyURLRequiredEnvelopeMsg `json:"msg"`
+}
+
+// ProxyURLRequiredEnvelopeCode defines model for ProxyURLRequiredEnvelope.Code.
+type ProxyURLRequiredEnvelopeCode int
+
+// ProxyURLRequiredEnvelopeMsg defines model for ProxyURLRequiredEnvelope.Msg.
+type ProxyURLRequiredEnvelopeMsg string
+
 // RailName defines model for RailName.
 type RailName string
 
@@ -4360,11 +4723,28 @@ type SettingsGetResponseBody struct {
 	union json.RawMessage
 }
 
+// SettingsNetworkPatch Feature 009 outbound-proxy patch. `proxy_url` accepts an
+// absolute http/https/socks5/socks5h URL (userinfo credentials
+// allowed) or an empty string to clear. Invalid values return
+// `9001 invalid_proxy_url`.
+type SettingsNetworkPatch struct {
+	// ProxyUrl Write-only form of the global outbound proxy URL. GET
+	// projections only ever expose the masked form
+	// (`NetworkSettings.proxy_url_masked`).
+	ProxyUrl *string `json:"proxy_url,omitempty"`
+}
+
 // SettingsPatchRequest Partial Settings update. Empty objects are legal no-ops. Any
-// top-level key other than `runtime` or `plugins`, any unknown
-// `runtime.*` key, and any unknown `plugins.*` or
-// `plugins.*.*` key returns `2012 unknown_config_key`.
+// top-level key other than `runtime`, `plugins` or `network`, any
+// unknown `runtime.*` key, and any unknown `plugins.*` /
+// `plugins.*.*` / `network.*` key returns `2012
+// unknown_config_key`.
 type SettingsPatchRequest struct {
+	// Network Feature 009 outbound-proxy patch. `proxy_url` accepts an
+	// absolute http/https/socks5/socks5h URL (userinfo credentials
+	// allowed) or an empty string to clear. Invalid values return
+	// `9001 invalid_proxy_url`.
+	Network *SettingsNetworkPatch `json:"network,omitempty"`
 	Plugins *SettingsPluginsPatch `json:"plugins,omitempty"`
 	Runtime *SettingsRuntimePatch `json:"runtime,omitempty"`
 }
@@ -4373,7 +4753,11 @@ type SettingsPatchRequest struct {
 type SettingsPayload struct {
 	// Db Non-secret database identity. The raw DSN/URL is never exposed
 	// because it may include credentials.
-	Db            DBSettings      `json:"db"`
+	Db DBSettings `json:"db"`
+
+	// Network Non-secret outbound-proxy projection. The raw proxy_url is
+	// never returned because it may carry credentials.
+	Network       NetworkSettings `json:"network"`
 	PluginIntents []PluginIntent  `json:"plugin_intents"`
 	Plugins       []PluginSummary `json:"plugins"`
 	Runtime       RuntimeSettings `json:"runtime"`
@@ -4569,6 +4953,9 @@ type AccountModelAddJSONRequestBody = AddModelRequest
 // AccountModelRemoveJSONRequestBody defines body for AccountModelRemove for application/json ContentType.
 type AccountModelRemoveJSONRequestBody = RemoveModelRequest
 
+// AccountProxySetJSONRequestBody defines body for AccountProxySet for application/json ContentType.
+type AccountProxySetJSONRequestBody = ProxySetRequest
+
 // OauthBrowserManualCallbackJSONRequestBody defines body for OauthBrowserManualCallback for application/json ContentType.
 type OauthBrowserManualCallbackJSONRequestBody = ManualCallbackRequest
 
@@ -4583,6 +4970,9 @@ type OauthDeviceStartJSONRequestBody = OAuthStartRequest
 
 // PlaygroundRunJSONRequestBody defines body for PlaygroundRun for application/json ContentType.
 type PlaygroundRunJSONRequestBody = PlaygroundRunRequest
+
+// SettingsProxyTestJSONRequestBody defines body for SettingsProxyTest for application/json ContentType.
+type SettingsProxyTestJSONRequestBody = ProxyTestRequest
 
 // SettingsUpdateJSONRequestBody defines body for SettingsUpdate for application/json ContentType.
 type SettingsUpdateJSONRequestBody = SettingsPatchRequest
@@ -5254,6 +5644,172 @@ func (t AccountModelsRemoveResponseBody) MarshalJSON() ([]byte, error) {
 }
 
 func (t *AccountModelsRemoveResponseBody) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAccountProxySetSuccessEnvelope returns the union data inside the AccountProxySetResponseBody as a AccountProxySetSuccessEnvelope
+func (t AccountProxySetResponseBody) AsAccountProxySetSuccessEnvelope() (AccountProxySetSuccessEnvelope, error) {
+	var body AccountProxySetSuccessEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountProxySetSuccessEnvelope overwrites any union data inside the AccountProxySetResponseBody as the provided AccountProxySetSuccessEnvelope
+func (t *AccountProxySetResponseBody) FromAccountProxySetSuccessEnvelope(v AccountProxySetSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountProxySetSuccessEnvelope performs a merge with any union data inside the AccountProxySetResponseBody, using the provided AccountProxySetSuccessEnvelope
+func (t *AccountProxySetResponseBody) MergeAccountProxySetSuccessEnvelope(v AccountProxySetSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountNotFoundEnvelope returns the union data inside the AccountProxySetResponseBody as a AccountNotFoundEnvelope
+func (t AccountProxySetResponseBody) AsAccountNotFoundEnvelope() (AccountNotFoundEnvelope, error) {
+	var body AccountNotFoundEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountNotFoundEnvelope overwrites any union data inside the AccountProxySetResponseBody as the provided AccountNotFoundEnvelope
+func (t *AccountProxySetResponseBody) FromAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountNotFoundEnvelope performs a merge with any union data inside the AccountProxySetResponseBody, using the provided AccountNotFoundEnvelope
+func (t *AccountProxySetResponseBody) MergeAccountNotFoundEnvelope(v AccountNotFoundEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMalformedBodyEnvelope returns the union data inside the AccountProxySetResponseBody as a MalformedBodyEnvelope
+func (t AccountProxySetResponseBody) AsMalformedBodyEnvelope() (MalformedBodyEnvelope, error) {
+	var body MalformedBodyEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMalformedBodyEnvelope overwrites any union data inside the AccountProxySetResponseBody as the provided MalformedBodyEnvelope
+func (t *AccountProxySetResponseBody) FromMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMalformedBodyEnvelope performs a merge with any union data inside the AccountProxySetResponseBody, using the provided MalformedBodyEnvelope
+func (t *AccountProxySetResponseBody) MergeMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAccountAlreadyInStateEnvelope returns the union data inside the AccountProxySetResponseBody as a AccountAlreadyInStateEnvelope
+func (t AccountProxySetResponseBody) AsAccountAlreadyInStateEnvelope() (AccountAlreadyInStateEnvelope, error) {
+	var body AccountAlreadyInStateEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAccountAlreadyInStateEnvelope overwrites any union data inside the AccountProxySetResponseBody as the provided AccountAlreadyInStateEnvelope
+func (t *AccountProxySetResponseBody) FromAccountAlreadyInStateEnvelope(v AccountAlreadyInStateEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAccountAlreadyInStateEnvelope performs a merge with any union data inside the AccountProxySetResponseBody, using the provided AccountAlreadyInStateEnvelope
+func (t *AccountProxySetResponseBody) MergeAccountAlreadyInStateEnvelope(v AccountAlreadyInStateEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsProxyURLRequiredEnvelope returns the union data inside the AccountProxySetResponseBody as a ProxyURLRequiredEnvelope
+func (t AccountProxySetResponseBody) AsProxyURLRequiredEnvelope() (ProxyURLRequiredEnvelope, error) {
+	var body ProxyURLRequiredEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProxyURLRequiredEnvelope overwrites any union data inside the AccountProxySetResponseBody as the provided ProxyURLRequiredEnvelope
+func (t *AccountProxySetResponseBody) FromProxyURLRequiredEnvelope(v ProxyURLRequiredEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProxyURLRequiredEnvelope performs a merge with any union data inside the AccountProxySetResponseBody, using the provided ProxyURLRequiredEnvelope
+func (t *AccountProxySetResponseBody) MergeProxyURLRequiredEnvelope(v ProxyURLRequiredEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInternalErrorEnvelope returns the union data inside the AccountProxySetResponseBody as a InternalErrorEnvelope
+func (t AccountProxySetResponseBody) AsInternalErrorEnvelope() (InternalErrorEnvelope, error) {
+	var body InternalErrorEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInternalErrorEnvelope overwrites any union data inside the AccountProxySetResponseBody as the provided InternalErrorEnvelope
+func (t *AccountProxySetResponseBody) FromInternalErrorEnvelope(v InternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInternalErrorEnvelope performs a merge with any union data inside the AccountProxySetResponseBody, using the provided InternalErrorEnvelope
+func (t *AccountProxySetResponseBody) MergeInternalErrorEnvelope(v InternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AccountProxySetResponseBody) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AccountProxySetResponseBody) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -6440,6 +6996,146 @@ func (t *PlaygroundRunResponseBody) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsProxyTestSuccessEnvelope returns the union data inside the ProxyTestResponseBody as a ProxyTestSuccessEnvelope
+func (t ProxyTestResponseBody) AsProxyTestSuccessEnvelope() (ProxyTestSuccessEnvelope, error) {
+	var body ProxyTestSuccessEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProxyTestSuccessEnvelope overwrites any union data inside the ProxyTestResponseBody as the provided ProxyTestSuccessEnvelope
+func (t *ProxyTestResponseBody) FromProxyTestSuccessEnvelope(v ProxyTestSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProxyTestSuccessEnvelope performs a merge with any union data inside the ProxyTestResponseBody, using the provided ProxyTestSuccessEnvelope
+func (t *ProxyTestResponseBody) MergeProxyTestSuccessEnvelope(v ProxyTestSuccessEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInvalidProxyURLEnvelope returns the union data inside the ProxyTestResponseBody as a InvalidProxyURLEnvelope
+func (t ProxyTestResponseBody) AsInvalidProxyURLEnvelope() (InvalidProxyURLEnvelope, error) {
+	var body InvalidProxyURLEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvalidProxyURLEnvelope overwrites any union data inside the ProxyTestResponseBody as the provided InvalidProxyURLEnvelope
+func (t *ProxyTestResponseBody) FromInvalidProxyURLEnvelope(v InvalidProxyURLEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvalidProxyURLEnvelope performs a merge with any union data inside the ProxyTestResponseBody, using the provided InvalidProxyURLEnvelope
+func (t *ProxyTestResponseBody) MergeInvalidProxyURLEnvelope(v InvalidProxyURLEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsProxyTestFailedEnvelope returns the union data inside the ProxyTestResponseBody as a ProxyTestFailedEnvelope
+func (t ProxyTestResponseBody) AsProxyTestFailedEnvelope() (ProxyTestFailedEnvelope, error) {
+	var body ProxyTestFailedEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProxyTestFailedEnvelope overwrites any union data inside the ProxyTestResponseBody as the provided ProxyTestFailedEnvelope
+func (t *ProxyTestResponseBody) FromProxyTestFailedEnvelope(v ProxyTestFailedEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProxyTestFailedEnvelope performs a merge with any union data inside the ProxyTestResponseBody, using the provided ProxyTestFailedEnvelope
+func (t *ProxyTestResponseBody) MergeProxyTestFailedEnvelope(v ProxyTestFailedEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMalformedBodyEnvelope returns the union data inside the ProxyTestResponseBody as a MalformedBodyEnvelope
+func (t ProxyTestResponseBody) AsMalformedBodyEnvelope() (MalformedBodyEnvelope, error) {
+	var body MalformedBodyEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMalformedBodyEnvelope overwrites any union data inside the ProxyTestResponseBody as the provided MalformedBodyEnvelope
+func (t *ProxyTestResponseBody) FromMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMalformedBodyEnvelope performs a merge with any union data inside the ProxyTestResponseBody, using the provided MalformedBodyEnvelope
+func (t *ProxyTestResponseBody) MergeMalformedBodyEnvelope(v MalformedBodyEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInternalErrorEnvelope returns the union data inside the ProxyTestResponseBody as a InternalErrorEnvelope
+func (t ProxyTestResponseBody) AsInternalErrorEnvelope() (InternalErrorEnvelope, error) {
+	var body InternalErrorEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInternalErrorEnvelope overwrites any union data inside the ProxyTestResponseBody as the provided InternalErrorEnvelope
+func (t *ProxyTestResponseBody) FromInternalErrorEnvelope(v InternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInternalErrorEnvelope performs a merge with any union data inside the ProxyTestResponseBody, using the provided InternalErrorEnvelope
+func (t *ProxyTestResponseBody) MergeInternalErrorEnvelope(v InternalErrorEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ProxyTestResponseBody) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ProxyTestResponseBody) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsRequestDetailEnvelope returns the union data inside the RequestDetailResponseBody as a RequestDetailEnvelope
 func (t RequestDetailResponseBody) AsRequestDetailEnvelope() (RequestDetailEnvelope, error) {
 	var body RequestDetailEnvelope
@@ -6938,6 +7634,32 @@ func (t *SettingsUpdateResponseBody) FromInvalidPluginFlagEnvelope(v InvalidPlug
 
 // MergeInvalidPluginFlagEnvelope performs a merge with any union data inside the SettingsUpdateResponseBody, using the provided InvalidPluginFlagEnvelope
 func (t *SettingsUpdateResponseBody) MergeInvalidPluginFlagEnvelope(v InvalidPluginFlagEnvelope) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInvalidProxyURLEnvelope returns the union data inside the SettingsUpdateResponseBody as a InvalidProxyURLEnvelope
+func (t SettingsUpdateResponseBody) AsInvalidProxyURLEnvelope() (InvalidProxyURLEnvelope, error) {
+	var body InvalidProxyURLEnvelope
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvalidProxyURLEnvelope overwrites any union data inside the SettingsUpdateResponseBody as the provided InvalidProxyURLEnvelope
+func (t *SettingsUpdateResponseBody) FromInvalidProxyURLEnvelope(v InvalidProxyURLEnvelope) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvalidProxyURLEnvelope performs a merge with any union data inside the SettingsUpdateResponseBody, using the provided InvalidProxyURLEnvelope
+func (t *SettingsUpdateResponseBody) MergeInvalidProxyURLEnvelope(v InvalidProxyURLEnvelope) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err

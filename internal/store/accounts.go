@@ -51,6 +51,11 @@ type AccountListItem struct {
 
 	Capabilities []string `json:"capabilities,omitempty"`
 
+	// UseProxy is the 009 per-account outbound-proxy opt-in. Not a
+	// credential and not auth-method-specific, so it is projected for
+	// api_key and OAuth rows alike (spec 009 US-2 edge).
+	UseProxy bool `json:"use_proxy"`
+
 	PrimaryUsedPercent     *float64   `json:"-"`
 	SecondaryUsedPercent   *float64   `json:"-"`
 	UsageUpdatedAt         *time.Time `json:"-"`
@@ -372,7 +377,8 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			"primary_used_percent", "secondary_used_percent", "usage_updated_at",
 			"primary_reset_at", "secondary_reset_at",
 			"primary_window_seconds", "secondary_window_seconds",
-			"capabilities").
+			"capabilities",
+			"use_proxy").
 		Where("status != ?", domain.AccountStatusDeleted).
 		OrderBy("id ASC").
 		Find(&rows)
@@ -403,6 +409,7 @@ func (r *AccountRepo) ListForAdminAPI(_ context.Context) ([]AccountListItem, err
 			CreatedAt:    r.CreatedAt,
 			UpdatedAt:    r.UpdatedAt,
 			Capabilities: r.Capabilities,
+			UseProxy:     r.UseProxy,
 		}
 		if method != domain.AuthMethodAPIKey {
 			it.Email = r.Email
@@ -674,6 +681,28 @@ func (r *AccountRepo) UpdateStatus(_ context.Context, id int64, status string) e
 		Update(&domain.UpstreamAccount{Status: status})
 	if err != nil {
 		return fmt.Errorf("update account %d status: %w", id, err)
+	}
+	if affected == 0 {
+		return domain.ErrAccountNotFound
+	}
+	return nil
+}
+
+// UpdateUseProxy flips the 009 per-account outbound-proxy opt-in.
+// It is deliberately OUTSIDE UpdateDetails: the toggle is not a
+// credential, so the api_key-only immutability rule does not apply and
+// every auth_method may flip it. Deleted rows keep their row (soft
+// delete) and are rejected by the handler after a GetByID, mirroring
+// enable/disable semantics; here a plain missing-row check suffices
+// because UpdateUseProxy is only reached through that validated path.
+// The bool is force-written via Cols so false→true and true→false both
+// persist (xorm only writes non-zero struct fields without Cols).
+func (r *AccountRepo) UpdateUseProxy(_ context.Context, id int64, useProxy bool) error {
+	affected, err := r.engine.ID(id).
+		Cols("use_proxy", "updated_at").
+		Update(&domain.UpstreamAccount{UseProxy: useProxy})
+	if err != nil {
+		return fmt.Errorf("update account %d use_proxy: %w", id, err)
 	}
 	if affected == 0 {
 		return domain.ErrAccountNotFound

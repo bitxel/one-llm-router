@@ -142,9 +142,9 @@ func TestDefaultRuntimeConfig_MatchesDataModel(t *testing.T) {
 	t.Parallel()
 	got := DefaultRuntimeConfig()
 	want := RuntimeConfig{
-		LogClientRequestBody:    false,
-		LogUpstreamRequestBody:  false,
-		LogUpstreamResponseBody: false,
+		LogClientRequestBody:        false,
+		LogUpstreamRequestBody:      false,
+		LogUpstreamResponseBody:     false,
 		LogRetentionDays:            30,
 		LogLevel:                    "info",
 		UsageRefreshIntervalSeconds: 300,

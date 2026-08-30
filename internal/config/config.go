@@ -29,8 +29,19 @@ type Config struct {
 	DB        DBConfig      `json:"db"`
 	Runtime   RuntimeConfig `json:"runtime"`
 	Plugins   PluginsConfig `json:"plugins"`
+	Network   NetworkConfig `json:"network"`
 	CreatedAt time.Time     `json:"created_at"`
 	UpdatedAt time.Time     `json:"updated_at"`
+}
+
+// NetworkConfig holds the single outbound-proxy setting (Feature 009).
+// ProxyURL MAY contain credentials and therefore MUST be masked on
+// every API/log boundary via proxydial.MaskedURL — like db.url it is
+// never returned raw by /api/admin/settings. An empty value means
+// direct egress; there is deliberately no master enable switch
+// (spec 009 decision D1).
+type NetworkConfig struct {
+	ProxyURL string `json:"proxy_url"`
 }
 
 // DBConfig carries the database driver and DSN. The DSN MAY contain

@@ -18,6 +18,7 @@ package httpio
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"mime"
 	"net/http"
 
@@ -132,7 +133,8 @@ func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, reqID string, max
 	// Trailing bytes after the first JSON value (e.g. a second object)
 	// are caller error and should also 2008 — the envelope contract is
 	// "one JSON document per admin request".
-	if dec.More() {
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
 		WriteMalformedBody(w, reqID)
 		return zero, false
 	}

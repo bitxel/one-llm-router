@@ -87,6 +87,10 @@ var registryFixture = []struct {
 	{AccountModelDuplicate, "account_model_duplicate"},
 	{AccountModelRefreshFailed, "account_model_refresh_failed"},
 	{AccountModelInternalError, "account_model_internal_error"},
+
+	{InvalidProxyURL, "invalid_proxy_url"},
+	{ProxyURLRequired, "proxy_url_required"},
+	{ProxyTestFailed, "proxy_test_failed"},
 }
 
 func TestSymbol_KnownCodes(t *testing.T) {

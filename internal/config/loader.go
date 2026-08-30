@@ -196,6 +196,15 @@ func Load(ctx context.Context, path string, env Env) (*Config, SourceMap, error)
 	// "operator explicitly recorded false" from "field never existed".
 	applyPluginDefaults(&cfg.Plugins, present, srcMap)
 
+	// Network (009): the only field is proxy_url and its zero value
+	// ("", direct egress) is also the default — just record provenance
+	// for the 2013 guard's SourceMap probe.
+	if _, ok := present["network.proxy_url"]; ok {
+		srcMap["network.proxy_url"] = srcFile
+	} else {
+		srcMap["network.proxy_url"] = srcDefault
+	}
+
 	// DB: file is authoritative, env may overlay.
 	srcMap["db.driver"] = srcFile
 	srcMap["db.url"] = srcFile
@@ -262,6 +271,16 @@ func scanPresentKeys(raw []byte) (map[string]struct{}, error) {
 			for k := range subMap {
 				present["plugins."+pluginID+"."+k] = struct{}{}
 			}
+		}
+	}
+
+	if msg, ok := top["network"]; ok {
+		inner := map[string]json.RawMessage{}
+		if err := json.Unmarshal(msg, &inner); err != nil {
+			return nil, fmt.Errorf("network: %w", err)
+		}
+		for k := range inner {
+			present["network."+k] = struct{}{}
 		}
 	}
 

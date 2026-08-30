@@ -1322,3 +1322,37 @@ func TestAccountsStore_ListForAdminAPI_EmptyAuthMethodFallback(t *testing.T) {
 	assert.Equal(t, domain.AuthMethodAPIKey, items[0].AuthMethod,
 		"empty auth_method must default to api_key so the admin list stays renderable")
 }
+
+func TestAccountsStore_UpdateUseProxy_RoundTrip(t *testing.T) {
+	s, cleanup := setupTestStore(t)
+	defer cleanup()
+	repo := NewAccountRepo(s.Engine())
+
+	id, err := repo.InsertUpstreamAccount(context.Background(), apiKeyRow("k1"))
+	require.NoError(t, err)
+
+	got, err := repo.GetByID(context.Background(), id)
+	require.NoError(t, err)
+	assert.False(t, got.UseProxy, "default must be direct (use_proxy=false)")
+
+	// Flip on and verify both the row and the admin projection.
+	require.NoError(t, repo.UpdateUseProxy(context.Background(), id, true))
+	got, err = repo.GetByID(context.Background(), id)
+	require.NoError(t, err)
+	assert.True(t, got.UseProxy)
+
+	items, err := repo.ListForAdminAPI(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.True(t, items[0].UseProxy, "use_proxy must be projected for every auth_method")
+
+	// Flip off again — Cols-forced write must persist false.
+	require.NoError(t, repo.UpdateUseProxy(context.Background(), id, false))
+	got, err = repo.GetByID(context.Background(), id)
+	require.NoError(t, err)
+	assert.False(t, got.UseProxy)
+
+	// Missing rows surface the shared sentinel.
+	err = repo.UpdateUseProxy(context.Background(), 999, true)
+	require.ErrorIs(t, err, domain.ErrAccountNotFound)
+}

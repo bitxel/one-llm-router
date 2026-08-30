@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/user/one-llm-router/internal/domain"
+	"github.com/user/one-llm-router/internal/proxydial"
 )
 
 var ErrModelRefreshStoreFailed = errors.New("core: model refresh store failed")
@@ -20,18 +21,26 @@ type ModelRefresherRepo interface {
 }
 
 type ModelRefresher struct {
-	client             *http.Client
+	// directClient dials without any proxy; proxiedClient routes
+	// through the global outbound proxy (Feature 009). The choice is
+	// per-account via UseProxy — same fail-fast rule as the forwarder.
+	directClient       *http.Client
+	proxiedClient      *http.Client
 	codexBackend       string
 	codexClientVersion string
 	logger             *slog.Logger
 }
 
-func NewModelRefresher(client *http.Client, codexBackend, codexClientVersion string, logger *slog.Logger) *ModelRefresher {
+// NewModelRefresher takes the direct and proxied clients separately so
+// the app wiring can share its transports; proxied may be nil in tests
+// that never opt accounts into the proxy.
+func NewModelRefresher(directClient, proxiedClient *http.Client, codexBackend, codexClientVersion string, logger *slog.Logger) *ModelRefresher {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &ModelRefresher{
-		client:             client,
+		directClient:       directClient,
+		proxiedClient:      proxiedClient,
 		codexBackend:       codexBackend,
 		codexClientVersion: codexClientVersion,
 		logger:             logger,
@@ -94,11 +103,28 @@ func (r *ModelRefresher) fetchUpstreamModels(ctx context.Context, acct *domain.U
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := r.client.Do(req)
+	client := r.directClient
+	if acct.UseProxy {
+		if _, err := proxydial.Decide(true); err != nil {
+			r.logger.Warn("outbound proxy required but not configured",
+				"account_id", acct.ID,
+				"hint", proxydial.ProxyRequiredHint)
+			return nil, fmt.Errorf("upstream request failed: %w", proxydial.ErrProxyRequired)
+		}
+		if r.proxiedClient == nil {
+			return nil, errors.New("model refresher proxied client is nil")
+		}
+		client = r.proxiedClient
+	}
+	if client == nil {
+		return nil, errors.New("model refresher client is nil")
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read upstream response: %w", err)

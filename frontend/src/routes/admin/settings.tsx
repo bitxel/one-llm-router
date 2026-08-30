@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -22,6 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import type { PluginIntent, SettingsPatch, SettingsPayload } from '@/hooks/use-settings'
 import { useSettings, useUpdateSettings } from '@/hooks/use-settings'
+import { api, RouterApiError } from '@/lib/api-client'
+import { Err009InvalidProxyURL } from '@/lib/errcode'
 
 const RuntimeFormSchema = z.object({
   log_client_request_body: z.boolean(),
@@ -318,6 +320,8 @@ function SettingsForm({ data, onPatch }: FormProps) {
         </PanelCard>
       </form>
 
+      <OutboundProxyCard proxyUrl={data.network.proxy_url_masked} onPatch={onPatch} />
+
       <PanelCard title="Plugin intents" meta="persisted to config.json" metaMuted>
         {PLUGIN_INTENTS.map((plugin) => {
           const installed = data.plugins.some((p) => p.id === plugin.id)
@@ -396,6 +400,16 @@ function validateSettingsContract(data: SettingsPayload): Error | null {
   if (!Array.isArray(data.runtime.model_renames)) {
     return new Error('settings payload contract violation: runtime.model_renames must be an array')
   }
+  if (typeof data.network?.proxy_configured !== 'boolean') {
+    return new Error(
+      'settings payload contract violation: network.proxy_configured must be a boolean',
+    )
+  }
+  if (typeof data.network?.proxy_url_masked !== 'string') {
+    return new Error(
+      'settings payload contract violation: network.proxy_url_masked must be a string',
+    )
+  }
   for (const plugin of PLUGIN_INTENTS) {
     const intent = data.plugin_intents.find((item) => item.id === plugin.id)
     if (!intent) {
@@ -406,6 +420,107 @@ function validateSettingsContract(data: SettingsPayload): Error | null {
     }
   }
   return null
+}
+
+// OutboundProxyCard edits the single global egress proxy (Feature 009).
+// The raw URL is write-only on the wire — a password typed once is never
+// echoed back, so the input is prefilled with the server-masked form.
+// The Test button probes the typed-in (not yet saved) URL through a
+// fresh backend dial; the response never echoes the candidate.
+function OutboundProxyCard({
+  proxyUrl,
+  onPatch,
+}: {
+  proxyUrl: string
+  onPatch: (patch: SettingsPatch) => Promise<SettingsPayload>
+}) {
+  const [value, setValue] = useState(proxyUrl)
+  const [busy, setBusy] = useState(false)
+  const [testing, setTesting] = useState(false)
+
+  const submit = useCallback(
+    async (next: string) => {
+      setBusy(true)
+      try {
+        const saved = await onPatch({ network: { proxy_url: next } })
+        setValue(saved.network.proxy_url_masked)
+        toast.success('Outbound proxy updated')
+      } catch {
+        toast.error('Could not update the outbound proxy')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [onPatch],
+  )
+
+  const test = useCallback(async () => {
+    const candidate = value.trim()
+    if (candidate === '') {
+      return
+    }
+    setTesting(true)
+    try {
+      await api.post<{ reachable: boolean }>('/api/admin/settings/proxy/test', {
+        proxy_url: candidate,
+      })
+      toast.success('Proxy reachable — the upstream responded through it')
+    } catch (err) {
+      if (err instanceof RouterApiError) {
+        const detail = (err.data as { detail?: string } | null)?.detail
+        if (err.code === Err009InvalidProxyURL) {
+          toast.error(detail ? `Invalid proxy URL — ${detail}` : 'Invalid proxy URL')
+        } else {
+          toast.error(detail ? `Proxy unreachable — ${detail}` : 'Proxy test failed')
+        }
+      } else {
+        toast.error('Proxy test failed')
+      }
+    } finally {
+      setTesting(false)
+    }
+  }, [value])
+
+  return (
+    <PanelCard title="Outbound proxy">
+      <Field
+        htmlFor="network_proxy_url"
+        label="Proxy URL"
+        hint="Single global egress proxy (http/https/socks5/socks5h), e.g. socks5://127.0.0.1:7890"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            id="network_proxy_url"
+            className="max-w-md font-mono"
+            placeholder="socks5://127.0.0.1:7890"
+            autoComplete="off"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            data-testid="network-proxy-url"
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || value.trim() === ''}
+              onClick={() => submit(value.trim())}
+            >
+              Save proxy
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={testing || busy || value.trim() === ''}
+              onClick={() => void test()}
+              data-testid="network-proxy-test"
+            >
+              {testing ? 'Testing…' : 'Test'}
+            </Button>
+          </div>
+        </div>
+      </Field>
+    </PanelCard>
+  )
 }
 
 function pluginIntentMap(data: SettingsPayload): Map<PluginIntentID, PluginIntent> {

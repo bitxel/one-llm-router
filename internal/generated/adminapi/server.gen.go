@@ -37,6 +37,9 @@ type ServerInterface interface {
 	// Remove a model from an account.
 	// (POST /api/admin/accounts/{id}/models/remove)
 	AccountModelRemove(w http.ResponseWriter, r *http.Request, id int64)
+	// Opt an account in or out of the global outbound proxy.
+	// (POST /api/admin/accounts/{id}/proxy/set)
+	AccountProxySet(w http.ResponseWriter, r *http.Request, id int64)
 	// Return the Admin Dashboard observability snapshot.
 	// (GET /api/admin/dashboard)
 	DashboardGet(w http.ResponseWriter, r *http.Request, params DashboardGetParams)
@@ -70,7 +73,10 @@ type ServerInterface interface {
 	// Return hot-reloadable runtime settings.
 	// (GET /api/admin/settings)
 	SettingsGet(w http.ResponseWriter, r *http.Request)
-	// Patch hot-reloadable runtime settings and plugin intents.
+	// Test connectivity through a candidate outbound proxy URL.
+	// (POST /api/admin/settings/proxy/test)
+	SettingsProxyTest(w http.ResponseWriter, r *http.Request)
+	// Patch hot-reloadable runtime, network, and plugin settings.
 	// (POST /api/admin/settings/update)
 	SettingsUpdate(w http.ResponseWriter, r *http.Request)
 	// Return router-local usage summary.
@@ -253,6 +259,37 @@ func (siw *ServerInterfaceWrapper) AccountModelRemove(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AccountModelRemove(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AccountProxySet operation middleware
+func (siw *ServerInterfaceWrapper) AccountProxySet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, AdminAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AccountProxySet(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -652,6 +689,26 @@ func (siw *ServerInterfaceWrapper) SettingsGet(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// SettingsProxyTest operation middleware
+func (siw *ServerInterfaceWrapper) SettingsProxyTest(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, AdminAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SettingsProxyTest(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SettingsUpdate operation middleware
 func (siw *ServerInterfaceWrapper) SettingsUpdate(w http.ResponseWriter, r *http.Request) {
 
@@ -818,6 +875,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/models/add", wrapper.AccountModelAdd)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/models/refresh", wrapper.AccountModelRefresh)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/models/remove", wrapper.AccountModelRemove)
+	m.HandleFunc("POST "+options.BaseURL+"/api/admin/accounts/{id}/proxy/set", wrapper.AccountProxySet)
 	m.HandleFunc("GET "+options.BaseURL+"/api/admin/dashboard", wrapper.DashboardGet)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/oauth/browser/manual-callback", wrapper.OauthBrowserManualCallback)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/oauth/browser/start", wrapper.OauthBrowserStart)
@@ -829,6 +887,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/admin/requests/options", wrapper.RequestsOptions)
 	m.HandleFunc("GET "+options.BaseURL+"/api/admin/requests/{id}", wrapper.RequestsGet)
 	m.HandleFunc("GET "+options.BaseURL+"/api/admin/settings", wrapper.SettingsGet)
+	m.HandleFunc("POST "+options.BaseURL+"/api/admin/settings/proxy/test", wrapper.SettingsProxyTest)
 	m.HandleFunc("POST "+options.BaseURL+"/api/admin/settings/update", wrapper.SettingsUpdate)
 	m.HandleFunc("GET "+options.BaseURL+"/api/admin/usage", wrapper.UsageGet)
 
@@ -1002,6 +1061,33 @@ func (response AccountModelRemove200JSONResponse) VisitAccountModelRemoveRespons
 type AccountModelRemove500JSONResponse struct{ SystemErrorJSONResponse }
 
 func (response AccountModelRemove500JSONResponse) VisitAccountModelRemoveResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountProxySetRequestObject struct {
+	Id   int64 `json:"id"`
+	Body *AccountProxySetJSONRequestBody
+}
+
+type AccountProxySetResponseObject interface {
+	VisitAccountProxySetResponse(w http.ResponseWriter) error
+}
+
+type AccountProxySet200JSONResponse AccountProxySetResponseBody
+
+func (response AccountProxySet200JSONResponse) VisitAccountProxySetResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AccountProxySet500JSONResponse struct{ SystemErrorJSONResponse }
+
+func (response AccountProxySet500JSONResponse) VisitAccountProxySetResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -1292,6 +1378,32 @@ func (response SettingsGet500JSONResponse) VisitSettingsGetResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type SettingsProxyTestRequestObject struct {
+	Body *SettingsProxyTestJSONRequestBody
+}
+
+type SettingsProxyTestResponseObject interface {
+	VisitSettingsProxyTestResponse(w http.ResponseWriter) error
+}
+
+type SettingsProxyTest200JSONResponse ProxyTestResponseBody
+
+func (response SettingsProxyTest200JSONResponse) VisitSettingsProxyTestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SettingsProxyTest500JSONResponse struct{ SystemErrorJSONResponse }
+
+func (response SettingsProxyTest500JSONResponse) VisitSettingsProxyTestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type SettingsUpdateRequestObject struct {
 	Body *SettingsUpdateJSONRequestBody
 }
@@ -1363,6 +1475,9 @@ type StrictServerInterface interface {
 	// Remove a model from an account.
 	// (POST /api/admin/accounts/{id}/models/remove)
 	AccountModelRemove(ctx context.Context, request AccountModelRemoveRequestObject) (AccountModelRemoveResponseObject, error)
+	// Opt an account in or out of the global outbound proxy.
+	// (POST /api/admin/accounts/{id}/proxy/set)
+	AccountProxySet(ctx context.Context, request AccountProxySetRequestObject) (AccountProxySetResponseObject, error)
 	// Return the Admin Dashboard observability snapshot.
 	// (GET /api/admin/dashboard)
 	DashboardGet(ctx context.Context, request DashboardGetRequestObject) (DashboardGetResponseObject, error)
@@ -1396,7 +1511,10 @@ type StrictServerInterface interface {
 	// Return hot-reloadable runtime settings.
 	// (GET /api/admin/settings)
 	SettingsGet(ctx context.Context, request SettingsGetRequestObject) (SettingsGetResponseObject, error)
-	// Patch hot-reloadable runtime settings and plugin intents.
+	// Test connectivity through a candidate outbound proxy URL.
+	// (POST /api/admin/settings/proxy/test)
+	SettingsProxyTest(ctx context.Context, request SettingsProxyTestRequestObject) (SettingsProxyTestResponseObject, error)
+	// Patch hot-reloadable runtime, network, and plugin settings.
 	// (POST /api/admin/settings/update)
 	SettingsUpdate(ctx context.Context, request SettingsUpdateRequestObject) (SettingsUpdateResponseObject, error)
 	// Return router-local usage summary.
@@ -1613,6 +1731,39 @@ func (sh *strictHandler) AccountModelRemove(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AccountModelRemoveResponseObject); ok {
 		if err := validResponse.VisitAccountModelRemoveResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AccountProxySet operation middleware
+func (sh *strictHandler) AccountProxySet(w http.ResponseWriter, r *http.Request, id int64) {
+	var request AccountProxySetRequestObject
+
+	request.Id = id
+
+	var body AccountProxySetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AccountProxySet(ctx, request.(AccountProxySetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AccountProxySet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AccountProxySetResponseObject); ok {
+		if err := validResponse.VisitAccountProxySetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1920,6 +2071,37 @@ func (sh *strictHandler) SettingsGet(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SettingsGetResponseObject); ok {
 		if err := validResponse.VisitSettingsGetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SettingsProxyTest operation middleware
+func (sh *strictHandler) SettingsProxyTest(w http.ResponseWriter, r *http.Request) {
+	var request SettingsProxyTestRequestObject
+
+	var body SettingsProxyTestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SettingsProxyTest(ctx, request.(SettingsProxyTestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SettingsProxyTest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SettingsProxyTestResponseObject); ok {
+		if err := validResponse.VisitSettingsProxyTestResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

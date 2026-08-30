@@ -82,7 +82,7 @@ func (r *UsageRefresher) refreshOne(ctx context.Context, acc domain.UpstreamAcco
 		chatGPTAccountID = *acc.ChatGPTAccountID
 	}
 
-	usage, err := r.client.FetchUsage(ctx, string(token), chatGPTAccountID)
+	usage, err := r.client.FetchUsage(ctx, string(token), chatGPTAccountID, acc.UseProxy, acc.ID)
 	if err != nil {
 		r.logger.Error("usage refresher: failed to fetch usage", "account_id", acc.ID, "error", err)
 		return

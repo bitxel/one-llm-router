@@ -18,6 +18,11 @@ import (
 	"github.com/user/one-llm-router/internal/domain"
 )
 
+func forwardRequestForTest(ctx context.Context, c *Client, upstreamBaseURL, apiKey string, original *http.Request) (*http.Response, error) {
+	resp, _, err := c.forwardRequestWithCapture(ctx, upstreamBaseURL, apiKey, false, 0, original)
+	return resp, err
+}
+
 func TestNewClient(t *testing.T) {
 	timeout := 7 * time.Second
 	c := NewClient(timeout)
@@ -66,7 +71,7 @@ func TestForwardRequest_Success(t *testing.T) {
 	orig.Header.Set("Content-Type", "application/json")
 	orig.Header.Set("X-Extra", "extra-value")
 
-	resp, err := c.ForwardRequest(context.Background(), srv.URL+"/", apiKey, orig)
+	resp, err := forwardRequestForTest(context.Background(), c, srv.URL+"/", apiKey, orig)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	t.Cleanup(func() { _ = resp.Body.Close() })
@@ -468,7 +473,7 @@ func TestForwardRequest_SSEResponse(t *testing.T) {
 	c := NewClient(30 * time.Second)
 	orig := httptest.NewRequest(http.MethodGet, "http://downstream/v1/responses", nil)
 
-	resp, err := c.ForwardRequest(context.Background(), srv.URL, "k", orig)
+	resp, err := forwardRequestForTest(context.Background(), c, srv.URL, "k", orig)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	t.Cleanup(func() { _ = resp.Body.Close() })
@@ -489,7 +494,7 @@ func TestForwardRequest_UpstreamError(t *testing.T) {
 	c := NewClient(30 * time.Second)
 	orig := httptest.NewRequest(http.MethodGet, "http://downstream/v1/models", nil)
 
-	resp, err := c.ForwardRequest(context.Background(), srv.URL, "k", orig)
+	resp, err := forwardRequestForTest(context.Background(), c, srv.URL, "k", orig)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	t.Cleanup(func() { _ = resp.Body.Close() })
@@ -508,9 +513,9 @@ func TestForwardRequest_Timeout(t *testing.T) {
 	c := NewClient(50 * time.Millisecond)
 	orig := httptest.NewRequest(http.MethodGet, "http://downstream/v1/slow", nil)
 
-	// ForwardRequest guarantees resp == nil when err != nil (see
+	// The internal forward helper guarantees resp == nil when err != nil (see
 	// forwarder.go); nothing to close.
-	resp, err := c.ForwardRequest(context.Background(), srv.URL, "k", orig) //nolint:bodyclose
+	resp, err := forwardRequestForTest(context.Background(), c, srv.URL, "k", orig) //nolint:bodyclose
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.ErrorIs(t, err, ErrUpstreamTimeout)
@@ -521,9 +526,9 @@ func TestForwardRequest_ConnectionFailed(t *testing.T) {
 	// Nothing listens on 127.0.0.1:1 — connection refused.
 	orig := httptest.NewRequest(http.MethodGet, "http://downstream/v1/models", nil)
 
-	// ForwardRequest guarantees resp == nil when err != nil (see
+	// The internal forward helper guarantees resp == nil when err != nil (see
 	// forwarder.go); nothing to close.
-	resp, err := c.ForwardRequest(context.Background(), "http://127.0.0.1:1", "k", orig) //nolint:bodyclose
+	resp, err := forwardRequestForTest(context.Background(), c, "http://127.0.0.1:1", "k", orig) //nolint:bodyclose
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.ErrorIs(t, err, ErrUpstreamConnectFailed)
@@ -614,7 +619,7 @@ func TestForwardRequest_StripsHopByHopHeaders(t *testing.T) {
 	// A regular header that MUST survive.
 	orig.Header.Set("X-Keep-Me", "alive")
 
-	resp, err := c.ForwardRequest(context.Background(), srv.URL, "k", orig)
+	resp, err := forwardRequestForTest(context.Background(), c, srv.URL, "k", orig)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = resp.Body.Close() })
 
@@ -648,7 +653,7 @@ func TestFetchUsageParsesNestedRateLimitUsage(t *testing.T) {
 	c := NewClient(30 * time.Second)
 	c.codexBackendBaseURL = srv.URL
 
-	usage, err := c.FetchUsage(context.Background(), "access-token", "acct-123")
+	usage, err := c.FetchUsage(context.Background(), "access-token", "acct-123", false, 1)
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	require.NotNil(t, usage.RateLimit)
@@ -679,7 +684,7 @@ func TestFetchUsageSparseWindowKeepsOptionalFieldsNil(t *testing.T) {
 	c := NewClient(30 * time.Second)
 	c.codexBackendBaseURL = srv.URL
 
-	usage, err := c.FetchUsage(context.Background(), "access-token", "")
+	usage, err := c.FetchUsage(context.Background(), "access-token", "", false, 1)
 	require.NoError(t, err)
 	require.NotNil(t, usage.RateLimit.PrimaryWindow)
 	assert.Nil(t, usage.RateLimit.PrimaryWindow.LimitWindowSeconds)

@@ -154,6 +154,7 @@ describe('useOAuthFlow', () => {
               provider: 'openai',
               auth_method: 'oauth_browser',
               status: 'active',
+              use_proxy: false,
             },
           },
         },

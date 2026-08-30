@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AccountModelAddData, AccountModelAddErrors, AccountModelAddResponses, AccountModelRefreshData, AccountModelRefreshErrors, AccountModelRefreshResponses, AccountModelRemoveData, AccountModelRemoveErrors, AccountModelRemoveResponses, AccountModelsListData2, AccountModelsListErrors, AccountModelsListResponses, AccountsExportAuthJsonData, AccountsExportAuthJsonErrors, AccountsExportAuthJsonResponses, AccountsImportAuthJsonData, AccountsImportAuthJsonErrors, AccountsImportAuthJsonResponses, DashboardGetData, DashboardGetErrors, DashboardGetResponses, OauthBrowserManualCallbackData, OauthBrowserManualCallbackErrors, OauthBrowserManualCallbackResponses, OauthBrowserStartData, OauthBrowserStartErrors, OauthBrowserStartResponses, OauthCancelData, OauthCancelErrors, OauthCancelResponses, OauthDeviceStartData, OauthDeviceStartErrors, OauthDeviceStartResponses, OauthFlowStatusData, OauthFlowStatusErrors, OauthFlowStatusResponses, PlaygroundRunData, PlaygroundRunErrors, PlaygroundRunResponses, RequestsGetData, RequestsGetErrors, RequestsGetResponses, RequestsListData2, RequestsListErrors, RequestsListResponses, RequestsOptionsData2, RequestsOptionsErrors, RequestsOptionsResponses, SettingsGetData, SettingsGetErrors, SettingsGetResponses, SettingsUpdateData, SettingsUpdateErrors, SettingsUpdateResponses, UsageGetData, UsageGetErrors, UsageGetResponses } from './types.gen';
+import type { AccountModelAddData, AccountModelAddErrors, AccountModelAddResponses, AccountModelRefreshData, AccountModelRefreshErrors, AccountModelRefreshResponses, AccountModelRemoveData, AccountModelRemoveErrors, AccountModelRemoveResponses, AccountModelsListData2, AccountModelsListErrors, AccountModelsListResponses, AccountProxySetData, AccountProxySetErrors, AccountProxySetResponses, AccountsExportAuthJsonData, AccountsExportAuthJsonErrors, AccountsExportAuthJsonResponses, AccountsImportAuthJsonData, AccountsImportAuthJsonErrors, AccountsImportAuthJsonResponses, DashboardGetData, DashboardGetErrors, DashboardGetResponses, OauthBrowserManualCallbackData, OauthBrowserManualCallbackErrors, OauthBrowserManualCallbackResponses, OauthBrowserStartData, OauthBrowserStartErrors, OauthBrowserStartResponses, OauthCancelData, OauthCancelErrors, OauthCancelResponses, OauthDeviceStartData, OauthDeviceStartErrors, OauthDeviceStartResponses, OauthFlowStatusData, OauthFlowStatusErrors, OauthFlowStatusResponses, PlaygroundRunData, PlaygroundRunErrors, PlaygroundRunResponses, RequestsGetData, RequestsGetErrors, RequestsGetResponses, RequestsListData2, RequestsListErrors, RequestsListResponses, RequestsOptionsData2, RequestsOptionsErrors, RequestsOptionsResponses, SettingsGetData, SettingsGetErrors, SettingsGetResponses, SettingsProxyTestData, SettingsProxyTestErrors, SettingsProxyTestResponses, SettingsUpdateData, SettingsUpdateErrors, SettingsUpdateResponses, UsageGetData, UsageGetErrors, UsageGetResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -22,8 +22,9 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
  * Return hot-reloadable runtime settings.
  *
  * Returns the live Settings page projection: the five
- * hot-reloadable runtime controls, non-secret DB identity, live
- * plugin summaries, persisted plugin intents, and build metadata.
+ * hot-reloadable runtime controls, non-secret outbound-proxy and DB
+ * identity, live plugin summaries, persisted plugin intents, and
+ * build metadata.
  * `db.url` and every credential-bearing field are intentionally
  * omitted.
  *
@@ -35,13 +36,14 @@ export const settingsGet = <ThrowOnError extends boolean = false>(options?: Opti
 });
 
 /**
- * Patch hot-reloadable runtime settings and plugin intents.
+ * Patch hot-reloadable runtime, network, and plugin settings.
  *
- * Partial, RPC-style settings mutation. Only the five
- * `runtime.*` fields and the two persisted plugin intent flags
- * (`plugins.admin_auth.enabled`, `plugins.client_keys.enabled`)
- * are patchable. Unknown keys are rejected with
- * `2012 unknown_config_key`. On success the response returns the
+ * Partial, RPC-style settings mutation. The five `runtime.*`
+ * fields, the two persisted plugin intent flags
+ * (`plugins.admin_auth.enabled`, `plugins.client_keys.enabled`),
+ * and `network.proxy_url` are patchable. Unknown keys are rejected
+ * with `2012 unknown_config_key`; invalid proxy URLs are rejected
+ * with `9001 invalid_proxy_url`. On success the response returns the
  * same `data` shape as `GET /api/admin/settings` so the SPA can
  * hydrate its cache without a follow-up GET.
  *
@@ -53,6 +55,30 @@ export const settingsGet = <ThrowOnError extends boolean = false>(options?: Opti
 export const settingsUpdate = <ThrowOnError extends boolean = false>(options: Options<SettingsUpdateData, ThrowOnError>) => (options.client ?? client).post<SettingsUpdateResponses, SettingsUpdateErrors, ThrowOnError>({
     security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
     url: '/api/admin/settings/update',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Test connectivity through a candidate outbound proxy URL.
+ *
+ * Feature 009 connectivity probe. The proxy URL in the request
+ * body (may carry credentials) is dialed to the OpenAI upstream
+ * through a fresh transport; any HTTP response counts as
+ * reachable. The response never echoes the URL — failures return
+ * `9003 proxy_test_failed` with a coarse stable `detail` reason
+ * (`timeout`, `connection_refused`, `proxy_auth_failed`,
+ * `dns_failed`, `tls_failed`, `network_error`). The value is NOT
+ * persisted; use `settingsUpdate` with `network.proxy_url` to
+ * save it.
+ *
+ */
+export const settingsProxyTest = <ThrowOnError extends boolean = false>(options: Options<SettingsProxyTestData, ThrowOnError>) => (options.client ?? client).post<SettingsProxyTestResponses, SettingsProxyTestErrors, ThrowOnError>({
+    security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
+    url: '/api/admin/settings/proxy/test',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -398,4 +424,29 @@ export const accountModelRefresh = <ThrowOnError extends boolean = false>(option
     security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
     url: '/api/admin/accounts/{id}/models/refresh',
     ...options
+});
+
+/**
+ * Opt an account in or out of the global outbound proxy.
+ *
+ * Feature 009 per-account egress switch. The body is an absolute
+ * assignment (`use_proxy: true|false`), so repeated calls with
+ * the same value succeed idempotently — this is not a state
+ * transition. The toggle is not a credential and works on every
+ * `auth_method`.
+ *
+ * Rejected with `9002 proxy_url_required` when `use_proxy=true`
+ * while `network.proxy_url` is not configured; missing ids
+ * return `1001 account_not_found`; deleted rows return `1004
+ * account_already_in_state` (mirroring enable/disable).
+ *
+ */
+export const accountProxySet = <ThrowOnError extends boolean = false>(options: Options<AccountProxySetData, ThrowOnError>) => (options.client ?? client).post<AccountProxySetResponses, AccountProxySetErrors, ThrowOnError>({
+    security: [{ name: 'X-Admin-Token', type: 'apiKey' }],
+    url: '/api/admin/accounts/{id}/proxy/set',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });

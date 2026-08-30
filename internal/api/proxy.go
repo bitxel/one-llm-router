@@ -294,6 +294,8 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		CredentialValue: string(accessToken),
 		AccountMetadata: accountBridgeMetadata(account),
 		UpstreamBaseURL: upstreamBaseURL,
+		UseProxy:        account.UseProxy,
+		AccountID:       account.ID,
 	})
 	if err != nil {
 		h.writeError(w, requestID, start, r, &account,

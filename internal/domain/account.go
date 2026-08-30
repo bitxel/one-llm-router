@@ -82,6 +82,13 @@ type UpstreamAccount struct {
 	PlanType         *string    `xorm:"'plan_type'" json:"plan_type,omitempty"`
 	ChatGPTAccountID *string    `xorm:"'chatgpt_account_id'" json:"chatgpt_account_id,omitempty"`
 
+	// Feature 009 — per-account outbound-proxy opt-in. NOT a credential:
+	// valid on every auth_method shape (UpdateDetails' OAuth immutability
+	// rule does not apply). false = direct egress (default); true = dial
+	// through the global network.proxy_url when configured, fail fast
+	// when not (specs/009-outbound-proxy spec §3.3 — no silent fallback).
+	UseProxy bool `xorm:"not null default(false) 'use_proxy'" json:"use_proxy"`
+
 	// Capabilities declares which API operations this account can handle.
 	// Stored as JSON text array. Only meaningful for api_key accounts.
 	// Empty/nil means the account supports no capability-governed operations.

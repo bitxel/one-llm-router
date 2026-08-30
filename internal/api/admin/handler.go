@@ -425,6 +425,10 @@ type accountListItemResponse struct {
 
 	Capabilities []string `json:"capabilities,omitempty"`
 
+	// UseProxy is the 009 per-account outbound-proxy opt-in, present
+	// on every auth_method (not a credential, spec 009 US-2).
+	UseProxy bool `json:"use_proxy"`
+
 	PrimaryUsedPercent     *float64   `json:"primary_used_percent,omitempty"`
 	SecondaryUsedPercent   *float64   `json:"secondary_used_percent,omitempty"`
 	UsageUpdatedAt         *time.Time `json:"usage_updated_at,omitempty"`
@@ -490,6 +494,7 @@ func newAccountListItemResponse(account domain.UpstreamAccount) accountListItemR
 		CreatedAt:    account.CreatedAt,
 		UpdatedAt:    account.UpdatedAt,
 		Capabilities: account.Capabilities,
+		UseProxy:     account.UseProxy,
 	}
 	if method == domain.AuthMethodAPIKey {
 		return resp
@@ -525,6 +530,7 @@ func newAccountListProjectionResponse(account store.AccountListItem) accountList
 		CreatedAt:    account.CreatedAt,
 		UpdatedAt:    account.UpdatedAt,
 		Capabilities: account.Capabilities,
+		UseProxy:     account.UseProxy,
 	}
 	if method == domain.AuthMethodAPIKey {
 		return resp

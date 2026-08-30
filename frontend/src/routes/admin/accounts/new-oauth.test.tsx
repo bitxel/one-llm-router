@@ -77,7 +77,7 @@ const pendingBrowserSnapshot: OAuthFlowSnapshot = {
   created_at: '2026-04-21T12:00:00Z',
   expires_at: '2026-04-21T12:05:00Z',
 }
-const successSnapshot: OAuthFlowSnapshot = {
+const successSnapshot: Extract<OAuthFlowSnapshot, { status: 'success' }> = {
   status: 'success',
   method: 'browser',
   flow_id: browserStartFlowID,
@@ -88,6 +88,7 @@ const successSnapshot: OAuthFlowSnapshot = {
     provider: 'openai',
     auth_method: 'oauth_browser',
     status: 'active',
+    use_proxy: false,
   },
 }
 const expiredDeviceSnapshot: OAuthFlowSnapshot = {

@@ -377,7 +377,7 @@ func (p *manualCallbackProvider) ExchangeCode(_ context.Context, _ string, _ str
 	return p.exchangeTokens, nil
 }
 
-func (*manualCallbackProvider) Refresh(context.Context, []byte) (oauth.Tokens, error) {
+func (*manualCallbackProvider) Refresh(context.Context, []byte, bool) (oauth.Tokens, error) {
 	return oauth.Tokens{}, errors.New("manualCallbackProvider.Refresh: not implemented")
 }
 

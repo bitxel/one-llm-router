@@ -105,6 +105,8 @@ func (h *ProxyHandler) serveModelsUnion(w http.ResponseWriter, requestID string,
 			CredentialValue: string(item.Token),
 			AccountMetadata: accountBridgeMetadata(account),
 			UpstreamBaseURL: upstreamBaseURL,
+			UseProxy:        account.UseProxy,
+			AccountID:       account.ID,
 		})
 		if err != nil {
 			h.writeError(w, requestID, start, r, &account,

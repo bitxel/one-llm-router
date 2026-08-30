@@ -249,6 +249,10 @@ describe('routeTree new-account gating', () => {
             host: '',
             database_name: 'router.db',
           },
+          network: {
+            proxy_configured: false,
+            proxy_url_masked: '',
+          },
           plugins: [],
           plugin_intents: [
             {
@@ -284,6 +288,10 @@ describe('routeTree new-account gating', () => {
           driver: 'sqlite3',
           host: '',
           database_name: 'router.db',
+        },
+        network: {
+          proxy_configured: false,
+          proxy_url_masked: '',
         },
         plugins: [],
         plugin_intents: [
@@ -366,6 +374,10 @@ describe('routeTree new-account gating', () => {
           driver: 'sqlite3',
           host: '',
           database_name: 'router.db',
+        },
+        network: {
+          proxy_configured: false,
+          proxy_url_masked: '',
         },
         plugins: [],
         system: {

@@ -42,6 +42,7 @@ All router-owned responses use a single envelope. See `specs/001-codex-router-mv
 | `6000–6999` | Feature 006 — OpenAI API gateway | 006 author |
 | `7000–7999` | Feature 007 — Data-plane Operation Bridge (reserved, no codes minted) | 007 author |
 | `8000–8999` | Feature 008 — Account Model Routing | 008 author |
+| `9000–9999` | Feature 009 — Outbound Proxy | 009 author |
 
 Each feature should prefer numbers toward the **low end** of its range and leave headroom at the top for additive codes in later revisions.
 
@@ -177,6 +178,16 @@ All business errors below are returned at **HTTP 200** in the standard Admin API
 | `8003` | `account_model_refresh_failed` | 200 | Upstream models endpoint unreachable or returned error during refresh. |
 | `8900` | `account_model_internal_error` | 500 | Unexpected model service failure. |
 
+### Feature 009 — Outbound Proxy (9000–9999)
+
+All business errors below are returned at **HTTP 200** in the standard Admin API envelope. The runtime stale-opt-in defence (data-plane request with `use_proxy=true` but no configured proxy) intentionally does NOT use a code from this range: it surfaces as the native 502-class data-plane failure, and OAuth refresh reuses the transient `request_failed` classification with the existing `usedFallback=true` fallback.
+
+| Code | Symbol | HTTP | Meaning |
+|---|---|---|---|
+| `9001` | `invalid_proxy_url` | 200 | `network.proxy_url` failed validation: scheme not in {http, https, socks5, socks5h}, unparsable URL, or missing host. `data.field = "network.proxy_url"`. |
+| `9002` | `proxy_url_required` | 200 | `POST /api/admin/accounts/{id}/proxy/set` with `use_proxy=true` while `network.proxy_url` is not configured. Set the proxy first or keep the toggle off. |
+| `9003` | `proxy_test_failed` | 200 | `POST /api/admin/settings/proxy/test` could not reach the OpenAI upstream through the candidate proxy. `data.detail` carries a coarse, stable reason (`timeout`, `connection_refused`, `proxy_auth_failed`, `dns_failed`, `tls_failed`, `network_error`); the candidate URL is never echoed back. |
+
 ## Adding a new code (checklist)
 
 Every PR that introduces a new error path must:
@@ -203,3 +214,5 @@ Every PR that introduces a new error path must:
 | 1.9 | 2026-04-26 | Clarified Feature 006 data-plane envelope exclusions for selected `/backend-api/*` paths, plus native `unsupported_endpoint` / `blocked_endpoint` router errors that are intentionally outside the Admin API code registry. |
 | 1.10 | 2026-04-27 | Moved router-local usage observability to `GET /api/admin/usage` and registered `6900 usage_internal_error`; removed `/api/codex/usage` from data-plane envelope exclusions. |
 | 1.11 | 2026-06-07 | Reserved `8000–8999` for Feature 008 — Account Model Routing. |
+| 1.12 | 2026-08-29 | Reserved `9000–9999` for Feature 009 — Outbound Proxy and registered `9001 invalid_proxy_url` / `9002 proxy_url_required`. Documented that the stale-opt-in runtime defence stays outside the registry (native data-plane failure + transient refresh fallback). |
+| 1.13 | 2026-08-30 | Registered `9003 proxy_test_failed` for the `POST /api/admin/settings/proxy/test` connectivity probe. |

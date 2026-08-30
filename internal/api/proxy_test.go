@@ -184,7 +184,7 @@ func (*proxyRefreshProvider) ExchangeCode(context.Context, string, string) (oaut
 	return oauth.Tokens{}, errors.New("not used in proxy refresh tests")
 }
 
-func (p *proxyRefreshProvider) Refresh(_ context.Context, _ []byte) (oauth.Tokens, error) {
+func (p *proxyRefreshProvider) Refresh(_ context.Context, _ []byte, _ bool) (oauth.Tokens, error) {
 	p.refreshCalls.Add(1)
 	if p.refreshGate != nil {
 		<-p.refreshGate

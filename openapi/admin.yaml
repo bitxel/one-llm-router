@@ -136,6 +136,12 @@ tags:
       refresh-from-upstream for the models an account advertises.
       The data-plane proxy consults this list to route requests
       to accounts that support the requested model.
+  - name: outbound-proxy
+    description: |
+      Feature 009 — global outbound proxy configuration (via the
+      settings endpoints' `network` block) and the per-account
+      opt-in switch. The settings value is the single source of
+      truth for egress; environment variables never participate.
 
 paths:
   /api/admin/settings:
@@ -145,8 +151,9 @@ paths:
       summary: Return hot-reloadable runtime settings.
       description: |
         Returns the live Settings page projection: the five
-        hot-reloadable runtime controls, non-secret DB identity, live
-        plugin summaries, persisted plugin intents, and build metadata.
+        hot-reloadable runtime controls, non-secret outbound-proxy and DB
+        identity, live plugin summaries, persisted plugin intents, and
+        build metadata.
         `db.url` and every credential-bearing field are intentionally
         omitted.
       responses:
@@ -162,13 +169,14 @@ paths:
     post:
       operationId: settingsUpdate
       tags: [settings]
-      summary: Patch hot-reloadable runtime settings and plugin intents.
+      summary: Patch hot-reloadable runtime, network, and plugin settings.
       description: |
-        Partial, RPC-style settings mutation. Only the five
-        `runtime.*` fields and the two persisted plugin intent flags
-        (`plugins.admin_auth.enabled`, `plugins.client_keys.enabled`)
-        are patchable. Unknown keys are rejected with
-        `2012 unknown_config_key`. On success the response returns the
+        Partial, RPC-style settings mutation. The five `runtime.*`
+        fields, the two persisted plugin intent flags
+        (`plugins.admin_auth.enabled`, `plugins.client_keys.enabled`),
+        and `network.proxy_url` are patchable. Unknown keys are rejected
+        with `2012 unknown_config_key`; invalid proxy URLs are rejected
+        with `9001 invalid_proxy_url`. On success the response returns the
         same `data` shape as `GET /api/admin/settings` so the SPA can
         hydrate its cache without a follow-up GET.
 
@@ -186,6 +194,35 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SettingsUpdateResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
+  /api/admin/settings/proxy/test:
+    post:
+      operationId: settingsProxyTest
+      tags: [settings, outbound-proxy]
+      summary: Test connectivity through a candidate outbound proxy URL.
+      description: |
+        Feature 009 connectivity probe. The proxy URL in the request
+        body (may carry credentials) is dialed to the OpenAI upstream
+        through a fresh transport; any HTTP response counts as
+        reachable. The response never echoes the URL — failures return
+        `9003 proxy_test_failed` with a coarse stable `detail` reason
+        (`timeout`, `connection_refused`, `proxy_auth_failed`,
+        `dns_failed`, `tls_failed`, `network_error`). The value is NOT
+        persisted; use `settingsUpdate` with `network.proxy_url` to
+        save it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProxyTestRequest' }
+      responses:
+        '200':
+          description: Envelope — reachable, invalid URL, or test failed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxyTestResponseBody' }
         '500':
           $ref: '#/components/responses/SystemError'
 
@@ -772,6 +809,41 @@ paths:
         '500':
           $ref: '#/components/responses/SystemError'
 
+  /api/admin/accounts/{id}/proxy/set:
+    post:
+      operationId: accountProxySet
+      tags: [outbound-proxy]
+      summary: Opt an account in or out of the global outbound proxy.
+      description: |
+        Feature 009 per-account egress switch. The body is an absolute
+        assignment (`use_proxy: true|false`), so repeated calls with
+        the same value succeed idempotently — this is not a state
+        transition. The toggle is not a credential and works on every
+        `auth_method`.
+
+        Rejected with `9002 proxy_url_required` when `use_proxy=true`
+        while `network.proxy_url` is not configured; missing ids
+        return `1001 account_not_found`; deleted rows return `1004
+        account_already_in_state` (mirroring enable/disable).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProxySetRequest' }
+      responses:
+        '200':
+          description: Envelope — success, proxy-required, or account-not-found/deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountProxySetResponseBody' }
+        '500':
+          $ref: '#/components/responses/SystemError'
+
 components:
   securitySchemes:
     adminAuth:
@@ -1026,6 +1098,103 @@ components:
         - $ref: '#/components/schemas/AccountModelRefreshFailedEnvelope'
         - $ref: '#/components/schemas/AccountModelInternalErrorEnvelope'
 
+    # ---- Outbound proxy (Feature 009) ----
+
+    ProxySetRequest:
+      type: object
+      additionalProperties: false
+      required: [use_proxy]
+      properties:
+        use_proxy:
+          type: boolean
+          description: Absolute assignment — true dials the global proxy, false dials direct.
+
+    AccountProxySetSuccessData:
+      type: object
+      required: [id, use_proxy]
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        use_proxy: { type: boolean }
+
+    AccountProxySetSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/AccountProxySetSuccessData' }
+
+    ProxyURLRequiredEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [9002] }
+            msg: { type: string, enum: [proxy_url_required] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
+    AccountProxySetResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/AccountProxySetSuccessEnvelope'
+        - $ref: '#/components/schemas/AccountNotFoundEnvelope'
+        - $ref: '#/components/schemas/MalformedBodyEnvelope'
+        - $ref: '#/components/schemas/AccountAlreadyInStateEnvelope'
+        - $ref: '#/components/schemas/ProxyURLRequiredEnvelope'
+        - $ref: '#/components/schemas/InternalErrorEnvelope'
+
+    ProxyTestRequest:
+      type: object
+      additionalProperties: false
+      required: [proxy_url]
+      description: |
+        Connectivity probe for a candidate outbound proxy URL. The
+        value may carry credentials and is never echoed back; it is
+        NOT persisted.
+      properties:
+        proxy_url:
+          type: string
+          description: Candidate proxy URL to probe (http/https/socks5/socks5h).
+
+    ProxyTestSuccessData:
+      type: object
+      required: [reachable]
+      properties:
+        reachable: { type: boolean }
+
+    ProxyTestSuccessEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [0] }
+            msg: { type: string, enum: [ok] }
+            data: { $ref: '#/components/schemas/ProxyTestSuccessData' }
+
+    ProxyTestFailedEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [9003] }
+            msg: { type: string, enum: [proxy_test_failed] }
+            data:
+              type: object
+              properties:
+                detail: { type: string }
+
+    ProxyTestResponseBody:
+      oneOf:
+        - $ref: '#/components/schemas/ProxyTestSuccessEnvelope'
+        - $ref: '#/components/schemas/InvalidProxyURLEnvelope'
+        - $ref: '#/components/schemas/ProxyTestFailedEnvelope'
+        - $ref: '#/components/schemas/MalformedBodyEnvelope'
+        - $ref: '#/components/schemas/InternalErrorEnvelope'
+
     # ---- Shared request types ----
 
     OAuthStartRequest:
@@ -1067,12 +1236,14 @@ components:
       additionalProperties: false
       description: |
         Partial Settings update. Empty objects are legal no-ops. Any
-        top-level key other than `runtime` or `plugins`, any unknown
-        `runtime.*` key, and any unknown `plugins.*` or
-        `plugins.*.*` key returns `2012 unknown_config_key`.
+        top-level key other than `runtime`, `plugins` or `network`, any
+        unknown `runtime.*` key, and any unknown `plugins.*` /
+        `plugins.*.*` / `network.*` key returns `2012
+        unknown_config_key`.
       properties:
         runtime: { $ref: '#/components/schemas/SettingsRuntimePatch' }
         plugins: { $ref: '#/components/schemas/SettingsPluginsPatch' }
+        network: { $ref: '#/components/schemas/SettingsNetworkPatch' }
 
     SettingsRuntimePatch:
       type: object
@@ -1112,6 +1283,39 @@ components:
       properties:
         enabled:
           type: boolean
+
+    SettingsNetworkPatch:
+      type: object
+      additionalProperties: false
+      description: |
+        Feature 009 outbound-proxy patch. `proxy_url` accepts an
+        absolute http/https/socks5/socks5h URL (userinfo credentials
+        allowed) or an empty string to clear. Invalid values return
+        `9001 invalid_proxy_url`.
+      properties:
+        proxy_url:
+          type: string
+          description: |
+            Write-only form of the global outbound proxy URL. GET
+            projections only ever expose the masked form
+            (`NetworkSettings.proxy_url_masked`).
+
+    NetworkSettings:
+      type: object
+      required: [proxy_configured, proxy_url_masked]
+      description: |
+        Non-secret outbound-proxy projection. The raw proxy_url is
+        never returned because it may carry credentials.
+      properties:
+        proxy_configured:
+          type: boolean
+          description: True when a proxy URL is configured (and egress is eligible to use it).
+        proxy_url_masked:
+          type: string
+          description: Masked URL (`socks5://user:*****@host:port` form) or "" when unset.
+        proxy_has_auth:
+          type: boolean
+          description: True when the stored URL carries userinfo credentials.
 
     PlaygroundRunRequest:
       type: object
@@ -1166,9 +1370,10 @@ components:
 
     SettingsPayload:
       type: object
-      required: [runtime, db, plugins, plugin_intents, system]
+      required: [runtime, network, db, plugins, plugin_intents, system]
       properties:
         runtime: { $ref: '#/components/schemas/RuntimeSettings' }
+        network: { $ref: '#/components/schemas/NetworkSettings' }
         db: { $ref: '#/components/schemas/DBSettings' }
         plugins:
           type: array
@@ -1269,7 +1474,7 @@ components:
 
     AccountListItem:
       type: object
-      required: [id, name, provider, auth_method, status]
+      required: [id, name, provider, auth_method, status, use_proxy]
       description: |
         Admin projection of an account row. Works for both API-key and
         OAuth accounts; OAuth-only fields (`email`, `plan_type`,
@@ -1324,6 +1529,13 @@ components:
             operations — it will be skipped for any capability-gated
             route. OAuth accounts always skip capability checks.
             Example: `["op.openai.chat_completions", "op.openai.responses"]`.
+        use_proxy:
+          type: boolean
+          description: |
+            Feature 009 per-account outbound-proxy opt-in. Present on
+            every auth_method. false (default) = direct egress; true =
+            dial through the global `network.proxy_url` (fails fast as
+            an upstream error when the proxy was later removed).
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -2038,8 +2250,14 @@ components:
         - $ref: '#/components/schemas/EnvelopeBase'
         - type: object
           properties:
-            code: { type: integer, enum: [0] }
-            msg: { type: string, enum: [ok] }
+            code:
+              type: integer
+              enum: [0]
+              x-enum-varnames: [UsageEnvelopeCodeN0]
+            msg:
+              type: string
+              enum: [ok]
+              x-enum-varnames: [UsageEnvelopeMsgOk]
             data: { $ref: '#/components/schemas/UsageData' }
 
     RequestsListEnvelope:
@@ -2404,6 +2622,24 @@ components:
             msg: { type: string, enum: [account_not_found] }
             data: { type: object }
 
+    AccountAlreadyInStateEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [1004] }
+            msg: { type: string, enum: [account_already_in_state] }
+            data: { type: object }
+
+    InternalErrorEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [1901] }
+            msg: { type: string, enum: [internal_error] }
+            data: { type: object }
+
     RequestRecordNotFoundEnvelope:
       allOf:
         - $ref: '#/components/schemas/EnvelopeBase'
@@ -2445,6 +2681,19 @@ components:
           properties:
             code: { type: integer, enum: [2006] }
             msg: { type: string, enum: [invalid_plugin_flag] }
+            data:
+              type: object
+              properties:
+                field: { type: string }
+                detail: { type: string }
+
+    InvalidProxyURLEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            code: { type: integer, enum: [9001] }
+            msg: { type: string, enum: [invalid_proxy_url] }
             data:
               type: object
               properties:
@@ -2578,6 +2827,7 @@ components:
         - $ref: '#/components/schemas/InvalidLogLevelEnvelope'
         - $ref: '#/components/schemas/InvalidModelRenameEnvelope'
         - $ref: '#/components/schemas/InvalidPluginFlagEnvelope'
+        - $ref: '#/components/schemas/InvalidProxyURLEnvelope'
 
     OAuthCancelResponseBody:
       oneOf:

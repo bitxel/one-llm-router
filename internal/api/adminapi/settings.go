@@ -18,6 +18,7 @@
 package adminapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -31,6 +32,7 @@ import (
 	"github.com/user/one-llm-router/internal/api/httpio"
 	"github.com/user/one-llm-router/internal/app/buildinfo"
 	"github.com/user/one-llm-router/internal/config"
+	"github.com/user/one-llm-router/internal/proxydial"
 	"github.com/user/one-llm-router/internal/setup"
 )
 
@@ -177,6 +179,7 @@ func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"request_id", reqID,
 		"runtime_keys_changed", patch.RuntimeKeys(),
 		"plugin_keys_changed", patch.PluginKeys(),
+		"network_keys_changed", patch.NetworkKeys(),
 	)
 	api.WriteOK(w, reqID, projectSettings(cfg))
 }
@@ -204,11 +207,31 @@ func projectSettings(cfg *config.Config) map[string]any {
 			"log_level":                  cfg.Runtime.LogLevel,
 			"model_renames":              cloneModelRenameRules(cfg.Runtime.ModelRenames),
 		},
+		"network":        projectNetwork(cfg.Network),
 		"db":             projectDB(cfg.DB),
 		"plugins":        []any{}, // 002 ships no concrete plugins
 		"plugin_intents": projectPluginIntents(cfg.Plugins),
 		"system":         projectSystem(),
 	}
+}
+
+// projectNetwork exposes the 009 outbound-proxy setting WITHOUT ever
+// returning the raw URL: credentials ride inside proxy_url, so the
+// projection carries only the masked form and whether credentials exist.
+func projectNetwork(n config.NetworkConfig) map[string]any {
+	raw := strings.TrimSpace(n.ProxyURL)
+	out := map[string]any{
+		"proxy_configured": raw != "",
+		"proxy_url_masked": proxydial.MaskedURL(raw),
+		"proxy_has_auth":   false,
+	}
+	if raw == "" {
+		return out
+	}
+	if parsed, err := url.Parse(raw); err == nil {
+		out["proxy_has_auth"] = parsed.User != nil
+	}
+	return out
 }
 
 // projectPluginIntents exposes the operator's persisted plugin-enable
@@ -357,6 +380,16 @@ type SettingsPatch struct {
 	ModelRenames            *[]config.ModelRenameRule // runtime.model_renames
 	AdminAuthEnabled        *bool                     // plugins.admin_auth.enabled
 	ClientKeysEnabled       *bool                     // plugins.client_keys.enabled
+	NetworkProxyURL         *string                   // network.proxy_url (009); "" clears
+}
+
+// NetworkKeys returns the network keys touched by the patch.
+func (p SettingsPatch) NetworkKeys() []string {
+	var out []string
+	if p.NetworkProxyURL != nil {
+		out = append(out, "proxy_url")
+	}
+	return out
 }
 
 // RuntimeKeys returns the slice of runtime keys actually present in
@@ -399,7 +432,7 @@ func (p SettingsPatch) PluginKeys() []string {
 
 // IsEmpty reports whether the patch contains no actionable keys.
 func (p SettingsPatch) IsEmpty() bool {
-	return len(p.RuntimeKeys()) == 0 && len(p.PluginKeys()) == 0
+	return len(p.RuntimeKeys()) == 0 && len(p.PluginKeys()) == 0 && len(p.NetworkKeys()) == 0
 }
 
 // parseAndValidatePatch reads the decoded top-level map, detects
@@ -410,12 +443,12 @@ func parseAndValidatePatch(raw map[string]json.RawMessage) (SettingsPatch, *setu
 
 	for k := range raw {
 		switch k {
-		case "runtime", "plugins":
+		case "runtime", "plugins", "network":
 			// OK
 		default:
 			return patch, &setup.ValidationError{
 				Code:  errcode.UnknownConfigKey,
-				Msg:   fmt.Sprintf("config key %q is not patchable in 002", k),
+				Msg:   fmt.Sprintf("config key %q is not patchable", k),
 				Field: k,
 			}
 		}
@@ -447,7 +480,68 @@ func parseAndValidatePatch(raw map[string]json.RawMessage) (SettingsPatch, *setu
 		}
 	}
 
+	if networkRaw, ok := raw["network"]; ok {
+		if strings.TrimSpace(string(networkRaw)) == "null" {
+			return patch, &setup.ValidationError{
+				Code: errcode.MalformedBody,
+				Msg:  "network must be a JSON object",
+			}
+		}
+		networkMap := map[string]json.RawMessage{}
+		if err := json.Unmarshal(networkRaw, &networkMap); err != nil {
+			return patch, &setup.ValidationError{
+				Code: errcode.MalformedBody,
+				Msg:  "network must be a JSON object",
+			}
+		}
+		if vErr := decodeNetworkPatch(networkMap, &patch); vErr != nil {
+			return patch, vErr
+		}
+	}
+
 	return patch, nil
+}
+
+// decodeNetworkPatch walks the network object (Feature 009). The only
+// writable key is proxy_url: a string that must parse with an
+// allow-listed scheme and a non-empty host (proxydial.ParseAndValidate),
+// or "" to clear. Everything else → 2012.
+func decodeNetworkPatch(raw map[string]json.RawMessage, patch *SettingsPatch) *setup.ValidationError {
+	for k, v := range raw {
+		switch k {
+		case "proxy_url":
+			if bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
+				return &setup.ValidationError{
+					Code:  errcode.MalformedBody,
+					Msg:   "network.proxy_url must be a string or \"\" to clear",
+					Field: "network.proxy_url",
+				}
+			}
+			var s string
+			if err := json.Unmarshal(v, &s); err != nil {
+				return &setup.ValidationError{
+					Code:  errcode.InvalidProxyURL,
+					Msg:   "network.proxy_url must be a string (http/https/socks5/socks5h) or \"\" to clear",
+					Field: "network.proxy_url",
+				}
+			}
+			if _, err := proxydial.ParseAndValidate(s); err != nil {
+				return &setup.ValidationError{
+					Code:  errcode.InvalidProxyURL,
+					Msg:   err.Error(),
+					Field: "network.proxy_url",
+				}
+			}
+			patch.NetworkProxyURL = &s
+		default:
+			return &setup.ValidationError{
+				Code:  errcode.UnknownConfigKey,
+				Msg:   fmt.Sprintf("config key %q is not patchable", "network."+k),
+				Field: "network." + k,
+			}
+		}
+	}
+	return nil
 }
 
 // decodeRuntimePatch inspects each present runtime key, enforcing its

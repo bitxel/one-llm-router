@@ -371,9 +371,9 @@ func oauthSystemErrorCode(err error) int {
 func oauthSystemErrorEnum(code int) generatedadminapi.EnvelopeSystemErrorCode {
 	switch code {
 	case errcode.OAuthInternalError:
-		return generatedadminapi.N3900
+		return generatedadminapi.EnvelopeSystemErrorCodeN3900
 	case errcode.OAuthStoreFailed:
-		return generatedadminapi.N3901
+		return generatedadminapi.EnvelopeSystemErrorCodeN3901
 	default:
 		panic(fmt.Sprintf("oauthSystemErrorEnum: unsupported code %d", code))
 	}
@@ -815,6 +815,7 @@ func accountListItemFromDomain(account *domain.UpstreamAccount) (generatedadmina
 		CreatedAt:  &createdAt,
 		UpdatedAt:  &updatedAt,
 	}
+	item.UseProxy = account.UseProxy
 
 	if account.AuthMethod != domain.AuthMethodAPIKey {
 		item.Email = account.Email
@@ -867,18 +868,10 @@ func intPointerIfPositive(v int) *int {
 	return &v
 }
 
-func int64Pointer(v int64) *int64 {
-	return &v
-}
-
-func boolPointer(v bool) *bool {
-	return &v
-}
-
 func (h *Handler) AccountModelsList(ctx context.Context, request generatedadminapi.AccountModelsListRequestObject) (generatedadminapi.AccountModelsListResponseObject, error) {
 	return generatedadminapi.AccountModelsList500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -888,7 +881,27 @@ func (h *Handler) AccountModelsList(ctx context.Context, request generatedadmina
 func (h *Handler) AccountModelAdd(ctx context.Context, request generatedadminapi.AccountModelAddRequestObject) (generatedadminapi.AccountModelAddResponseObject, error) {
 	return generatedadminapi.AccountModelAdd500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *Handler) AccountProxySet(ctx context.Context, request generatedadminapi.AccountProxySetRequestObject) (generatedadminapi.AccountProxySetResponseObject, error) {
+	return generatedadminapi.AccountProxySet500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *Handler) SettingsProxyTest(ctx context.Context, request generatedadminapi.SettingsProxyTestRequestObject) (generatedadminapi.SettingsProxyTestResponseObject, error) {
+	return generatedadminapi.SettingsProxyTest500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -898,7 +911,7 @@ func (h *Handler) AccountModelAdd(ctx context.Context, request generatedadminapi
 func (h *Handler) AccountModelRefresh(ctx context.Context, request generatedadminapi.AccountModelRefreshRequestObject) (generatedadminapi.AccountModelRefreshResponseObject, error) {
 	return generatedadminapi.AccountModelRefresh500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -908,7 +921,7 @@ func (h *Handler) AccountModelRefresh(ctx context.Context, request generatedadmi
 func (h *Handler) AccountModelRemove(ctx context.Context, request generatedadminapi.AccountModelRemoveRequestObject) (generatedadminapi.AccountModelRemoveResponseObject, error) {
 	return generatedadminapi.AccountModelRemove500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},

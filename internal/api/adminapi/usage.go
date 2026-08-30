@@ -59,8 +59,8 @@ func (h *UsageHandler) UsageGet(ctx context.Context, _ generatedadminapi.UsageGe
 
 func usageSuccess(summary core.AdminUsageSummary) generatedadminapi.UsageGetResponseObject {
 	env := generatedadminapi.UsageEnvelope{
-		Code: generatedadminapi.N0,
-		Msg:  generatedadminapi.Ok,
+		Code: generatedadminapi.UsageEnvelopeCodeN0,
+		Msg:  generatedadminapi.UsageEnvelopeMsgOk,
 		Data: generatedadminapi.UsageData{
 			RequestCount:      summary.RequestCount,
 			TotalTokens:       summary.TotalTokens,
@@ -96,7 +96,7 @@ func nullableObject(value map[string]any) *map[string]interface{} {
 func usageSystemError(error) generatedadminapi.UsageGetResponseObject {
 	return generatedadminapi.UsageGet500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N6900,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN6900,
 			Data: map[string]interface{}{},
 			Msg:  errcode.Symbol(errcode.UsageInternalError),
 		},
@@ -162,7 +162,7 @@ func (h *UsageHandler) SettingsUpdate(context.Context, generatedadminapi.Setting
 func (h *UsageHandler) AccountModelsList(ctx context.Context, request generatedadminapi.AccountModelsListRequestObject) (generatedadminapi.AccountModelsListResponseObject, error) {
 	return generatedadminapi.AccountModelsList500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -172,7 +172,27 @@ func (h *UsageHandler) AccountModelsList(ctx context.Context, request generateda
 func (h *UsageHandler) AccountModelAdd(ctx context.Context, request generatedadminapi.AccountModelAddRequestObject) (generatedadminapi.AccountModelAddResponseObject, error) {
 	return generatedadminapi.AccountModelAdd500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *UsageHandler) AccountProxySet(ctx context.Context, request generatedadminapi.AccountProxySetRequestObject) (generatedadminapi.AccountProxySetResponseObject, error) {
+	return generatedadminapi.AccountProxySet500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
+			Msg:  "internal_error",
+			Data: map[string]any{},
+		},
+	}, nil
+}
+
+func (h *UsageHandler) SettingsProxyTest(ctx context.Context, request generatedadminapi.SettingsProxyTestRequestObject) (generatedadminapi.SettingsProxyTestResponseObject, error) {
+	return generatedadminapi.SettingsProxyTest500JSONResponse{
+		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -182,7 +202,7 @@ func (h *UsageHandler) AccountModelAdd(ctx context.Context, request generatedadm
 func (h *UsageHandler) AccountModelRefresh(ctx context.Context, request generatedadminapi.AccountModelRefreshRequestObject) (generatedadminapi.AccountModelRefreshResponseObject, error) {
 	return generatedadminapi.AccountModelRefresh500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},
@@ -192,7 +212,7 @@ func (h *UsageHandler) AccountModelRefresh(ctx context.Context, request generate
 func (h *UsageHandler) AccountModelRemove(ctx context.Context, request generatedadminapi.AccountModelRemoveRequestObject) (generatedadminapi.AccountModelRemoveResponseObject, error) {
 	return generatedadminapi.AccountModelRemove500JSONResponse{
 		SystemErrorJSONResponse: generatedadminapi.SystemErrorJSONResponse{
-			Code: generatedadminapi.N1901,
+			Code: generatedadminapi.EnvelopeSystemErrorCodeN1901,
 			Msg:  "internal_error",
 			Data: map[string]any{},
 		},

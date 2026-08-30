@@ -545,7 +545,7 @@ func TestAccountService_Create_AutoRefreshesModels(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	baseURL := srv.URL + "/v1"
-	refresher := NewModelRefresher(&http.Client{Timeout: 2 * time.Second}, "", "", discardLogger())
+	refresher := NewModelRefresher(&http.Client{Timeout: 2 * time.Second}, nil, "", "", discardLogger())
 	modelRepo := &recordingModelRepo{got: map[int64][]string{}}
 	svc := NewAccountService(newInMemoryAccountRepo(), discardLogger())
 	svc.SetModelRefresher(refresher, modelRepo)

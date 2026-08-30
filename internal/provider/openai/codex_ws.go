@@ -60,22 +60,27 @@ func (c *Client) DialCodexWebSocket(
 		headers.Set("chatgpt-account-id", *account.ChatGPTAccountID)
 	}
 
-	return c.dialWebSocket(ctx, targetURL, headers, turnState)
+	return c.dialWebSocket(ctx, targetURL, headers, turnState, account.UseProxy, account.ID)
 }
 
 func (c *Client) DialBridgeWebSocket(ctx context.Context, upstream UpstreamRequest, turnState string) (*websocket.Conn, *http.Response, error) {
 	if strings.TrimSpace(upstream.URL) == "" {
 		return nil, nil, fmt.Errorf("%w: missing bridge websocket upstream URL", ErrInvalidUpstreamRequest)
 	}
-	return c.dialWebSocket(ctx, websocketURL(upstream.URL), upstream.Headers.Clone(), turnState)
+	return c.dialWebSocket(ctx, websocketURL(upstream.URL), upstream.Headers.Clone(), turnState, upstream.UseProxy, upstream.AccountID)
 }
 
-func (c *Client) dialWebSocket(ctx context.Context, targetURL string, headers http.Header, turnState string) (*websocket.Conn, *http.Response, error) {
+func (c *Client) dialWebSocket(ctx context.Context, targetURL string, headers http.Header, turnState string, useProxy bool, accountID int64) (*websocket.Conn, *http.Response, error) {
 	headers.Set("x-codex-turn-state", turnState)
 	appendOpenAIBeta(headers, responsesWebSocketBetaToken)
 
+	httpClient, err := c.httpClientForUseProxy(useProxy, accountID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrUpstreamConnectFailed, err)
+	}
+
 	conn, resp, err := websocket.Dial(ctx, targetURL, &websocket.DialOptions{
-		HTTPClient:      c.httpClient,
+		HTTPClient:      httpClient,
 		HTTPHeader:      headers,
 		CompressionMode: websocket.CompressionDisabled,
 	})

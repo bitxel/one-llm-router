@@ -1,0 +1,1 @@
+ALTER TABLE upstream_accounts ADD COLUMN use_proxy TINYINT(1) NOT NULL DEFAULT 0;

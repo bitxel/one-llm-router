@@ -154,6 +154,68 @@ export type AccountModelsRemoveResponseBody = AccountModelsRemoveSuccessEnvelope
 
 export type AccountModelsRefreshResponseBody = AccountModelsRefreshSuccessEnvelope | AccountNotFoundEnvelope | AccountModelRefreshFailedEnvelope | AccountModelInternalErrorEnvelope;
 
+export type ProxySetRequest = {
+    /**
+     * Absolute assignment — true dials the global proxy, false dials direct.
+     */
+    use_proxy: boolean;
+};
+
+export type AccountProxySetSuccessData = {
+    id: number;
+    use_proxy: boolean;
+};
+
+export type AccountProxySetSuccessEnvelope = EnvelopeBase & {
+    code?: 0;
+    msg?: 'ok';
+    data?: AccountProxySetSuccessData;
+};
+
+export type ProxyUrlRequiredEnvelope = EnvelopeBase & {
+    code?: 9002;
+    msg?: 'proxy_url_required';
+    data?: {
+        field?: string;
+        detail?: string;
+    };
+};
+
+export type AccountProxySetResponseBody = AccountProxySetSuccessEnvelope | AccountNotFoundEnvelope | MalformedBodyEnvelope | AccountAlreadyInStateEnvelope | ProxyUrlRequiredEnvelope | InternalErrorEnvelope;
+
+/**
+ * Connectivity probe for a candidate outbound proxy URL. The
+ * value may carry credentials and is never echoed back; it is
+ * NOT persisted.
+ *
+ */
+export type ProxyTestRequest = {
+    /**
+     * Candidate proxy URL to probe (http/https/socks5/socks5h).
+     */
+    proxy_url: string;
+};
+
+export type ProxyTestSuccessData = {
+    reachable: boolean;
+};
+
+export type ProxyTestSuccessEnvelope = EnvelopeBase & {
+    code?: 0;
+    msg?: 'ok';
+    data?: ProxyTestSuccessData;
+};
+
+export type ProxyTestFailedEnvelope = EnvelopeBase & {
+    code?: 9003;
+    msg?: 'proxy_test_failed';
+    data?: {
+        detail?: string;
+    };
+};
+
+export type ProxyTestResponseBody = ProxyTestSuccessEnvelope | InvalidProxyUrlEnvelope | ProxyTestFailedEnvelope | MalformedBodyEnvelope | InternalErrorEnvelope;
+
 /**
  * Unknown keys are ignored to keep forward compatibility painless
  * when the CLI adds a new parameter.
@@ -181,14 +243,16 @@ export type CancelFlowRequest = {
 
 /**
  * Partial Settings update. Empty objects are legal no-ops. Any
- * top-level key other than `runtime` or `plugins`, any unknown
- * `runtime.*` key, and any unknown `plugins.*` or
- * `plugins.*.*` key returns `2012 unknown_config_key`.
+ * top-level key other than `runtime`, `plugins` or `network`, any
+ * unknown `runtime.*` key, and any unknown `plugins.*` /
+ * `plugins.*.*` / `network.*` key returns `2012
+ * unknown_config_key`.
  *
  */
 export type SettingsPatchRequest = {
     runtime?: SettingsRuntimePatch;
     plugins?: SettingsPluginsPatch;
+    network?: SettingsNetworkPatch;
 };
 
 export type SettingsRuntimePatch = {
@@ -216,6 +280,43 @@ export type SettingsPluginsPatch = {
 
 export type SettingsPluginFlagPatch = {
     enabled?: boolean;
+};
+
+/**
+ * Feature 009 outbound-proxy patch. `proxy_url` accepts an
+ * absolute http/https/socks5/socks5h URL (userinfo credentials
+ * allowed) or an empty string to clear. Invalid values return
+ * `9001 invalid_proxy_url`.
+ *
+ */
+export type SettingsNetworkPatch = {
+    /**
+     * Write-only form of the global outbound proxy URL. GET
+     * projections only ever expose the masked form
+     * (`NetworkSettings.proxy_url_masked`).
+     *
+     */
+    proxy_url?: string;
+};
+
+/**
+ * Non-secret outbound-proxy projection. The raw proxy_url is
+ * never returned because it may carry credentials.
+ *
+ */
+export type NetworkSettings = {
+    /**
+     * True when a proxy URL is configured (and egress is eligible to use it).
+     */
+    proxy_configured: boolean;
+    /**
+     * Masked URL (`socks5://user:*****@host:port` form) or "" when unset.
+     */
+    proxy_url_masked: string;
+    /**
+     * True when the stored URL carries userinfo credentials.
+     */
+    proxy_has_auth?: boolean;
 };
 
 export type PlaygroundRunRequest = {
@@ -252,6 +353,7 @@ export type PlaygroundRunRequest = {
 
 export type SettingsPayload = {
     runtime: RuntimeSettings;
+    network: NetworkSettings;
     db: DbSettings;
     plugins: Array<PluginSummary>;
     plugin_intents: Array<PluginIntent>;
@@ -375,6 +477,14 @@ export type AccountListItem = {
      *
      */
     capabilities?: Array<string>;
+    /**
+     * Feature 009 per-account outbound-proxy opt-in. Present on
+     * every auth_method. false (default) = direct egress; true =
+     * dial through the global `network.proxy_url` (fails fast as
+     * an upstream error when the proxy was later removed).
+     *
+     */
+    use_proxy: boolean;
     created_at?: string;
     updated_at?: string;
 };
@@ -1049,6 +1159,22 @@ export type AccountNotFoundEnvelope = EnvelopeBase & {
     };
 };
 
+export type AccountAlreadyInStateEnvelope = EnvelopeBase & {
+    code?: 1004;
+    msg?: 'account_already_in_state';
+    data?: {
+        [key: string]: unknown;
+    };
+};
+
+export type InternalErrorEnvelope = EnvelopeBase & {
+    code?: 1901;
+    msg?: 'internal_error';
+    data?: {
+        [key: string]: unknown;
+    };
+};
+
 export type RequestRecordNotFoundEnvelope = EnvelopeBase & {
     code?: 1005;
     msg?: 'request_record_not_found';
@@ -1080,6 +1206,15 @@ export type InvalidApiKeyEnvelope = EnvelopeBase & {
 export type InvalidPluginFlagEnvelope = EnvelopeBase & {
     code?: 2006;
     msg?: 'invalid_plugin_flag';
+    data?: {
+        field?: string;
+        detail?: string;
+    };
+};
+
+export type InvalidProxyUrlEnvelope = EnvelopeBase & {
+    code?: 9001;
+    msg?: 'invalid_proxy_url';
     data?: {
         field?: string;
         detail?: string;
@@ -1151,7 +1286,7 @@ export type InvalidModelRenameEnvelope = EnvelopeBase & {
 
 export type SettingsGetResponseBody = SettingsEnvelope | SetupRequiredEnvelope;
 
-export type SettingsUpdateResponseBody = SettingsEnvelope | RequestBodyTooLargeEnvelope | MalformedBodyEnvelope | UnknownConfigKeyEnvelope | EnvOverrideReadonlyEnvelope | InvalidRetentionEnvelope | InvalidLogLevelEnvelope | InvalidModelRenameEnvelope | InvalidPluginFlagEnvelope;
+export type SettingsUpdateResponseBody = SettingsEnvelope | RequestBodyTooLargeEnvelope | MalformedBodyEnvelope | UnknownConfigKeyEnvelope | EnvOverrideReadonlyEnvelope | InvalidRetentionEnvelope | InvalidLogLevelEnvelope | InvalidModelRenameEnvelope | InvalidPluginFlagEnvelope | InvalidProxyUrlEnvelope;
 
 export type OAuthCancelResponseBody = CancelSuccessEnvelope | FlowIdMismatchEnvelope;
 
@@ -1280,6 +1415,37 @@ export type SettingsUpdateResponses = {
 };
 
 export type SettingsUpdateResponse = SettingsUpdateResponses[keyof SettingsUpdateResponses];
+
+export type SettingsProxyTestData = {
+    body: ProxyTestRequest;
+    path?: never;
+    query?: never;
+    url: '/api/admin/settings/proxy/test';
+};
+
+export type SettingsProxyTestErrors = {
+    /**
+     * HTTP 500 — reserved for system errors (panic, DB unavailable,
+     * store write failure, export read failure, transport-layer
+     * handler bug). The envelope is the same shape; `code` is always
+     * one of `-1` / 1900 / 1901 / 2903 / 3900 / 3901 / 3902 / 4900 / 5900 / 6900.
+     * Clients SHOULD treat any HTTP 500 as a retriable server fault and surface the
+     * `code`/`msg` to the operator.
+     *
+     */
+    500: EnvelopeSystemError;
+};
+
+export type SettingsProxyTestError = SettingsProxyTestErrors[keyof SettingsProxyTestErrors];
+
+export type SettingsProxyTestResponses = {
+    /**
+     * Envelope — reachable, invalid URL, or test failed.
+     */
+    200: ProxyTestResponseBody;
+};
+
+export type SettingsProxyTestResponse = SettingsProxyTestResponses[keyof SettingsProxyTestResponses];
 
 export type OauthBrowserStartData = {
     body: OAuthStartRequest;
@@ -1876,3 +2042,36 @@ export type AccountModelRefreshResponses = {
 };
 
 export type AccountModelRefreshResponse = AccountModelRefreshResponses[keyof AccountModelRefreshResponses];
+
+export type AccountProxySetData = {
+    body: ProxySetRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/admin/accounts/{id}/proxy/set';
+};
+
+export type AccountProxySetErrors = {
+    /**
+     * HTTP 500 — reserved for system errors (panic, DB unavailable,
+     * store write failure, export read failure, transport-layer
+     * handler bug). The envelope is the same shape; `code` is always
+     * one of `-1` / 1900 / 1901 / 2903 / 3900 / 3901 / 3902 / 4900 / 5900 / 6900.
+     * Clients SHOULD treat any HTTP 500 as a retriable server fault and surface the
+     * `code`/`msg` to the operator.
+     *
+     */
+    500: EnvelopeSystemError;
+};
+
+export type AccountProxySetError = AccountProxySetErrors[keyof AccountProxySetErrors];
+
+export type AccountProxySetResponses = {
+    /**
+     * Envelope — success, proxy-required, or account-not-found/deleted.
+     */
+    200: AccountProxySetResponseBody;
+};
+
+export type AccountProxySetResponse = AccountProxySetResponses[keyof AccountProxySetResponses];

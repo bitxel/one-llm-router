@@ -242,7 +242,7 @@ func TestPlaygroundRunContract(t *testing.T) {
 		require.NoError(t, err)
 		system, ok := resp.(generatedadminapi.PlaygroundRun500JSONResponse)
 		require.True(t, ok)
-		assert.Equal(t, generatedadminapi.N4900, system.Code)
+		assert.Equal(t, generatedadminapi.EnvelopeSystemErrorCodeN4900, system.Code)
 		assert.Equal(t, errcode.Symbol(errcode.PlaygroundInternalError), system.Msg)
 	})
 

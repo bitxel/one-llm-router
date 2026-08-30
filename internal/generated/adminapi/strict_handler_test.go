@@ -46,6 +46,12 @@ func (s stubServer) AccountsImportAuthJSON(ctx context.Context, req AccountsImpo
 	return s.importAuthResp.(AccountsImportAuthJSONResponseObject), nil
 }
 
+func (stubServer) AccountProxySet(context.Context, AccountProxySetRequestObject) (AccountProxySetResponseObject, error) {
+	panic("stubServer.AccountProxySet not wired")
+}
+func (stubServer) SettingsProxyTest(context.Context, SettingsProxyTestRequestObject) (SettingsProxyTestResponseObject, error) {
+	panic("stubServer.SettingsProxyTest not wired")
+}
 func (stubServer) AccountsExportAuthJSON(context.Context, AccountsExportAuthJSONRequestObject) (AccountsExportAuthJSONResponseObject, error) {
 	panic("stubServer.AccountsExportAuthJSON not wired")
 }

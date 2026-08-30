@@ -1756,7 +1756,7 @@ func (*appDeviceProvider) ExchangeCode(context.Context, string, string) (oauth.T
 	return oauth.Tokens{}, errors.New("appDeviceProvider.ExchangeCode: not implemented")
 }
 
-func (*appDeviceProvider) Refresh(context.Context, []byte) (oauth.Tokens, error) {
+func (*appDeviceProvider) Refresh(context.Context, []byte, bool) (oauth.Tokens, error) {
 	return oauth.Tokens{}, errors.New("appDeviceProvider.Refresh: not implemented")
 }
 
@@ -1768,42 +1768,6 @@ func (p *appDeviceProvider) RequestDeviceCode(context.Context) (oauth.DeviceCode
 func (p *appDeviceProvider) PollDeviceCode(context.Context, string, string) (oauth.Tokens, error) {
 	p.pollCalls.Add(1)
 	return oauth.Tokens{}, errors.New("appDeviceProvider.PollDeviceCode: should not be called")
-}
-
-type appBrowserProvider struct {
-	redirectURI string
-}
-
-func (p *appBrowserProvider) BuildAuthorizeURL(state, verifier string) (string, error) {
-	redirectURI := p.redirectURI
-	if redirectURI == "" {
-		redirectURI = "http://localhost:1455/auth/callback"
-	}
-	return "https://auth.example.test/oauth/authorize?state=" + state + "&verifier=" + verifier + "&redirect_uri=" + redirectURI, nil
-}
-
-func (*appBrowserProvider) ExchangeCode(context.Context, string, string) (oauth.Tokens, error) {
-	return oauth.Tokens{}, errors.New("appBrowserProvider.ExchangeCode: not implemented")
-}
-
-func (*appBrowserProvider) Refresh(context.Context, []byte) (oauth.Tokens, error) {
-	return oauth.Tokens{}, errors.New("appBrowserProvider.Refresh: not implemented")
-}
-
-func (*appBrowserProvider) RequestDeviceCode(context.Context) (oauth.DeviceCode, error) {
-	return oauth.DeviceCode{}, errors.New("appBrowserProvider.RequestDeviceCode: not implemented")
-}
-
-func (*appBrowserProvider) PollDeviceCode(context.Context, string, string) (oauth.Tokens, error) {
-	return oauth.Tokens{}, errors.New("appBrowserProvider.PollDeviceCode: not implemented")
-}
-
-func (p *appBrowserProvider) SetRedirectURI(redirectURI string) {
-	p.redirectURI = redirectURI
-}
-
-func (p *appBrowserProvider) WithRedirectURI(redirectURI string) oauth.Provider {
-	return &appBrowserProvider{redirectURI: redirectURI}
 }
 
 // helpers

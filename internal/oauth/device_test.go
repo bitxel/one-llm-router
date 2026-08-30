@@ -504,7 +504,7 @@ func (p *deviceProvider) ExchangeCode(context.Context, string, string) (Tokens, 
 	return Tokens{}, errors.New("deviceProvider.ExchangeCode: not implemented")
 }
 
-func (p *deviceProvider) Refresh(context.Context, []byte) (Tokens, error) {
+func (p *deviceProvider) Refresh(context.Context, []byte, bool) (Tokens, error) {
 	return Tokens{}, errors.New("deviceProvider.Refresh: not implemented")
 }
 

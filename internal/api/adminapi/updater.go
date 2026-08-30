@@ -121,25 +121,29 @@ func (u *ConfigUpdater) Update(patch SettingsPatch) (*config.Config, error) {
 	if err := config.WriteAtomic(u.path, next); err != nil {
 		return nil, fmt.Errorf("write config.json: %w", err)
 	}
-	u.publisher.Store(next)
 
-	// Re-load to re-compute the SourceMap: a settings update can
+	// Re-load before publishing to re-compute the SourceMap: a settings update can
 	// flip a field from "env:ROUTER_*" to "file" (or vice-versa when
 	// env changes behind the router's back) and the published map
 	// must stay in sync so future /api/admin/settings/update calls
 	// see the correct provenance for the 2013 guard. The re-load
-	// also validates that the WriteAtomic actually produced a
-	// loadable file — fail loud here rather than on the next boot.
+	// also validates that the WriteAtomic actually produced a loadable
+	// file — fail loud here rather than publishing an unverifiable config.
+	published := next
 	if u.env != nil {
-		if _, src, lerr := config.Load(context.Background(), u.path, u.env); lerr == nil {
-			config.SourcePublisher.Store(src)
+		loaded, src, lerr := config.Load(context.Background(), u.path, u.env)
+		if lerr != nil {
+			return nil, fmt.Errorf("reload config.json: %w", lerr)
 		}
+		published = loaded
+		config.SourcePublisher.Store(src)
 	}
+	u.publisher.Store(published)
 
 	if u.onReload != nil {
-		u.onReload(next)
+		u.onReload(published)
 	}
-	return next, nil
+	return published, nil
 }
 
 // cloneConfig returns a deep copy of cfg suitable for mutation.
@@ -191,6 +195,9 @@ func applyPatch(cfg *config.Config, p SettingsPatch) {
 	}
 	if p.ClientKeysEnabled != nil {
 		cfg.Plugins.ClientKeys.Enabled = *p.ClientKeysEnabled
+	}
+	if p.NetworkProxyURL != nil {
+		cfg.Network.ProxyURL = *p.NetworkProxyURL
 	}
 }
 

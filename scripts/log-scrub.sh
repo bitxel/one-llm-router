@@ -18,6 +18,7 @@ PATTERN_NAMES=(
   "plain_token_field"
   "jwt_shape"
   "openai_api_key"
+  "proxy_url_credentials"
 )
 PATTERN_REGEXES=(
   'Bearer [A-Za-z0-9+/=_-]{20,}'
@@ -26,6 +27,7 @@ PATTERN_REGEXES=(
   '(^|[^A-Za-z0-9_])(access_token|refresh_token|id_token)[[:space:]]*=[[:space:]]*[^"[:space:]][^[:space:]]{7,}'
   'eyJ[A-Za-z0-9._-]{40,}'
   'sk-[A-Za-z0-9_-]{8,}'
+  '(http|https|socks5|socks5h)://[^/@[:space:]]+:[^/@[:space:]]+@'
 )
 PATTERN_ALLOW_REGEXES=(
   ''
@@ -34,6 +36,7 @@ PATTERN_ALLOW_REGEXES=(
   '(^|[^A-Za-z0-9_])(access_token|refresh_token|id_token)[[:space:]]*=[[:space:]]*(fixture_[a-z0-9_]+|\[redacted\])'
   ''
   ''
+  ':[*]{5}@'
 )
 
 LOG_FILES=()

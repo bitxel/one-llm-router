@@ -45,6 +45,7 @@ import (
 	"github.com/user/one-llm-router/internal/oauth"
 	"github.com/user/one-llm-router/internal/plugin"
 	"github.com/user/one-llm-router/internal/provider/openai"
+	"github.com/user/one-llm-router/internal/proxydial"
 	"github.com/user/one-llm-router/internal/setup"
 	"github.com/user/one-llm-router/internal/spa"
 	"github.com/user/one-llm-router/internal/store"
@@ -310,14 +311,20 @@ func BuildApp(ctx context.Context, cfg *config.Config, src config.SourceMap, dep
 		migrationsDone = true
 	}
 
-	// 3. Steady-state — open DB.
+	// 3. Validate and install the proxy before touching the DB. An invalid
+	// URL must refuse startup without running migrations or publishing state.
+	if err := applyOutboundProxy(cfg, true); err != nil {
+		return nil, err
+	}
+
+	// 4. Steady-state — open DB.
 	st, err := store.New(cfg.DB.Driver, cfg.DB.URL, defaultMaxConns, defaultMinConns)
 	if err != nil {
 		return nil, fmt.Errorf("app.BuildApp: open store: %w", err)
 	}
 	a.store = st
 
-	// 4. Run migrations (skipped if the brownfield probe already did
+	// 5. Run migrations (skipped if the brownfield probe already did
 	//    so against the same DSN). Dirty state is LOGGED as ERROR
 	//    but not fatal — the operator can use `one-llm-router migrate force
 	//    <v>` to recover while the health endpoint stays up.
@@ -329,7 +336,7 @@ func BuildApp(ctx context.Context, cfg *config.Config, src config.SourceMap, dep
 		}
 	}
 
-	// 5. Plugin assembly. 002 ships zero concrete plugins, so the
+	// 6. Plugin assembly. 002 ships zero concrete plugins, so the
 	//    loop is effectively a no-op — but we still execute it so
 	//    any 003+ plugin registered via import-time side effect wires
 	//    up at boot in the expected order.
@@ -341,7 +348,7 @@ func BuildApp(ctx context.Context, cfg *config.Config, src config.SourceMap, dep
 	}
 	a.plugins = plugins
 
-	// 6. Publish effective config so hot-reload readers (e.g. the
+	// 7. Publish effective config so hot-reload readers (e.g. the
 	//    settings handler, future proxy body-logging toggle) see the
 	//    post-boot value before the first request lands. The
 	//    SourceMap is published in the same goroutine so the settings
@@ -418,6 +425,9 @@ func (a *App) promoteToSteadyState(ctx context.Context) error {
 	cfg, src, err := config.Load(ctx, a.deps.ConfigPath, a.deps.Env)
 	if err != nil {
 		return fmt.Errorf("promote: load config: %w", err)
+	}
+	if err := applyOutboundProxy(cfg, true); err != nil {
+		return fmt.Errorf("promote: %w", err)
 	}
 
 	st, err := store.New(cfg.DB.Driver, cfg.DB.URL, defaultMaxConns, defaultMinConns)
@@ -696,7 +706,8 @@ func registerSteadyStateRoutes(
 	recordRepo := store.NewRequestRecordRepo(st.Engine())
 
 	modelRefresher := core.NewModelRefresher(
-		&http.Client{Timeout: 30 * time.Second},
+		&http.Client{Timeout: 30 * time.Second, Transport: newRefreshTransport(nil)},
+		&http.Client{Timeout: 30 * time.Second, Transport: newRefreshTransport(proxydial.ProxyFunc())},
 		deps.CodexBackendBaseURL,
 		openai.CodexClientVersion,
 		a.logger,
@@ -725,11 +736,18 @@ func registerSteadyStateRoutes(
 	settingsUpdater := adminapi.NewConfigUpdater(deps.ConfigPath, config.Reader, config.Publisher)
 	// Hot-reload log_level: every successful settings update pushes
 	// the new cfg into the shared slog.LevelVar so operators never
-	// need to restart the router to flip verbosity.
-	if deps.LogLevel != nil {
-		lv := deps.LogLevel
-		settingsUpdater.SetOnReload(func(c *config.Config) { applyLogLevel(lv, c) })
-	}
+	// need to restart the router to flip verbosity. The same hook
+	// swaps the outbound-proxy slot (network.proxy_url, Feature 009):
+	// decodeNetworkPatch already rejects invalid URLs with 9001, so
+	// an error here is defensive — log and keep the previous slot.
+	settingsUpdater.SetOnReload(func(c *config.Config) {
+		if deps.LogLevel != nil {
+			applyLogLevel(deps.LogLevel, c)
+		}
+		if err := applyOutboundProxy(c, false); err != nil {
+			a.logger.Error("hot-reload outbound proxy rejected", "error", err)
+		}
+	})
 	// Wire the env closure so the updater can re-publish SourceMap
 	// after every WriteAtomic — this keeps the 2013
 	// env_override_readonly guard correct after a settings write.
@@ -785,6 +803,11 @@ func registerSteadyStateRoutes(
 	mux.HandleFunc("GET /api/admin/settings", settingsHandler.Get)
 	mux.HandleFunc("POST /api/admin/settings/update", settingsHandler.Update)
 
+	// Feature 009 — connectivity probe for a candidate outbound proxy
+	// URL (settings page Test button).
+	proxyTestHandler := adminapi.NewProxyTestHandler(a.logger)
+	mux.HandleFunc("POST /api/admin/settings/proxy/test", proxyTestHandler.Test)
+
 	mux.HandleFunc("POST /api/admin/accounts", wrapped.CreateAccount)
 	mux.HandleFunc("GET /api/admin/accounts", wrapped.ListAccounts)
 	mux.HandleFunc("GET /api/admin/accounts/{id}", wrapped.GetAccount)
@@ -792,6 +815,10 @@ func registerSteadyStateRoutes(
 	mux.HandleFunc("POST /api/admin/accounts/{id}/enable", wrapped.EnableAccount)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/disable", wrapped.DisableAccount)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/delete", wrapped.DeleteAccount)
+
+	// Feature 009 — per-account outbound-proxy opt-in.
+	proxyToggleHandler := adminapi.NewProxyToggleHandler(accountRepo, config.Reader, a.logger)
+	mux.HandleFunc("POST /api/admin/accounts/{id}/proxy/set", proxyToggleHandler.SetUseProxy)
 
 	mux.HandleFunc("GET /api/admin/accounts/{id}/models", modelsHandler.ListModels)
 	mux.HandleFunc("POST /api/admin/accounts/{id}/models/add", modelsHandler.AddModel)

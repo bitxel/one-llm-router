@@ -81,4 +81,9 @@ export const strings = {
   refreshModelsButton: 'Refresh from upstream',
   refreshingModels: 'Refreshing…',
   removeModelTitle: 'Remove',
+  proxyTitle: 'Outbound proxy',
+  proxyHint:
+    'When enabled, this account dials upstreams through the global proxy configured in Settings. If that proxy is later removed, requests for this account fail fast instead of silently going direct. When disabled, egress is always direct.',
+  proxyEnableLabel: 'Use global proxy',
+  proxySetFailed: 'Failed to update the outbound proxy switch',
 } as const

@@ -8,6 +8,8 @@ import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { accountsExportAuthJson } from '@/generated/openapi'
 import { api } from '@/lib/api-client'
 import { planTypeLabel } from '@/lib/plan-label'
@@ -42,6 +44,7 @@ interface AccountDetail {
   primary_window_seconds?: number | null
   secondary_window_seconds?: number | null
   capabilities?: string[] | null
+  use_proxy?: boolean
 }
 
 interface AccountModel {
@@ -78,6 +81,7 @@ export function AdminAccountDetail() {
   const [newModelID, setNewModelID] = useState('')
   const [isAddingModel, setIsAddingModel] = useState(false)
   const [isRefreshingModels, setIsRefreshingModels] = useState(false)
+  const [isSettingProxy, setIsSettingProxy] = useState(false)
   const addModelInputRef = useRef<HTMLInputElement>(null)
   const modelsQueryKey = ['admin', 'account', rawAccountID, 'models'] as const
 
@@ -257,6 +261,23 @@ export function AdminAccountDetail() {
     }
   }
 
+  async function handleUseProxyChange(useProxy: boolean) {
+    if (!account || isSettingProxy) {
+      return
+    }
+    setIsSettingProxy(true)
+    try {
+      await api.post<Record<string, unknown>>(`/api/admin/accounts/${account.id}/proxy/set`, {
+        use_proxy: useProxy,
+      })
+      await invalidateAdminAccountQueries(queryClient, account.id)
+    } catch (_error) {
+      toast.error(strings.proxySetFailed)
+    } finally {
+      setIsSettingProxy(false)
+    }
+  }
+
   return (
     <Canvas variant="wide">
       <Stripe eyebrow={strings.title}>{strings.parentTitle}</Stripe>
@@ -409,6 +430,26 @@ export function AdminAccountDetail() {
           </div>
 
           {!showOAuthMetadata ? <ApiKeyEditPanel account={account} /> : null}
+
+          <PanelCard title={strings.proxyTitle}>
+            <div className="grid items-start gap-3 sm:grid-cols-[minmax(0,220px)_1fr_auto] sm:gap-5">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="account-use-proxy">{strings.proxyEnableLabel}</Label>
+              </div>
+              <p className="pt-[2px] text-[12.5px] leading-[1.55] text-[var(--text-dim)]">
+                {strings.proxyHint}
+              </p>
+              <div className="justify-self-start sm:self-center sm:justify-self-auto">
+                <Switch
+                  id="account-use-proxy"
+                  checked={account.use_proxy ?? false}
+                  onCheckedChange={(v) => void handleUseProxyChange(v)}
+                  disabled={isSettingProxy}
+                  data-testid="account-use-proxy-switch"
+                />
+              </div>
+            </div>
+          </PanelCard>
 
           <PanelCard title={strings.deleteTitle}>
             <div className="flex flex-wrap items-center justify-between gap-3">

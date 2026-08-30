@@ -123,6 +123,8 @@ func (b operationBridge) BuildUpstreamRequest(_ context.Context, in BuildInput) 
 		ContentLength: contentLength,
 		Headers:       b.upstreamHeaders(in.ClientRequest, in.CredentialValue, in.AccountMetadata),
 		Metadata:      cloneJSONMap(in.ClientRequest.Metadata),
+		UseProxy:      in.UseProxy,
+		AccountID:     in.AccountID,
 	}
 	return upstream, adapter, nil
 }

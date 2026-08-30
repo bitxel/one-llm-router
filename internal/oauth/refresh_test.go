@@ -1125,7 +1125,7 @@ func (*refreshProvider) ExchangeCode(context.Context, string, string) (Tokens, e
 	return Tokens{}, errors.New("not used in refresh tests")
 }
 
-func (p *refreshProvider) Refresh(_ context.Context, _ []byte) (Tokens, error) {
+func (p *refreshProvider) Refresh(_ context.Context, _ []byte, _ bool) (Tokens, error) {
 	p.refreshCalls.Add(1)
 	if p.refreshEntered != nil {
 		select {

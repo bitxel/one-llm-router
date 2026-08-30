@@ -94,6 +94,10 @@ export const Err005DashboardInternalError = 5900
 // Feature 006 — OpenAI API gateway.
 export const Err006UsageInternalError = 6900
 
+// Feature 009 — Outbound proxy.
+export const Err009InvalidProxyURL = 9001
+export const Err009ProxyURLRequired = 9002
+
 /**
  * Readable label for a code, for debug panels only. End-user strings
  * come from the server's `msg` field (canonical) — this map is a
@@ -175,6 +179,9 @@ export const CodeSymbols: Record<number, string> = {
   [Err005DashboardInternalError]: 'dashboard_internal_error',
 
   [Err006UsageInternalError]: 'usage_internal_error',
+
+  [Err009InvalidProxyURL]: 'invalid_proxy_url',
+  [Err009ProxyURLRequired]: 'proxy_url_required',
 }
 
 export function symbolFor(code: number): string {

@@ -52,11 +52,12 @@ func FromRemoteAddr(remoteAddr string) string {
 	if addrPort, err := netip.ParseAddrPort(remoteAddr); err == nil {
 		return normalizeAddr(addrPort.Addr())
 	}
-	if strings.HasPrefix(remoteAddr, "[") || strings.HasSuffix(remoteAddr, "]") {
-		if !(strings.HasPrefix(remoteAddr, "[") && strings.HasSuffix(remoteAddr, "]")) {
-			return ""
-		}
-		remoteAddr = strings.TrimPrefix(strings.TrimSuffix(remoteAddr, "]"), "[")
+	// A bracket at exactly one end means a malformed bracketed address.
+	if strings.HasPrefix(remoteAddr, "[") != strings.HasSuffix(remoteAddr, "]") {
+		return ""
+	}
+	if strings.HasPrefix(remoteAddr, "[") {
+		remoteAddr = strings.TrimSuffix(strings.TrimPrefix(remoteAddr, "["), "]")
 	}
 	addr, err := netip.ParseAddr(remoteAddr)
 	if err != nil {

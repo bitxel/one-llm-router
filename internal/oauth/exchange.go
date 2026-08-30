@@ -121,6 +121,8 @@ func (e *oauthErrorValue) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
+// ExchangeCode is bind-path traffic: it follows the global outbound
+// proxy (spec 009 §3.2 — no account exists yet to consult).
 func (p *openAIProvider) ExchangeCode(ctx context.Context, code, verifier string) (Tokens, error) {
 	if code == "" {
 		return Tokens{}, errors.New("oauth.ExchangeCode: code is empty")
@@ -135,19 +137,27 @@ func (p *openAIProvider) ExchangeCode(ctx context.Context, code, verifier string
 	form.Set("code_verifier", verifier)
 	form.Set("redirect_uri", p.redirectURIOrDefault())
 	form.Set("client_id", openAIClientID)
-	return p.exchangeTokens(ctx, "authorization_code", form, "")
+	return p.exchangeTokens(ctx, "authorization_code", form, "", p.clientForBind())
 }
 
-func (p *openAIProvider) Refresh(ctx context.Context, refreshToken []byte) (Tokens, error) {
+// Refresh follows the ACCOUNT row's use_proxy opt-in (spec 009 §3.3):
+// opted-in + configured → proxied; opted-in + missing → transient
+// request_failed; not opted-in → direct. Environment variables never
+// participate (Feature 009 D3).
+func (p *openAIProvider) Refresh(ctx context.Context, refreshToken []byte, useProxy bool) (Tokens, error) {
 	if len(refreshToken) == 0 {
 		return Tokens{}, errors.New("oauth.Refresh: refreshToken is empty")
+	}
+	client, err := p.clientForRefresh(useProxy)
+	if err != nil {
+		return Tokens{}, err
 	}
 
 	form := url.Values{}
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", string(refreshToken))
 	form.Set("client_id", openAIClientID)
-	return p.exchangeTokens(ctx, "refresh_token", form, oauthTokenDebugFingerprint(refreshToken))
+	return p.exchangeTokens(ctx, "refresh_token", form, oauthTokenDebugFingerprint(refreshToken), client)
 }
 
 func (p *openAIProvider) RequestDeviceCode(ctx context.Context) (DeviceCode, error) {
@@ -164,7 +174,7 @@ func (p *openAIProvider) RequestDeviceCode(ctx context.Context) (DeviceCode, err
 	}
 	req.Header.Set("Content-Type", jsonContentType)
 
-	resp, err := p.httpClientOrDefault().Do(req)
+	resp, err := p.clientForBind().Do(req)
 	if err != nil {
 		return DeviceCode{}, &TokenExchangeError{
 			code:    "request_failed",
@@ -215,7 +225,7 @@ func (p *openAIProvider) PollDeviceCode(ctx context.Context, deviceAuthID, userC
 	}
 	req.Header.Set("Content-Type", jsonContentType)
 
-	resp, err := p.httpClientOrDefault().Do(req)
+	resp, err := p.clientForBind().Do(req)
 	if err != nil {
 		return Tokens{}, &TokenExchangeError{
 			code:    "request_failed",
@@ -266,17 +276,17 @@ func (p *openAIProvider) PollDeviceCode(ctx context.Context, deviceAuthID, userC
 	form.Set("redirect_uri", p.deviceRedirectURI())
 	form.Set("client_id", openAIClientID)
 	form.Set("code_verifier", payload.CodeVerifier)
-	return p.exchangeTokens(ctx, "authorization_code", form, "")
+	return p.exchangeTokens(ctx, "authorization_code", form, "", p.clientForBind())
 }
 
-func (p *openAIProvider) exchangeTokens(ctx context.Context, grantType string, form url.Values, refreshTokenFingerprint string) (Tokens, error) {
+func (p *openAIProvider) exchangeTokens(ctx context.Context, grantType string, form url.Values, refreshTokenFingerprint string, client *http.Client) (Tokens, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tokenEndpoint(), strings.NewReader(form.Encode()))
 	if err != nil {
 		return Tokens{}, fmt.Errorf("oauth.exchangeTokens: create request: %w", err)
 	}
 	req.Header.Set("Content-Type", formContentTypeURLEncoded)
 
-	resp, err := p.httpClientOrDefault().Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return Tokens{}, &TokenExchangeError{
 			code:    "request_failed",
@@ -670,13 +680,6 @@ func (p *openAIProvider) deviceTokenEndpoint() string {
 		return p.deviceTokenURL
 	}
 	return openAIDeviceTokenURL
-}
-
-func (p *openAIProvider) httpClientOrDefault() *http.Client {
-	if p != nil && p.httpClient != nil {
-		return p.httpClient
-	}
-	return &http.Client{Timeout: oauthHTTPTimeout}
 }
 
 func (p *openAIProvider) nowOrDefault() time.Time {
