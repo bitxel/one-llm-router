@@ -72,18 +72,7 @@ func (s *AccountService) Create(ctx context.Context, name, provider, apiKey stri
 		"provider", account.Provider,
 		"capabilities", account.Capabilities,
 	)
-	if s.modelRefresher != nil && s.modelRepo != nil && account.Status == domain.AccountStatusActive {
-		go func() {
-			_, _, _, refreshErr := s.modelRefresher.Refresh(context.Background(), account, s.modelRepo)
-			if refreshErr != nil {
-				s.logger.Error("model refresh after account creation failed",
-					"account_id", account.ID,
-					"name", account.Name,
-					"error", refreshErr,
-				)
-			}
-		}()
-	}
+	s.modelRefresher.TriggerAsync(account, s.modelRepo)
 	return account, nil
 }
 

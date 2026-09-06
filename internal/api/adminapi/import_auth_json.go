@@ -115,9 +115,7 @@ func (h *ImportAuthJSONHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		"provider", account.Provider,
 	)
 
-	if h.modelRefresher != nil && h.modelRepo != nil && account.Status == domain.AccountStatusActive {
-		go func() { _, _, _, _ = h.modelRefresher.Refresh(context.Background(), account, h.modelRepo) }()
-	}
+	h.modelRefresher.TriggerAsync(account, h.modelRepo)
 
 	api.WriteOK(w, reqID, importAuthJSONSuccessData(account))
 }

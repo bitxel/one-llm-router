@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,10 +20,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/requestid"
 	"github.com/user/one-llm-router/internal/store"
 )
+
+// codexModelRecorder records ReplaceUpstreamModels calls from the
+// coordinator's fire-and-forget model refresh.
+type codexModelRecorder struct {
+	mu  sync.Mutex
+	got map[int64][]string
+}
+
+func (r *codexModelRecorder) ReplaceUpstreamModels(_ context.Context, accountID int64, modelIDs []string) (int, int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.got[accountID] = append([]string(nil), modelIDs...)
+	return len(modelIDs), 0, nil
+}
 
 func TestConsumeCode(t *testing.T) {
 	t.Run("happy path persists new oauth browser account", func(t *testing.T) {
@@ -49,6 +67,20 @@ func TestConsumeCode(t *testing.T) {
 		var logs bytes.Buffer
 		coord := NewCoordinatorWithClock(NewFakeClock(now), provider, newTestLogger(&logs, slog.LevelInfo))
 		coord.SetAccountStore(repo)
+
+		// A completed flow must fire the fire-and-forget model refresh
+		// against the codex backend (TriggerAsync).
+		codex := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/codex/models" {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5-codex"},{"slug":"gpt-5.1-codex"}]}`))
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		t.Cleanup(codex.Close)
+		modelRepo := &codexModelRecorder{got: map[int64][]string{}}
+		coord.SetModelRefresher(core.NewModelRefresher(&http.Client{Timeout: 2 * time.Second}, nil, codex.URL, "test", slog.Default()), modelRepo)
 
 		flow := newPendingBrowserFlow(now)
 		require.NoError(t, coord.TryStartFlow(flow))
@@ -105,6 +137,12 @@ func TestConsumeCode(t *testing.T) {
 		assert.Contains(t, logs.String(), fmt.Sprintf("account_id=%d", account.ID))
 		assert.Contains(t, logs.String(), "email=alice@example.com")
 		assert.Contains(t, logs.String(), "plan_type=chatgpt-plus")
+
+		require.Eventually(t, func() bool {
+			modelRepo.mu.Lock()
+			defer modelRepo.mu.Unlock()
+			return len(modelRepo.got[account.ID]) == 2
+		}, 3*time.Second, 20*time.Millisecond, "browser flow never refreshed upstream models")
 	})
 
 	t.Run("state mismatch leaves flow pending and second call succeeds", func(t *testing.T) {

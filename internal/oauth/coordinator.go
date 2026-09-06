@@ -615,9 +615,7 @@ func (c *Coordinator) ConsumeCode(ctx context.Context, flowID, code, state strin
 		return nil, c.failFlow(ctx, flow, rail, err)
 	}
 
-	if c.modelRefresher != nil && c.modelRepo != nil {
-		go func() { _, _, _, _ = c.modelRefresher.Refresh(context.Background(), account, c.modelRepo) }()
-	}
+	c.modelRefresher.TriggerAsync(account, c.modelRepo)
 
 	reqID := requestIDForFlow(ctx, flow)
 	flow.mu.Lock()
@@ -702,9 +700,7 @@ func (c *Coordinator) finishDeviceSuccess(ctx context.Context, flow *Flow, token
 		return
 	}
 
-	if c.modelRefresher != nil && c.modelRepo != nil {
-		go func() { _, _, _, _ = c.modelRefresher.Refresh(context.Background(), account, c.modelRepo) }()
-	}
+	c.modelRefresher.TriggerAsync(account, c.modelRepo)
 
 	reqID := requestIDForFlow(ctx, flow)
 	flow.mu.Lock()

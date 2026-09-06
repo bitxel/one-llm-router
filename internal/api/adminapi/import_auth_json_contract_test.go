@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,18 +21,20 @@ import (
 	"github.com/user/one-llm-router/internal/api"
 	"github.com/user/one-llm-router/internal/api/errcode"
 	"github.com/user/one-llm-router/internal/api/testutil"
+	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/oauth"
 	"github.com/user/one-llm-router/internal/store"
 )
 
 type importAuthJSONHarness struct {
-	mux    *http.ServeMux
-	repo   *store.AccountRepo
-	logs   *bytes.Buffer
-	now    time.Time
-	reqSeq int
-	lastID string
+	mux     *http.ServeMux
+	handler *ImportAuthJSONHandler
+	repo    *store.AccountRepo
+	logs    *bytes.Buffer
+	now     time.Time
+	reqSeq  int
+	lastID  string
 }
 
 func setupImportAuthJSONHarness(t *testing.T, now time.Time) *importAuthJSONHarness {
@@ -50,10 +53,11 @@ func setupImportAuthJSONHarness(t *testing.T, now time.Time) *importAuthJSONHarn
 	mux := http.NewServeMux()
 	RegisterImportAuthJSONHandler(mux, handler, nil)
 	return &importAuthJSONHarness{
-		mux:  mux,
-		repo: repo,
-		logs: logs,
-		now:  now,
+		mux:     mux,
+		handler: handler,
+		repo:    repo,
+		logs:    logs,
+		now:     now,
 	}
 }
 
@@ -105,6 +109,28 @@ func TestImportAuthJSON(t *testing.T) {
 
 	t.Run("happy path persists oauth_import row and derives account metadata", func(t *testing.T) {
 		h := setupImportAuthJSONHarness(t, now)
+
+		// A successful import must fire the fire-and-forget model
+		// refresh against the codex backend (TriggerAsync).
+		codex := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/codex/models" {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5-codex"},{"slug":"gpt-5.1-codex"}]}`))
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		t.Cleanup(codex.Close)
+		var modelCalls atomic.Int64
+		modelRepo := &fakeModelRepo{
+			models: map[int64][]domain.AccountModel{},
+			replaceFn: func(_ context.Context, _ int64, modelIDs []string) (int, int, error) {
+				modelCalls.Add(1)
+				return len(modelIDs), 0, nil
+			},
+		}
+		h.handler.SetModelRefresher(core.NewModelRefresher(&http.Client{Timeout: 2 * time.Second}, nil, codex.URL, "test", slog.Default()), modelRepo)
+
 		idToken := makeImportJWT(t, map[string]any{
 			"email": "alice@example.com",
 			"exp":   float64(now.Add(45 * time.Minute).Unix()),
@@ -156,6 +182,10 @@ func TestImportAuthJSON(t *testing.T) {
 		assert.NotContains(t, h.logs.String(), "acc-happy")
 		assert.NotContains(t, h.logs.String(), "ref-happy")
 		assert.NotContains(t, h.logs.String(), idToken)
+
+		require.Eventually(t, func() bool {
+			return modelCalls.Load() == 1
+		}, 3*time.Second, 20*time.Millisecond, "import never refreshed upstream models")
 	})
 
 	t.Run("json body with pasted auth_json persists oauth_import row", func(t *testing.T) {

@@ -147,6 +147,18 @@ type App struct {
 
 	usageRefresher *oauth.UsageRefresher
 
+	// wizardAccounts is the single setup.AccountCreator adapter shared
+	// by the setup handler and postCommitReloader so the seeded-account
+	// ID written during a wizard commit is visible to
+	// compensateWizardSeed (see accountCreator in adapters.go).
+	wizardAccounts *accountCreator
+	// modelRefresher + accountModelRepo mirror the steady-state model
+	// refresh wiring (assigned in registerSteadyStateRoutes) so the
+	// post-commit reloader can compensate the wizard-seeded first
+	// account. Nil in setup-pending boots.
+	modelRefresher   *core.ModelRefresher
+	accountModelRepo core.ModelRefresherRepo
+
 	srv        *http.Server
 	listenAddr string
 }
@@ -267,9 +279,10 @@ func BuildApp(ctx context.Context, cfg *config.Config, src config.SourceMap, dep
 	}
 
 	a := &App{
-		logger:     logger,
-		listenAddr: deps.ListenAddr,
-		deps:       deps,
+		logger:         logger,
+		listenAddr:     deps.ListenAddr,
+		deps:           deps,
+		wizardAccounts: &accountCreator{},
 	}
 
 	// 1. Sweep stale tmp files BEFORE any atomic write (writer.go
@@ -402,11 +415,10 @@ func (a *App) storeHandler(h http.Handler) {
 // (e.g. changing log_retention_days via /api/admin/settings/update)
 // does NOT go through this path.
 //
-// Concurrency: holds promoteMu for the full duration. Callers MUST NOT
-// hold setup.Serialiser while calling — commit releases Serialiser
-// before invoking the reloader precisely so that promoteToSteadyState
-// can itself acquire Serialiser if it needs to swap WriteAtomic races,
-// which today it does not.
+// Concurrency: holds promoteMu for the full duration. The only
+// production caller (postCommitReloader) runs while setup.Serialiser
+// is still held by setup.Commit — which is safe because
+// promoteToSteadyState never acquires Serialiser. Keep it that way.
 //
 // On failure, state is left untouched (no partial swap); the reloader
 // surfaces the error to the wizard UI which can prompt a restart.
@@ -628,7 +640,7 @@ func buildHandler(a *App, deps Deps, st *store.Store, cfg *config.Config, record
 		gate,
 		deps.ConfigPath,
 		migratorFactory{},
-		accountCreator{},
+		a.wizardAccounts,
 		postCommitReloader(a),
 		a.logger,
 	)
@@ -712,6 +724,11 @@ func registerSteadyStateRoutes(
 		openai.CodexClientVersion,
 		a.logger,
 	)
+	// Mirror onto the App so postCommitReloader's compensateWizardSeed
+	// can reach the refresher for the wizard-seeded first account after
+	// this wiring completes (these locals are not reachable from there).
+	a.modelRefresher = modelRefresher
+	a.accountModelRepo = accountModelRepo
 
 	accountSvc := core.NewAccountService(accountRepo, a.logger)
 	accountSvc.SetModelRefresher(modelRefresher, accountModelRepo)

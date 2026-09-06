@@ -9,9 +9,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/user/one-llm-router/internal/config"
+	"github.com/user/one-llm-router/internal/store"
 )
 
 // TestPromoteToSteadyState_AfterWizardCommit verifies F-002: after
@@ -160,6 +165,94 @@ func TestPromoteToSteadyState_AfterWizardCommit(t *testing.T) {
 	if err := a.promoteToSteadyState(context.Background()); err != nil {
 		t.Errorf("idempotent promote failed: %v", err)
 	}
+}
+
+// TestPromoteToSteadyState_SeededAccountRefreshesModels verifies the
+// wizard-seeded first account gets its upstream model list populated.
+// The insert runs on the commit's short-lived store before any
+// ModelRefresher exists, so postCommitReloader must compensate after
+// promoteToSteadyState wires the refresher (compensateWizardSeed in
+// adapters.go). Drives the real HTTP chain end-to-end: commit →
+// reloader → promotion → async refresh → account_models rows.
+func TestPromoteToSteadyState_SeededAccountRefreshesModels(t *testing.T) {
+	t.Parallel()
+	var modelHits atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			modelHits.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-4o"},{"id":"gpt-5.6-luna"}]}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(upstream.Close)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	dbFile := filepath.Join(dir, "router.db")
+
+	a, err := BuildApp(context.Background(), nil, nil, Deps{
+		ConfigPath: cfgPath,
+		Env:        config.MapEnv(map[string]string{}),
+		Logger:     silentLogger(),
+	})
+	if err != nil {
+		t.Fatalf("BuildApp: %v", err)
+	}
+	defer func() { _ = a.Stop(context.Background()) }()
+
+	commitBody := map[string]any{
+		"db": map[string]any{
+			"driver": "sqlite3",
+			"url":    dbFile,
+		},
+		"first_account": map[string]any{
+			"name":     "seeded-01",
+			"provider": "openai",
+			"api_key":  "sk-test-seeded",
+			"base_url": upstream.URL + "/v1",
+		},
+		"plugins": map[string]any{
+			"admin_auth":  map[string]any{"enabled": false},
+			"client_keys": map[string]any{"enabled": false},
+		},
+	}
+	raw, _ := json.Marshal(commitBody)
+	commitRec := httptest.NewRecorder()
+	handler := a.Handler()
+	handler.ServeHTTP(commitRec, httptest.NewRequest(http.MethodPost, "/api/setup/commit", bytes.NewReader(raw)))
+	if commitRec.Code != http.StatusOK {
+		t.Fatalf("commit http = %d; body=%s", commitRec.Code, commitRec.Body.String())
+	}
+	var commitEnv struct {
+		Code int `json:"code"`
+		Data struct {
+			AccountID int64 `json:"account_id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(commitRec.Body.Bytes(), &commitEnv); err != nil {
+		t.Fatalf("decode commit envelope: %v", err)
+	}
+	if commitEnv.Code != 0 {
+		t.Fatalf("commit code = %d; body=%s", commitEnv.Code, commitRec.Body.String())
+	}
+	if commitEnv.Data.AccountID == 0 {
+		t.Fatal("commit did not seed an account")
+	}
+
+	// The compensation runs inside the commit's reloader but refreshes
+	// upstream asynchronously — poll for the upstream hit and the
+	// persisted model rows.
+	require.Eventually(t, func() bool {
+		return modelHits.Load() == 1
+	}, 3*time.Second, 20*time.Millisecond, "compensation never fetched upstream models")
+
+	modelRepo := store.NewAccountModelRepo(a.Store().Engine())
+	require.Eventually(t, func() bool {
+		models, err := modelRepo.ListByAccount(context.Background(), commitEnv.Data.AccountID)
+		return err == nil && len(models) == 2
+	}, 3*time.Second, 20*time.Millisecond, "seeded account never received its model rows")
 }
 
 // TestPromoteToSteadyState_FailureLeavesPendingIntact verifies that a

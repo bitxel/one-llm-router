@@ -47,6 +47,28 @@ func NewModelRefresher(directClient, proxiedClient *http.Client, codexBackend, c
 	}
 }
 
+// TriggerAsync is the fire-and-forget hook every account-creation
+// path runs after persisting a new row (admin create, OAuth
+// browser/device flows, auth.json import, wizard-seed compensation).
+// Nil-safe so callers can hold an optional refresher, skipped for
+// non-active accounts, and failures are only logged — a creation
+// response never depends on the refresh succeeding. The manual
+// refresh endpoint keeps calling Refresh directly because it reports
+// errors synchronously.
+func (r *ModelRefresher) TriggerAsync(acct *domain.UpstreamAccount, repo ModelRefresherRepo) {
+	if r == nil || repo == nil || acct == nil || acct.Status != domain.AccountStatusActive {
+		return
+	}
+	go func() {
+		if _, _, _, err := r.Refresh(context.Background(), acct, repo); err != nil {
+			r.logger.Warn("account_models_refresh_failed",
+				"account_id", acct.ID,
+				"error", err,
+			)
+		}
+	}()
+}
+
 func (r *ModelRefresher) Refresh(ctx context.Context, acct *domain.UpstreamAccount, modelRepo ModelRefresherRepo) (int, int, int, error) {
 	acctID := acct.ID
 	r.logger.Info("model_refresh_started",
