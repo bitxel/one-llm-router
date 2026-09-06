@@ -88,6 +88,26 @@ func (r *UsageRefresher) refreshOne(ctx context.Context, acc domain.UpstreamAcco
 		return
 	}
 
+	// Codex's 5h/7d quota windows are rolling: entering a new window with
+	// no messages, the API answers used_percent=0 with a NOMINAL reset_at
+	// that keeps sliding ("now + period") — nothing pins the reset until a
+	// real message is sent. A window counts as fixed when it carries real
+	// usage (used_percent > 0, fast path) or when its reset_at lands
+	// strictly before a full period from now (anchored earlier). When no
+	// window is fixed, send one minimal probe so the next refresh can
+	// persist a fixed next-reset time. No re-fetch here — the anchored
+	// window surfaces on the next scheduled pass. The probe re-fires on
+	// every pass until the window reports fixed usage.
+	if !usageResetFixed(usage, time.Now().UTC()) {
+		if err := r.client.ProbeResetAnchor(ctx, acc, string(token)); err != nil {
+			r.logger.Warn("usage refresher: reset-anchor probe failed",
+				"account_id", acc.ID, "error", err)
+		} else {
+			r.logger.Info("usage refresher: reset-anchor probe sent",
+				"account_id", acc.ID)
+		}
+	}
+
 	var snapshot store.UsageSnapshot
 	if rateLimit := usage.RateLimit; rateLimit != nil {
 		if window := rateLimit.PrimaryWindow; window != nil {
@@ -108,6 +128,62 @@ func (r *UsageRefresher) refreshOne(ctx context.Context, acc domain.UpstreamAcco
 	if err != nil {
 		r.logger.Error("usage refresher: failed to update store", "account_id", acc.ID, "error", err)
 	}
+}
+
+// resetAnchorTolerance absorbs the small skew between the router clock
+// and the upstream clock in the reset_at vs now+period comparison. The
+// nominal rolling reset_at is computed as server_now + period, so it
+// must read as "not fixed" (probe) even when the server clock leads the
+// router by a few seconds.
+//
+// The tolerance MUST be smaller than the usage-refresh interval: a
+// freshly-anchored reset (probe time + period) re-evaluated one interval
+// later is only "period - interval" away from now, and an over-large
+// tolerance would keep re-classifying it as rolling and re-probe every
+// pass — pushing the reset forward indefinitely. 1 minute is comfortably
+// below the 5-minute default refresh while still absorbing latency and
+// sub-minute clock skew.
+const resetAnchorTolerance = time.Minute
+
+// usageResetFixed reports whether every quota window PRESENT in the
+// response has a fixed (non-sliding) reset time. Fast path: a window
+// with real usage (used_percent > 0) is anchored. Slow path: a window
+// with reset_at landing strictly before a full period from now was
+// anchored by a message in the past; a reset_at ≈ now + period is the
+// nominal rolling value and does NOT count as fixed.
+//
+// Absent windows are ignored — an entitlement gap, not something a
+// probe can fix. The probe anchors every present window, so it fires
+// whenever at least one PRESENT window is still rolling (e.g. the 5h
+// primary is used 0 and sliding while the 7d secondary is already
+// anchored by real usage).
+func usageResetFixed(usage *openai.UsageResponse, now time.Time) bool {
+	if usage == nil || usage.RateLimit == nil {
+		return false
+	}
+	rl := usage.RateLimit
+	if rl.PrimaryWindow != nil && !usageWindowFixed(rl.PrimaryWindow, now) {
+		return false
+	}
+	if rl.SecondaryWindow != nil && !usageWindowFixed(rl.SecondaryWindow, now) {
+		return false
+	}
+	return true
+}
+
+func usageWindowFixed(w *openai.UsageWindow, now time.Time) bool {
+	if w == nil {
+		return false
+	}
+	if w.UsedPercent > 0 {
+		return true
+	}
+	if w.ResetAt == nil || w.LimitWindowSeconds == nil {
+		return false
+	}
+	period := time.Duration(*w.LimitWindowSeconds) * time.Second
+	nominalReset := now.Add(period).Add(-resetAnchorTolerance)
+	return nominalReset.After(time.Unix(*w.ResetAt, 0).UTC())
 }
 
 // unixToTime converts a unix epoch seconds pointer to a UTC time.Time.

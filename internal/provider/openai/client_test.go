@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/user/one-llm-router/internal/domain"
+	"github.com/user/one-llm-router/internal/proxydial"
 )
 
 func forwardRequestForTest(ctx context.Context, c *Client, upstreamBaseURL, apiKey string, original *http.Request) (*http.Response, error) {
@@ -691,3 +692,64 @@ func TestFetchUsageSparseWindowKeepsOptionalFieldsNil(t *testing.T) {
 	assert.Nil(t, usage.RateLimit.PrimaryWindow.ResetAt)
 	assert.Nil(t, usage.RateLimit.SecondaryWindow)
 }
+
+func TestClientProbeResetAnchor(t *testing.T) {
+	t.Run("success sends minimal codex responses request", func(t *testing.T) {
+		var gotBody string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method)
+			assert.Equal(t, "/codex/responses", r.URL.Path)
+			assert.Equal(t, "Bearer access-token", r.Header.Get("Authorization"))
+			assert.Equal(t, CodexCLIUserAgent, r.Header.Get("User-Agent"))
+			assert.Equal(t, "acct-123", r.Header.Get("chatgpt-account-id"))
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			body, _ := io.ReadAll(r.Body)
+			gotBody = string(body)
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"id":"probe","object":"response","output":[]}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		c := NewClient(30 * time.Second)
+		c.codexBackendBaseURL = srv.URL
+		acct := domain.UpstreamAccount{
+			ID:               1,
+			ChatGPTAccountID: ptr("acct-123"),
+		}
+
+		require.NoError(t, c.ProbeResetAnchor(context.Background(), acct, "access-token"))
+		// The raw input is normalized to the codex-native shape: input
+		// becomes an input_text array, instructions is added, store=false
+		// and stream=true are forced.
+		assert.JSONEq(t,
+			`{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}],"store":false,"stream":true}`,
+			gotBody)
+	})
+
+	t.Run("non-2xx status surfaces as error", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"usage_limit_reached"}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		c := NewClient(30 * time.Second)
+		c.codexBackendBaseURL = srv.URL
+
+		err := c.ProbeResetAnchor(context.Background(), domain.UpstreamAccount{ID: 1}, "access-token")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "429")
+	})
+
+	t.Run("stale proxy opt-in fails fast", func(t *testing.T) {
+		t.Cleanup(func() { _ = proxydial.Configure("") })
+		c := NewClient(30 * time.Second)
+		acct := domain.UpstreamAccount{ID: 1, UseProxy: true}
+		err := c.ProbeResetAnchor(context.Background(), acct, "access-token")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, proxydial.ErrProxyRequired)
+	})
+}
+
+func ptr(s string) *string { return &s }

@@ -1,14 +1,17 @@
 package openai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/user/one-llm-router/internal/domain"
@@ -122,6 +125,67 @@ func (c *Client) httpClientForUseProxy(useProxy bool, accountID int64) (*http.Cl
 
 func (c *Client) SetCodexBackendBaseURLForTest(baseURL string) {
 	c.codexBackendBaseURL = baseURL
+}
+
+// ResetAnchorProbeModel is the model used for the reset-anchor probe.
+// Reuses the playground default — a model known to be served for OAuth
+// Codex accounts — so the minimal message is accepted and registers
+// usage.
+const ResetAnchorProbeModel = "gpt-5.4-mini"
+
+// resetAnchorProbeInput is the raw OpenAI-compatible responses request
+// that anchors an account's rolling quota window. Codex's 5h/7d buckets
+// only report a fixed reset_at once a real message registers usage (the
+// window is rolling: reset = first message + window duration), so a
+// fresh or just-reset account returns empty windows until one message
+// is sent. The raw form is normalized through normalizeCodexResponsesBody
+// before sending — the ChatGPT codex backend rejects unnormalized
+// payloads with 400.
+var resetAnchorProbeInput = []byte(`{"model":"gpt-5.4-mini","input":"hi"}`)
+
+// ProbeResetAnchor sends ONE minimal Codex message through the account
+// so the backend materializes the rolling quota window and starts
+// returning a fixed reset_at on the next usage fetch. The response body
+// is deliberately discarded — the only goal is to register usage. A
+// non-2xx (e.g. the account is genuinely limited) surfaces as an error
+// so the caller can log it; it never blocks snapshot persistence.
+func (c *Client) ProbeResetAnchor(ctx context.Context, account domain.UpstreamAccount, accessToken string) error {
+	body, _, err := normalizeCodexResponsesBody(resetAnchorProbeInput)
+	if err != nil {
+		return fmt.Errorf("build reset-anchor probe body: %w", err)
+	}
+	targetURL := strings.TrimRight(c.codexBaseURL(), "/") + "/codex/responses"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create reset-anchor probe: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", CodexCLIUserAgent)
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Accept-Encoding", "identity")
+	if account.ChatGPTAccountID != nil && *account.ChatGPTAccountID != "" {
+		req.Header.Set("chatgpt-account-id", *account.ChatGPTAccountID)
+	}
+
+	httpClient, err := c.httpClientFor(account)
+	if err != nil {
+		return fmt.Errorf("%w: reset-anchor probe: %w", ErrUpstreamConnectFailed, err)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		if isTimeout(err) {
+			return fmt.Errorf("%w: reset-anchor probe: %w", ErrUpstreamTimeout, err)
+		}
+		return fmt.Errorf("%w: reset-anchor probe: %w", ErrUpstreamConnectFailed, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	// Drain a bounded slice so the pooled connection can be reused.
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("reset-anchor probe: upstream returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // FetchUsage queries the ChatGPT backend usage endpoint for one OAuth
