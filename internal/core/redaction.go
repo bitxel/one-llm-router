@@ -57,6 +57,10 @@ func RedactJSONValue(value any) any {
 				out[key] = redactedValue
 				continue
 			}
+			if strings.EqualFold(key, "image_url") {
+				out[key] = redactImageURL(item)
+				continue
+			}
 			out[key] = RedactJSONValue(item)
 		}
 		return out
@@ -72,6 +76,28 @@ func RedactJSONValue(value any) any {
 		return RedactString(v)
 	default:
 		return value
+	}
+}
+
+func redactImageURL(value any) any {
+	switch image := value.(type) {
+	case string:
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(image)), "data:") {
+			return redactedValue
+		}
+		return RedactString(image)
+	case map[string]any:
+		out := make(map[string]any, len(image))
+		for key, item := range image {
+			if strings.EqualFold(key, "url") {
+				out[key] = redactImageURL(item)
+				continue
+			}
+			out[key] = RedactJSONValue(item)
+		}
+		return out
+	default:
+		return RedactJSONValue(value)
 	}
 }
 

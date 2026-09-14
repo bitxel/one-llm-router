@@ -494,9 +494,79 @@ func chatInputItemsFromMessage(role string, msg chatMessage) ([]any, error) {
 			if key == "role" {
 				continue
 			}
+			if key == "content" {
+				content, err := normalizeChatUserContent(value)
+				if err != nil {
+					return nil, fmt.Errorf("%w: %v", errChatAdapterValidation, err)
+				}
+				item[key] = content
+				continue
+			}
 			item[key] = value
 		}
 		return []any{item}, nil
+	}
+}
+
+func normalizeChatUserContent(value any) (any, error) {
+	switch content := value.(type) {
+	case string:
+		return []any{map[string]any{"type": "input_text", "text": content}}, nil
+	case []any:
+		if len(content) == 0 {
+			return nil, errors.New("user content must not be empty")
+		}
+		parts := make([]any, 0, len(content))
+		for _, part := range content {
+			normalized, err := normalizeChatUserContentPart(part)
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, normalized)
+		}
+		return parts, nil
+	default:
+		return nil, errors.New("user content must be a string or array")
+	}
+}
+
+func normalizeChatUserContentPart(value any) (map[string]any, error) {
+	part, ok := value.(map[string]any)
+	if !ok {
+		return nil, errors.New("user content part must be an object")
+	}
+	typeName, _ := part["type"].(string)
+	switch typeName {
+	case "text":
+		text, ok := part["text"].(string)
+		if !ok {
+			return nil, errors.New("text content part must include string text")
+		}
+		return map[string]any{"type": "input_text", "text": text}, nil
+	case "image_url":
+		image, ok := part["image_url"].(map[string]any)
+		if !ok {
+			return nil, errors.New("image_url content part must be an object")
+		}
+		url, ok := image["url"].(string)
+		if !ok || strings.TrimSpace(url) == "" {
+			return nil, errors.New("image_url content part must include non-empty string url")
+		}
+		lowerURL := strings.ToLower(url)
+		if !strings.HasPrefix(lowerURL, "https://") && !strings.HasPrefix(lowerURL, "data:") {
+			return nil, errors.New("image_url content part url must use https or data scheme")
+		}
+		output := map[string]any{"type": "input_image", "image_url": url}
+		if detail, exists := image["detail"]; exists {
+			detailValue, ok := detail.(string)
+			if !ok || (detailValue != "auto" && detailValue != "low" && detailValue != "high") {
+				return nil, errors.New("image_url detail must be auto, low, or high")
+			}
+			output["detail"] = detailValue
+		}
+		return output, nil
+	default:
+		return nil, fmt.Errorf("unsupported user content part type %q", typeName)
 	}
 }
 

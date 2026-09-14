@@ -160,6 +160,71 @@ func TestChatAdapterValidateRejectsUnsupportedFields(t *testing.T) {
 	}
 }
 
+func TestChatAdapterNormalizesUserMultimodalContent(t *testing.T) {
+	t.Parallel()
+
+	orig := httptest.NewRequest(http.MethodPost, "http://router/v1/chat/completions", strings.NewReader(`{
+		"model":"gpt",
+		"messages":[{"role":"user","content":[
+			{"type":"text","text":"describe this"},
+			{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,secret-image","detail":"high"}}
+		]}]
+	}`))
+
+	adapted, err := buildChatAdapterRequest(orig)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"model":"gpt",
+		"instructions":"",
+		"input":[{"role":"user","content":[
+			{"type":"input_text","text":"describe this"},
+			{"type":"input_image","image_url":"data:image/jpeg;base64,secret-image","detail":"high"}
+		]}],
+		"store":false,
+		"stream":true
+	}`, string(adapted.upstreamBody))
+}
+
+func TestChatAdapterRejectsUnsupportedUserContentParts(t *testing.T) {
+	t.Parallel()
+
+	tests := []string{
+		`{"type":"input_audio","input_audio":{"data":"abc"}}`,
+		`{"type":"file","file":{"file_id":"file_1"}}`,
+		`{"type":"image_url","image_url":{"url":"http://example.test/image.jpg"}}`,
+		`{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,abc","detail":"invalid"}}`,
+	}
+	for _, part := range tests {
+		part := part
+		t.Run(part, func(t *testing.T) {
+			orig := httptest.NewRequest(http.MethodPost, "http://router/v1/chat/completions", strings.NewReader(
+				`{"model":"gpt","messages":[{"role":"user","content":[`+part+`]}]}`,
+			))
+			_, err := buildChatAdapterRequest(orig)
+			require.Error(t, err)
+			assert.True(t, errors.Is(err, errChatAdapterValidation))
+			assert.NotContains(t, err.Error(), "secret-image")
+		})
+	}
+}
+
+func TestChatAdapterAcceptsImageURLSchemeCase(t *testing.T) {
+	t.Parallel()
+
+	orig := httptest.NewRequest(http.MethodPost, "http://router/v1/chat/completions", strings.NewReader(`{
+		"model":"gpt",
+		"messages":[{"role":"user","content":[
+			{"type":"image_url","image_url":{"url":"DATA:image/jpeg;base64,abc"}},
+			{"type":"image_url","image_url":{"url":"HTTPS://example.test/image.jpg"}}
+		]}]
+	}`))
+
+	adapted, err := buildChatAdapterRequest(orig)
+	require.NoError(t, err)
+	assert.Contains(t, string(adapted.upstreamBody), "DATA:image/jpeg;base64,abc")
+	assert.Contains(t, string(adapted.upstreamBody), "HTTPS://example.test/image.jpg")
+}
+
 func TestChatAdapterIgnoresUnknownAndUnsupportedFieldsWithWarning(t *testing.T) {
 	var logs bytes.Buffer
 	prevLogger := slog.Default()

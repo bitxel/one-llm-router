@@ -440,7 +440,7 @@ func TestChatCompletionsBridgeBuildUpstreamRequestSelectsAdapters(t *testing.T) 
 
 			assert.Equal(t, "https://chatgpt.example.test/backend-api/codex/responses?client_version="+CodexClientVersion, upstreamReq.URL)
 			assert.Equal(t, "identity", upstreamReq.Headers.Get("Accept-Encoding"))
-			assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":"hi"}],"store":false,"stream":true}`, string(upstreamReq.RawBody))
+			assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}],"store":false,"stream":true}`, string(upstreamReq.RawBody))
 			require.NotNil(t, adapter)
 			assert.Equal(t, tc.wantAdapter, adapter.Kind())
 			assert.Equal(t, ContractOpenAIV1ChatCompletions, adapter.ClientContract())
@@ -468,5 +468,5 @@ func TestChatCompletionsBridgeIgnoresUnsupportedFields(t *testing.T) {
 		UpstreamBaseURL: "https://chatgpt.example.test/backend-api",
 	})
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":"hi"}],"store":false,"stream":true}`, string(upstreamReq.RawBody))
+	assert.JSONEq(t, `{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}],"store":false,"stream":true}`, string(upstreamReq.RawBody))
 }

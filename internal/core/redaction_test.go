@@ -28,6 +28,21 @@ func TestRedactCapturedBody_JSON(t *testing.T) {
 	assert.Equal(t, redactedValue, decoded["items"].([]any)[0].(map[string]any)["Authorization"])
 }
 
+func TestRedactCapturedBody_ImageDataURL(t *testing.T) {
+	got := RedactCapturedBody([]byte(`{"messages":[{"content":[{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,secret-image"}}]}],"input":[{"content":[{"type":"input_image","image_url":"data:image/png;base64,secret-input-image"}]}]}`))
+
+	assert.NotContains(t, got, "secret-image")
+	assert.NotContains(t, got, "secret-input-image")
+	assert.Contains(t, got, `"url":"[redacted]"`)
+	assert.Contains(t, got, `"image_url":"[redacted]"`)
+}
+
+func TestRedactCapturedBody_PreservesHTTPSImageURL(t *testing.T) {
+	got := RedactCapturedBody([]byte(`{"image_url":{"url":"HTTPS://example.test/image.jpg"}}`))
+
+	assert.Contains(t, got, "HTTPS://example.test/image.jpg")
+}
+
 func TestRedactCapturedBody_Text(t *testing.T) {
 	got := RedactCapturedBody([]byte(`token=plain-secret-token Authorization: "Bearer bearer-secret-token" api_key=sk-live-secret-123456`))
 
