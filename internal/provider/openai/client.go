@@ -131,7 +131,7 @@ func (c *Client) SetCodexBackendBaseURLForTest(baseURL string) {
 // Reuses the playground default — a model known to be served for OAuth
 // Codex accounts — so the minimal message is accepted and registers
 // usage.
-const ResetAnchorProbeModel = "gpt-5.4-mini"
+const ResetAnchorProbeModel = "gpt-5.6-luna"
 
 // resetAnchorProbeInput is the raw OpenAI-compatible responses request
 // that anchors an account's rolling quota window. Codex's 5h/7d buckets
@@ -141,7 +141,7 @@ const ResetAnchorProbeModel = "gpt-5.4-mini"
 // is sent. The raw form is normalized through normalizeCodexResponsesBody
 // before sending — the ChatGPT codex backend rejects unnormalized
 // payloads with 400.
-var resetAnchorProbeInput = []byte(`{"model":"gpt-5.4-mini","input":"hi"}`)
+var resetAnchorProbeInput = []byte(`{"model":"gpt-5.6-luna","input":"hi"}`)
 
 // ProbeResetAnchor sends ONE minimal Codex message through the account
 // so the backend materializes the rolling quota window and starts
@@ -181,9 +181,16 @@ func (c *Client) ProbeResetAnchor(ctx context.Context, account domain.UpstreamAc
 	}
 	defer func() { _ = resp.Body.Close() }()
 	// Drain a bounded slice so the pooled connection can be reused.
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if readErr != nil {
+		return fmt.Errorf("reset-anchor probe: read upstream response: %w", readErr)
+	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("reset-anchor probe: upstream returned status %d", resp.StatusCode)
+		diagnostic := responseDiagnostic(responseBody)
+		if diagnostic == nil {
+			return fmt.Errorf("reset-anchor probe: upstream returned status %d", resp.StatusCode)
+		}
+		return fmt.Errorf("reset-anchor probe: upstream returned status %d: %s", resp.StatusCode, *diagnostic)
 	}
 	return nil
 }

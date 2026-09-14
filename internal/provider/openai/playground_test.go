@@ -431,7 +431,7 @@ func TestRunPlayground(t *testing.T) {
 		require.NotNil(t, upstreamErr.ProviderError)
 		assert.Equal(t, "rate_limit_exceeded", *upstreamErr.ProviderError)
 		require.NotNil(t, upstreamErr.ProviderMessage)
-		assert.Equal(t, "slow down", *upstreamErr.ProviderMessage)
+		assert.JSONEq(t, `{"error":{"code":"rate_limit_exceeded","message":"slow down"}}`, *upstreamErr.ProviderMessage)
 	})
 
 	t.Run("malformed and oversized success bodies map to typed router errors", func(t *testing.T) {

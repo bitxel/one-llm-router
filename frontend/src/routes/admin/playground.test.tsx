@@ -145,7 +145,7 @@ describe('AdminPlayground', () => {
     expect(screen.getByTestId('playground-include-raw-optional')).toHaveAccessibleName(
       `${strings('labels.optionalField')}: ${strings('labels.includeRaw')}`,
     )
-    expect(await screen.findByDisplayValue('gpt-5.4-mini')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('gpt-5.6-luna')).toBeInTheDocument()
     expect(screen.queryByTestId('playground-active-accounts')).not.toBeInTheDocument()
     expect(screen.queryByText('Active account pool')).not.toBeInTheDocument()
     const automaticMode = screen.getByRole('button', { name: strings('modes.auto') })
@@ -159,7 +159,7 @@ describe('AdminPlayground', () => {
       body: {
         selection_mode: 'auto',
         endpoint: 'chat_completions',
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         text: 'hello',
         max_output_tokens: 1024,
         include_raw_response: false,
@@ -235,7 +235,7 @@ describe('AdminPlayground', () => {
       body: expect.objectContaining({
         selection_mode: 'auto',
         endpoint: 'chat_completions',
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         text: 'hello',
       }),
     })

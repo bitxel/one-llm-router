@@ -338,7 +338,7 @@ export type PlaygroundRunRequest = {
     session_key?: string;
     /**
      * Provider model id. The UI defaults this field to
-     * `gpt-5.4-mini`; direct API callers must still send a
+     * `gpt-5.6-luna`; direct API callers must still send a
      * non-empty value.
      *
      */

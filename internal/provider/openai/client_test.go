@@ -723,14 +723,14 @@ func TestClientProbeResetAnchor(t *testing.T) {
 		// becomes an input_text array, instructions is added, store=false
 		// and stream=true are forced.
 		assert.JSONEq(t,
-			`{"model":"gpt-5.4-mini","instructions":"","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}],"store":false,"stream":true}`,
+			`{"model":"gpt-5.6-luna","instructions":"","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}],"store":false,"stream":true}`,
 			gotBody)
 	})
 
 	t.Run("non-2xx status surfaces as error", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"error":"usage_limit_reached"}`))
+			_, _ = w.Write([]byte(`{"detail":"usage_limit_reached"}`))
 		}))
 		t.Cleanup(srv.Close)
 
@@ -740,6 +740,7 @@ func TestClientProbeResetAnchor(t *testing.T) {
 		err := c.ProbeResetAnchor(context.Background(), domain.UpstreamAccount{ID: 1}, "access-token")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "429")
+		assert.Contains(t, err.Error(), `{"detail":"usage_limit_reached"}`)
 	})
 
 	t.Run("stale proxy opt-in fails fast", func(t *testing.T) {

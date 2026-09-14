@@ -1347,10 +1347,10 @@ components:
           type: string
           minLength: 1
           maxLength: 128
-          default: gpt-5.4-mini
+          default: gpt-5.6-luna
           description: |
             Provider model id. The UI defaults this field to
-            `gpt-5.4-mini`; direct API callers must still send a
+            `gpt-5.6-luna`; direct API callers must still send a
             non-empty value.
         text:
           type: string

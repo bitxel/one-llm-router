@@ -39,7 +39,7 @@ import { adminAccountsListQueryKey } from './accounts/query-keys'
 const t = i18n.getFixedT(null, 'playground')
 
 // Default model id is provider data, not UI copy — kept as a constant.
-const DEFAULT_MODEL = 'gpt-5.4-mini'
+const DEFAULT_MODEL = 'gpt-5.6-luna'
 
 const PROMPT_LIMIT = 16_000
 const MODEL_LIMIT = 128

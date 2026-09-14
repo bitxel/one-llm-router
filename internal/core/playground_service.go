@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	PlaygroundDefaultModel            = "gpt-5.4-mini"
+	PlaygroundDefaultModel            = "gpt-5.6-luna"
 	PlaygroundPromptLimitChars        = 16_000
 	PlaygroundDefaultMaxOutputTokens  = 1_024
 	PlaygroundMaxOutputTokens         = 4_096

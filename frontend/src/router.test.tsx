@@ -341,7 +341,7 @@ describe('routeTree new-account gating', () => {
     await renderRouterAt('/admin/playground')
 
     expect(await screen.findByTestId('playground-form')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('gpt-5.4-mini')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('gpt-5.6-luna')).toBeInTheDocument()
   })
 
   it('deep-links the real requests route and renders the request log shell', async () => {

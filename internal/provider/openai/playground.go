@@ -176,7 +176,7 @@ func (c *Client) RunPlayground(ctx context.Context, account domain.UpstreamAccou
 			UpstreamRequestBody:  body,
 			UpstreamResponseBody: responseBody,
 			ProviderError:        ExtractErrorCode(responseBody),
-			ProviderMessage:      ExtractErrorMessage(responseBody),
+			ProviderMessage:      responseDiagnostic(responseBody),
 		}
 	}
 	if account.IsOAuth() && endpoint == core.PlaygroundEndpointResponses && !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "application/json") {
@@ -212,7 +212,7 @@ func (c *Client) RunPlayground(ctx context.Context, account domain.UpstreamAccou
 				UpstreamRequestBody:  body,
 				UpstreamResponseBody: responseBody,
 				ProviderError:        ExtractErrorCode(responseBody),
-				ProviderMessage:      ExtractErrorMessage(responseBody),
+				ProviderMessage:      responseDiagnostic(responseBody),
 			}
 		}
 	}
@@ -397,19 +397,20 @@ func decodePlaygroundJSON(body []byte) (domain.JSONMap, error) {
 	return domain.JSONMap(object), nil
 }
 
-func ExtractErrorMessage(body []byte) *string {
-	if body == nil {
+func responseDiagnostic(body []byte) *string {
+	if len(body) == 0 {
 		return nil
 	}
-	var resp struct {
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
+	const maxDiagnosticBytes = 4096
+	value := core.RedactCapturedBody(body)
+	if len(value) > maxDiagnosticBytes {
+		value = value[:maxDiagnosticBytes]
 	}
-	if err := json.Unmarshal(body, &resp); err != nil || resp.Error == nil || resp.Error.Message == "" {
+	value = strings.TrimSpace(value)
+	if len(value) == 0 {
 		return nil
 	}
-	return &resp.Error.Message
+	return &value
 }
 
 func usageInts(usage domain.JSONMap) map[string]int {

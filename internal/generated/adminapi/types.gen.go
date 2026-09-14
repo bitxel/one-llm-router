@@ -4242,7 +4242,7 @@ type PlaygroundRunRequest struct {
 	MaxOutputTokens    *int                          `json:"max_output_tokens,omitempty"`
 
 	// Model Provider model id. The UI defaults this field to
-	// `gpt-5.4-mini`; direct API callers must still send a
+	// `gpt-5.6-luna`; direct API callers must still send a
 	// non-empty value.
 	Model         string                            `json:"model"`
 	SelectionMode PlaygroundRunRequestSelectionMode `json:"selection_mode"`
