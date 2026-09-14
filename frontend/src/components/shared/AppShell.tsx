@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { TopBar, type TopBarTag } from '@/components/neo'
 import { api } from '@/lib/api-client'
@@ -39,6 +40,7 @@ interface HealthSummary {
  * own 15 s poll remains authoritative for the V-001 banner.
  */
 export function AppShell({ children, breadcrumb, actions }: AppShellProps) {
+  const { t } = useTranslation('common')
   const { data: health } = useQuery({
     queryKey: ['admin', 'health', 'shell'],
     queryFn: () => api.get<HealthSummary>('/api/admin/health'),
@@ -48,19 +50,17 @@ export function AppShell({ children, breadcrumb, actions }: AppShellProps) {
 
   const statusTag: TopBarTag = health?.status
     ? health.status === 'healthy'
-      ? { kind: 'ok', label: 'healthy' }
+      ? { kind: 'ok', label: t('shell.healthy') }
       : health.status === 'degraded'
-        ? { kind: 'warn', label: 'degraded' }
-        : { kind: 'warn', label: 'unhealthy' }
-    : { kind: 'info', label: '…' }
+        ? { kind: 'warn', label: t('shell.degraded') }
+        : { kind: 'warn', label: t('shell.unhealthy') }
+    : { kind: 'info', label: t('shell.ellipsis') }
 
   const accountsTag: TopBarTag | null =
     typeof health?.active_accounts === 'number'
       ? {
           kind: 'plain',
-          label: `${health.active_accounts} active account${
-            health.active_accounts === 1 ? '' : 's'
-          }`,
+          label: t('shell.activeAccounts', { count: health.active_accounts }),
         }
       : null
 

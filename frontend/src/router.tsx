@@ -7,6 +7,7 @@ import {
   Navigate,
   Outlet,
 } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 /**
@@ -27,6 +28,7 @@ export interface RouterContext {
 // easiest React-idiomatic way to satisfy the contract without a
 // bespoke error boundary in every leaf page.
 function RouteErrorFallback({ error }: { error: Error }) {
+  const { t } = useTranslation('common')
   return (
     <div role="alert" data-testid="route-error-fallback" className="p-6">
       <div
@@ -38,11 +40,8 @@ function RouteErrorFallback({ error }: { error: Error }) {
           borderRadius: 2,
         }}
       >
-        <span className="font-medium uppercase tracking-[0.06em]">Something went wrong</span>
-        <p className="text-[12.5px] text-[var(--text-dim)]">
-          The admin portal hit an unexpected error while rendering this page. Navigation still works
-          — pick another section from the left, or reload this page.
-        </p>
+        <span className="font-medium uppercase tracking-[0.06em]">{t('routeError.title')}</span>
+        <p className="text-[12.5px] text-[var(--text-dim)]">{t('routeError.body')}</p>
         {error?.message ? (
           <pre
             className="max-h-40 overflow-auto border p-2 font-mono text-[11.5px] whitespace-pre-wrap"

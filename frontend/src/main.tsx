@@ -4,8 +4,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from 'sonner'
 
+import { initI18n } from '@/i18n'
+
 import './styles/globals.css'
 import { routeTree } from './router'
+
+// Boot i18n synchronously (catalogs are bundled) before the first render.
+initI18n()
 
 // Singleton QueryClient — shared across all routes.
 //

@@ -2,12 +2,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Copy, ExternalLink, RotateCcw } from 'lucide-react'
 import { type MutableRefObject, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
 import { type DeviceStartEnvelope, oauthCancel, oauthDeviceStart } from '@/generated/openapi'
+import { i18n } from '@/i18n'
 import { copyToClipboard } from '@/lib/clipboard'
 import {
   Err003DeviceAuthUnavailable,
@@ -27,7 +28,11 @@ import {
 } from '@/lib/oauth-flow'
 import { callAdmin } from '@/lib/router-api'
 import { RouterApiError } from '@/lib/router-api-error'
-import { strings } from './new-oauth-device.strings'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'accounts')
+
 import { invalidateAdminAccountQueries } from './query-keys'
 
 type DeviceStartSuccess = NonNullable<DeviceStartEnvelope['data']>
@@ -56,6 +61,8 @@ interface CopyState {
 const copyResetDelayMs = 2_000
 
 export function AdminAccountsNewOAuthDevice() {
+  // Subscribes this subtree to languageChanged so module-t() helpers re-render.
+  useTranslation('accounts')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const copyResetTimers = useRef<{ code: number | null; url: number | null }>({
@@ -70,7 +77,7 @@ export function AdminAccountsNewOAuthDevice() {
   const [screenError, setScreenError] = useState<unknown>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
-  const [countdownLabel, setCountdownLabel] = useState<string>(strings.countdownExpired)
+  const [countdownLabel, setCountdownLabel] = useState<string>(t('newOauthDevice.countdownExpired'))
   const [copyState, setCopyState] = useState<CopyState>({ code: false, url: false })
   const oauthFlow = useOAuthFlow({
     pendingIntervalMs: startedFlow ? startedFlow.interval_seconds * 1_000 : 5_000,
@@ -133,7 +140,7 @@ export function AdminAccountsNewOAuthDevice() {
 
   useEffect(() => {
     if (!activeDeviceFlow) {
-      setCountdownLabel(strings.countdownExpired)
+      setCountdownLabel(t('newOauthDevice.countdownExpired'))
       return
     }
 
@@ -274,7 +281,7 @@ export function AdminAccountsNewOAuthDevice() {
         copyResetTimers.current[kind] = null
       }, copyResetDelayMs)
     } catch {
-      toast.error(strings.toasts.copyFailed)
+      toast.error(t('newOauthDevice.toasts.copyFailed'))
     }
   }
 
@@ -291,24 +298,24 @@ export function AdminAccountsNewOAuthDevice() {
     !(terminalError && activeDeviceFlow)
   const statusLabel =
     oauthFlow.status === 'success'
-      ? strings.status.success
+      ? t('newOauthDevice.status.success')
       : oauthFlow.status === 'pending'
-        ? strings.status.pending
+        ? t('newOauthDevice.status.pending')
         : oauthFlow.status === 'error'
           ? isRecoveringExpiredFlow
-            ? strings.status.starting
+            ? t('newOauthDevice.status.starting')
             : terminalStatusLabel.label
-          : strings.status.starting
+          : t('newOauthDevice.status.starting')
 
   return (
     <Canvas variant="narrow">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('newOauthDevice.eyebrow')}>{t('newOauthDevice.stripe')}</Stripe>
       <div className="mb-5">
         <h1 className="mb-2 max-w-none whitespace-nowrap">
-          {strings.titleLead} <strong>{strings.titleStrong}</strong>
+          {t('newOauthDevice.titleLead')} <strong>{t('newOauthDevice.titleStrong')}</strong>
         </h1>
         <p className="max-w-[58ch] text-[14px] leading-[1.6] text-[var(--text-dim)]">
-          {strings.intro}
+          {t('newOauthDevice.intro')}
         </p>
       </div>
 
@@ -317,33 +324,37 @@ export function AdminAccountsNewOAuthDevice() {
       ) : null}
 
       {showConflictPanel ? (
-        <PanelCard title={strings.panel.blocked} meta="pending" data-testid="device-conflict-panel">
+        <PanelCard
+          title={t('newOauthDevice.panel.blocked')}
+          meta="pending"
+          data-testid="device-conflict-panel"
+        >
           <div className="space-y-4">
             <p className="text-[13px] leading-[1.65] text-[var(--text-dim)]">
-              {strings.err.oauth_flow_in_progress}
+              {t('newOauthDevice.err.oauth_flow_in_progress')}
             </p>
             <div className="grid gap-3 text-[12.5px] text-[var(--text-dim)] md:grid-cols-3">
               <div>
                 <span className="block font-mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                  {strings.labels.conflictMethod}
+                  {t('newOauthDevice.labels.conflictMethod')}
                 </span>
                 <span>{pendingConflict?.method}</span>
               </div>
               <div>
                 <span className="block font-mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                  {strings.labels.conflictFlow}
+                  {t('newOauthDevice.labels.conflictFlow')}
                 </span>
                 <span className="font-mono">{pendingConflict?.flow_id}</span>
               </div>
               <div>
                 <span className="block font-mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                  {strings.labels.conflictExpires}
+                  {t('newOauthDevice.labels.conflictExpires')}
                 </span>
                 <span>{pendingConflict?.expires_at}</span>
               </div>
             </div>
             <Button onClick={handleCancelPending} disabled={isBusy}>
-              {strings.actions.cancelPending}
+              {t('newOauthDevice.actions.cancelPending')}
             </Button>
           </div>
         </PanelCard>
@@ -351,16 +362,16 @@ export function AdminAccountsNewOAuthDevice() {
 
       {showUnavailablePanel ? (
         <PanelCard
-          title={strings.panel.unavailable}
+          title={t('newOauthDevice.panel.unavailable')}
           meta="3015"
           data-testid="device-unavailable-panel"
         >
           <div className="space-y-4">
             <p className="text-[13px] leading-[1.65] text-[var(--text-dim)]">
-              {strings.err.device_auth_unavailable}
+              {t('newOauthDevice.err.device_auth_unavailable')}
             </p>
             <Button asChild>
-              <Link to="/admin/accounts/new-oauth">{strings.actions.tryBrowser}</Link>
+              <Link to="/admin/accounts/new-oauth">{t('newOauthDevice.actions.tryBrowser')}</Link>
             </Button>
           </div>
         </PanelCard>
@@ -368,12 +379,12 @@ export function AdminAccountsNewOAuthDevice() {
 
       {showInvalidProviderPanel ? (
         <PanelCard
-          title={strings.panel.blocked}
+          title={t('newOauthDevice.panel.blocked')}
           meta="3002"
           data-testid="device-invalid-provider-panel"
         >
           <div className="space-y-3 text-[13px] leading-[1.65] text-[var(--text-dim)]">
-            <p>{strings.err.invalid_oauth_provider}</p>
+            <p>{t('newOauthDevice.err.invalid_oauth_provider')}</p>
             <code className="inline-block border border-[var(--line-2)] bg-[var(--panel-2)] px-2 py-1 font-mono text-[11.5px] text-[var(--text)]">
               {JSON.stringify((currentError as RouterApiError).data)}
             </code>
@@ -385,10 +396,10 @@ export function AdminAccountsNewOAuthDevice() {
         <PanelCard
           title={
             activeDeviceFlow
-              ? strings.panel.pending
+              ? t('newOauthDevice.panel.pending')
               : terminalError
-                ? strings.panel.failed
-                : strings.panel.code
+                ? t('newOauthDevice.panel.failed')
+                : t('newOauthDevice.panel.code')
           }
           meta={<span data-testid="device-status-pill">{statusLabel}</span>}
           metaMuted={oauthFlow.status !== 'pending'}
@@ -397,8 +408,8 @@ export function AdminAccountsNewOAuthDevice() {
           {activeDeviceFlow ? (
             <div className="space-y-7">
               <Field
-                label={strings.fields.verificationURL.label}
-                hint={strings.fields.verificationURL.hint}
+                label={t('newOauthDevice.fields.verificationURL.label')}
+                hint={t('newOauthDevice.fields.verificationURL.hint')}
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <Button asChild>
@@ -409,26 +420,31 @@ export function AdminAccountsNewOAuthDevice() {
                       rel="noopener noreferrer"
                     >
                       <ExternalLink />
-                      {strings.actions.openVerification}
+                      {t('newOauthDevice.actions.openVerification')}
                     </a>
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    aria-label={strings.labels.copyURL}
+                    aria-label={t('newOauthDevice.labels.copyURL')}
                     onClick={() => handleCopy('url', activeDeviceFlow.verification_url)}
                   >
                     <Copy />
-                    {copyState.url ? strings.actions.copied : strings.actions.copyURL}
+                    {copyState.url
+                      ? t('newOauthDevice.actions.copied')
+                      : t('newOauthDevice.actions.copyURL')}
                   </Button>
                 </div>
               </Field>
 
-              <Field label={strings.fields.userCode.label} hint={strings.fields.userCode.hint}>
+              <Field
+                label={t('newOauthDevice.fields.userCode.label')}
+                hint={t('newOauthDevice.fields.userCode.hint')}
+              >
                 <div className="flex flex-wrap items-start gap-3">
                   <output
                     data-testid="device-user-code"
-                    aria-label={strings.labels.userCode}
+                    aria-label={t('newOauthDevice.labels.userCode')}
                     className="min-w-[240px] border border-[var(--line-2)] bg-[var(--panel-2)] px-5 py-4 text-center font-mono text-[26px] tracking-[0.2em] text-[var(--text)]"
                     style={{ borderRadius: 2 }}
                   >
@@ -437,18 +453,20 @@ export function AdminAccountsNewOAuthDevice() {
                   <Button
                     type="button"
                     variant="outline"
-                    aria-label={strings.labels.copyCode}
+                    aria-label={t('newOauthDevice.labels.copyCode')}
                     onClick={() => handleCopy('code', activeDeviceFlow.user_code)}
                   >
                     <Copy />
-                    {copyState.code ? strings.actions.copied : strings.actions.copyCode}
+                    {copyState.code
+                      ? t('newOauthDevice.actions.copied')
+                      : t('newOauthDevice.actions.copyCode')}
                   </Button>
                 </div>
               </Field>
 
               <div className="grid gap-3 border-t border-[var(--line)] pt-5 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-center">
                 <div className="text-[12.5px] font-medium text-[var(--text)]">
-                  {strings.fields.countdown.label}
+                  {t('newOauthDevice.fields.countdown.label')}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <div
@@ -465,14 +483,14 @@ export function AdminAccountsNewOAuthDevice() {
                     data-testid="device-restart-button"
                   >
                     <RotateCcw />
-                    {strings.actions.restart}
+                    {t('newOauthDevice.actions.restart')}
                   </Button>
                 </div>
               </div>
             </div>
           ) : (
             <div className="space-y-4 text-[13px] leading-[1.65] text-[var(--text-dim)]">
-              <div>{terminalError ? terminalStatusLabel.detail : strings.intro}</div>
+              <div>{terminalError ? terminalStatusLabel.detail : t('newOauthDevice.intro')}</div>
               <Button
                 type="button"
                 variant="outline"
@@ -481,7 +499,7 @@ export function AdminAccountsNewOAuthDevice() {
                 data-testid="device-restart-button"
               >
                 <RotateCcw />
-                {strings.actions.restart}
+                {t('newOauthDevice.actions.restart')}
               </Button>
             </div>
           )}
@@ -513,7 +531,7 @@ function readStartedDeviceFlow(flow: OAuthFlowSnapshot | undefined, intervalSeco
 function formatCountdown(expiresAt: string): string {
   const remainingMs = Date.parse(expiresAt) - Date.now()
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
-    return strings.countdownAwaitingServer
+    return t('newOauthDevice.countdownAwaitingServer')
   }
   const totalSeconds = Math.ceil(remainingMs / 1000)
   const minutes = Math.floor(totalSeconds / 60)
@@ -538,35 +556,35 @@ function isRecoverableExpiredFlowError(error: { code: string } | null): boolean 
 function renderTerminalStatus(code?: string) {
   if (code === 'expired_token' || code === 'flow_expired') {
     return {
-      label: strings.status.expired,
-      detail: strings.toasts.flowExpired,
+      label: t('newOauthDevice.status.expired'),
+      detail: t('newOauthDevice.toasts.flowExpired'),
     }
   }
   if (code === 'cancelled') {
     return {
-      label: strings.status.cancelled,
-      detail: strings.toasts.flowCancelled,
+      label: t('newOauthDevice.status.cancelled'),
+      detail: t('newOauthDevice.toasts.flowCancelled'),
     }
   }
   if (code === 'access_denied') {
     return {
-      label: strings.status.denied,
-      detail: strings.toasts.flowCancelled,
+      label: t('newOauthDevice.status.denied'),
+      detail: t('newOauthDevice.toasts.flowCancelled'),
     }
   }
   return {
-    label: strings.status.failed,
-    detail: strings.err.default,
+    label: t('newOauthDevice.status.failed'),
+    detail: t('newOauthDevice.err.default'),
   }
 }
 
 function describeStartError(error: unknown): { title: string; detail: string } {
   if (!(error instanceof RouterApiError)) {
-    return { title: strings.err.default, detail: '' }
+    return { title: t('newOauthDevice.err.default'), detail: '' }
   }
   if (error.code === Err003OAuthUpstreamError) {
     return {
-      title: strings.err.oauth_upstream_error,
+      title: t('newOauthDevice.err.oauth_upstream_error'),
       detail: joinParts([
         readStringField(error.data, 'provider_error'),
         readStringField(error.data, 'provider_message'),
@@ -574,16 +592,19 @@ function describeStartError(error: unknown): { title: string; detail: string } {
     }
   }
   if (error.code === Err003OAuthStoreFailed) {
-    return { title: strings.err.oauth_store_failed, detail: '' }
+    return { title: t('newOauthDevice.err.oauth_store_failed'), detail: '' }
   }
   if (error.code === Err003FlowExpired) {
-    return { title: strings.status.expired, detail: strings.toasts.flowExpired }
+    return {
+      title: t('newOauthDevice.status.expired'),
+      detail: t('newOauthDevice.toasts.flowExpired'),
+    }
   }
   if (error.code === PlatformUnknown) {
-    return { title: strings.err.transport_error, detail: '' }
+    return { title: t('newOauthDevice.err.transport_error'), detail: '' }
   }
   return {
-    title: strings.err.default,
+    title: t('newOauthDevice.err.default'),
     detail: typeof error.msg === 'string' ? error.msg : '',
   }
 }

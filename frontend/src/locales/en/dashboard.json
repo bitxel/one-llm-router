@@ -1,0 +1,60 @@
+{
+  "eyebrow": "Observability",
+  "title": "Dashboard",
+  "intro": "Monitor live account capacity, request volume, token mix, error rate, and first-token latency from the router request log.",
+  "errorTitle": "Dashboard unavailable",
+  "loading": "Loading",
+  "emptyValue": "-",
+  "rangeTotal": "latest window",
+  "accountAll": "All accounts",
+  "noActiveAccounts": {
+    "title": "No active upstream accounts",
+    "prefix": "Routing is blocked until at least one account is active. Open",
+    "link": "Accounts -> New",
+    "suffix": " to add browser OAuth, device OAuth, import auth.json, or create an API-key row."
+  },
+  "labels": {
+    "range": "Range",
+    "account": "Account"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "editDashboard": "Edit dashboard",
+    "hide": "Hide {{card}}",
+    "moveDown": "Move {{card}} down",
+    "moveUp": "Move {{card}} up",
+    "show": "Show {{card}}"
+  },
+  "hidden": {
+    "title": "Hidden cards",
+    "itemMeta": "hidden",
+    "meta_one": "{{count}} hidden",
+    "meta_other": "{{count}} hidden"
+  },
+  "cards": {
+    "activeAccounts": {
+      "title": "Active accounts",
+      "shortTitle": "Active Accounts",
+      "meta": "current"
+    },
+    "requests": {
+      "title": "Requests",
+      "shortTitle": "Requests"
+    },
+    "tokens": {
+      "title": "Tokens",
+      "shortTitle": "Tokens",
+      "meta": "cache {{cached}} / input {{nonCached}} / output {{output}}"
+    },
+    "errorRate": {
+      "title": "Error rate",
+      "shortTitle": "Error Rate",
+      "meta": "{{errors}} / {{total}} errors"
+    },
+    "ttft": {
+      "title": "TTFT",
+      "shortTitle": "TTFT",
+      "meta": "{{samples}} samples"
+    }
+  }
+}

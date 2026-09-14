@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { Download, Pause, Play, RefreshCw, Trash2, X } from 'lucide-react'
 import { type ReactNode, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { accountsExportAuthJson } from '@/generated/openapi'
+import { i18n } from '@/i18n'
 import { api } from '@/lib/api-client'
+import { intlLocale } from '@/lib/intl'
 import { planTypeLabel } from '@/lib/plan-label'
 import { callAdminAttachment } from '@/lib/router-api'
-import { strings } from './detail.strings'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'accounts')
+
 import { ApiKeyEditPanel } from './detail-edit'
 import { adminAccountDetailQueryKey, invalidateAdminAccountQueries } from './query-keys'
 import { formatQuotaDetail } from './quota-format'
@@ -63,6 +69,8 @@ const activateAccountButtonClassName =
   'border-[var(--line-3)] bg-[var(--panel)] text-[var(--text-muted)] [box-shadow:var(--shadow-btn)] hover:border-[var(--ok)] hover:bg-[var(--ok-soft)] hover:text-[var(--ok)] focus-visible:border-[var(--ok)] focus-visible:text-[var(--ok)]'
 
 export function AdminAccountDetail() {
+  // Subscribes this subtree to languageChanged so module-t() helpers re-render.
+  useTranslation('accounts')
   const params = useParams({ strict: false })
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -107,7 +115,7 @@ export function AdminAccountDetail() {
   const showOAuthMetadata = account !== null && account.auth_method !== 'api_key'
   const planLabel =
     account?.plan_type_label ||
-    (account?.plan_type == null ? strings.empty : planTypeLabel(account.plan_type) || strings.empty)
+    (account?.plan_type == null ? t('empty') : planTypeLabel(account.plan_type) || t('empty'))
   const accountStatusMeta = account ? statusMetaFor(account.status) : null
   const accountIsActive = account ? isActiveStatus(account.status) : false
 
@@ -122,11 +130,11 @@ export function AdminAccountDetail() {
     try {
       await api.post<Record<string, string>>(`/api/admin/accounts/${account.id}/enable`, {})
       await invalidateAdminAccountQueries(queryClient, account.id)
-      toast.success(strings.toasts.activateSuccess)
+      toast.success(t('detail.toasts.activateSuccess'))
     } catch (error) {
       setActionError(error)
-      setActionErrorTitle(strings.activateTitle)
-      toast.error(strings.toasts.activateFailed)
+      setActionErrorTitle(t('detail.activateTitle'))
+      toast.error(t('detail.toasts.activateFailed'))
     } finally {
       setIsActivating(false)
     }
@@ -148,11 +156,11 @@ export function AdminAccountDetail() {
         }),
       )
       triggerBlobDownload(attachment.blob, attachment.filename)
-      toast.success(strings.toasts.exportSuccess)
+      toast.success(t('detail.toasts.exportSuccess'))
     } catch (error) {
       setActionError(error)
-      setActionErrorTitle(strings.exportTitle)
-      toast.error(strings.toasts.exportFailed)
+      setActionErrorTitle(t('detail.exportTitle'))
+      toast.error(t('detail.toasts.exportFailed'))
     } finally {
       setIsExporting(false)
     }
@@ -169,11 +177,11 @@ export function AdminAccountDetail() {
     try {
       await api.post<Record<string, string>>(`/api/admin/accounts/${account.id}/disable`, {})
       await invalidateAdminAccountQueries(queryClient, account.id)
-      toast.success(strings.toasts.disableSuccess)
+      toast.success(t('detail.toasts.disableSuccess'))
     } catch (error) {
       setActionError(error)
-      setActionErrorTitle(strings.disableTitle)
-      toast.error(strings.toasts.disableFailed)
+      setActionErrorTitle(t('detail.disableTitle'))
+      toast.error(t('detail.toasts.disableFailed'))
     } finally {
       setIsDisabling(false)
     }
@@ -196,12 +204,12 @@ export function AdminAccountDetail() {
     try {
       await api.post<Record<string, never>>(`/api/admin/accounts/${account.id}/delete`, {})
       await invalidateAdminAccountQueries(queryClient, account.id)
-      toast.success(strings.toasts.deleteSuccess)
+      toast.success(t('detail.toasts.deleteSuccess'))
       await navigate({ to: '/admin/accounts' })
     } catch (error) {
       setActionError(error)
-      setActionErrorTitle(strings.deleteTitle)
-      toast.error(strings.toasts.deleteFailed)
+      setActionErrorTitle(t('detail.deleteTitle'))
+      toast.error(t('detail.toasts.deleteFailed'))
     } finally {
       setIsDeleting(false)
     }
@@ -218,9 +226,9 @@ export function AdminAccountDetail() {
       })
       setNewModelID('')
       await queryClient.invalidateQueries({ queryKey: modelsQueryKey })
-      toast.success(strings.toasts.modelAddSuccess)
+      toast.success(t('detail.toasts.modelAddSuccess'))
     } catch (_error) {
-      toast.error(strings.toasts.modelAddFailed)
+      toast.error(t('detail.toasts.modelAddFailed'))
     } finally {
       setIsAddingModel(false)
       addModelInputRef.current?.focus()
@@ -236,9 +244,9 @@ export function AdminAccountDetail() {
         model_id: modelID,
       })
       await queryClient.invalidateQueries({ queryKey: modelsQueryKey })
-      toast.success(strings.toasts.modelRemoveSuccess)
+      toast.success(t('detail.toasts.modelRemoveSuccess'))
     } catch (_error) {
-      toast.error(strings.toasts.modelRemoveFailed)
+      toast.error(t('detail.toasts.modelRemoveFailed'))
     }
   }
 
@@ -253,9 +261,9 @@ export function AdminAccountDetail() {
         {},
       )
       await queryClient.invalidateQueries({ queryKey: modelsQueryKey })
-      toast.success(strings.toasts.modelRefreshSuccess)
+      toast.success(t('detail.toasts.modelRefreshSuccess'))
     } catch (_error) {
-      toast.error(strings.toasts.modelRefreshFailed)
+      toast.error(t('detail.toasts.modelRefreshFailed'))
     } finally {
       setIsRefreshingModels(false)
     }
@@ -272,7 +280,7 @@ export function AdminAccountDetail() {
       })
       await invalidateAdminAccountQueries(queryClient, account.id)
     } catch (_error) {
-      toast.error(strings.proxySetFailed)
+      toast.error(t('detail.proxySetFailed'))
     } finally {
       setIsSettingProxy(false)
     }
@@ -280,18 +288,18 @@ export function AdminAccountDetail() {
 
   return (
     <Canvas variant="wide">
-      <Stripe eyebrow={strings.title}>{strings.parentTitle}</Stripe>
+      <Stripe eyebrow={t('detail.title')}>{t('detail.parentTitle')}</Stripe>
       <h1 className="mb-3 max-w-[18ch]">
-        Account <strong>{hasValidID ? rawAccountID : strings.empty}</strong>
+        Account <strong>{hasValidID ? rawAccountID : t('empty')}</strong>
       </h1>
       <p className="mb-7 max-w-[70ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
-        {strings.subtitle}
+        {t('detail.subtitle')}
       </p>
 
       {!hasValidID ? (
         <ErrorBanner
-          error={new Error(strings.invalidIdDetail)}
-          title={strings.invalidIdTitle}
+          error={new Error(t('detail.invalidIdDetail'))}
+          title={t('detail.invalidIdTitle')}
           className="mb-4"
         />
       ) : null}
@@ -302,9 +310,9 @@ export function AdminAccountDetail() {
       ) : null}
 
       {accountQuery.isLoading ? (
-        <PanelCard title={strings.summaryTitle} meta={strings.loading}>
+        <PanelCard title={t('detail.summaryTitle')} meta={t('detail.loading')}>
           <div className="text-[13px] text-[var(--text-dim)]" data-testid="account-detail-loading">
-            {strings.loading}
+            {t('detail.loading')}
           </div>
         </PanelCard>
       ) : null}
@@ -312,7 +320,7 @@ export function AdminAccountDetail() {
       {account ? (
         <div data-testid="account-detail-view" className="space-y-3">
           <PanelCard
-            title={strings.summaryTitle}
+            title={t('detail.summaryTitle')}
             meta={accountStatusMeta?.label}
             metaClassName={accountStatusMeta?.className}
             metaTestId="account-summary-status"
@@ -341,8 +349,12 @@ export function AdminAccountDetail() {
                     }}
                     disabled={isDisabling}
                     data-testid="disable-account-button"
-                    aria-label={isDisabling ? strings.actions.disabling : strings.actions.disable}
-                    title={isDisabling ? strings.actions.disabling : strings.actions.disable}
+                    aria-label={
+                      isDisabling ? t('detail.actions.disabling') : t('detail.actions.disable')
+                    }
+                    title={
+                      isDisabling ? t('detail.actions.disabling') : t('detail.actions.disable')
+                    }
                     className={pauseAccountButtonClassName}
                   >
                     <Pause />
@@ -357,9 +369,11 @@ export function AdminAccountDetail() {
                     disabled={isActivating}
                     data-testid="activate-account-button"
                     aria-label={
-                      isActivating ? strings.actions.activating : strings.actions.activate
+                      isActivating ? t('detail.actions.activating') : t('detail.actions.activate')
                     }
-                    title={isActivating ? strings.actions.activating : strings.actions.activate}
+                    title={
+                      isActivating ? t('detail.actions.activating') : t('detail.actions.activate')
+                    }
                     className={activateAccountButtonClassName}
                   >
                     <Play />
@@ -374,7 +388,7 @@ export function AdminAccountDetail() {
                     data-testid="export-auth-json"
                   >
                     <Download />
-                    {isExporting ? strings.actions.exporting : strings.actions.export}
+                    {isExporting ? t('detail.actions.exporting') : t('detail.actions.export')}
                   </Button>
                 ) : null}
               </div>
@@ -383,27 +397,27 @@ export function AdminAccountDetail() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <MetadataPanel
-              title={strings.summaryTitle}
-              meta={accountStatusMeta?.label ?? strings.empty}
+              title={t('detail.summaryTitle')}
+              meta={accountStatusMeta?.label ?? t('empty')}
               metaClassName={accountStatusMeta?.className}
               rows={[
-                [strings.labels.id, String(account.id)],
-                [strings.labels.provider, account.provider],
-                [strings.labels.authMethod, renderAuthMethodLabel(account.auth_method)],
-                [strings.labels.status, account.status],
-                [strings.labels.baseURL, account.base_url ?? strings.empty],
+                [t('detail.labels.id'), String(account.id)],
+                [t('detail.labels.provider'), account.provider],
+                [t('detail.labels.authMethod'), renderAuthMethodLabel(account.auth_method)],
+                [t('detail.labels.status'), account.status],
+                [t('detail.labels.baseURL'), account.base_url ?? t('empty')],
               ]}
             />
 
             {showOAuthMetadata ? (
               <MetadataPanel
-                title={strings.metadataTitle}
+                title={t('detail.metadataTitle')}
                 testID="account-oauth-metadata"
                 rows={[
-                  [strings.labels.email, account.email ?? strings.empty],
-                  [strings.labels.plan, planLabel],
+                  [t('detail.labels.email'), account.email ?? t('empty')],
+                  [t('detail.labels.plan'), planLabel],
                   [
-                    strings.labels.primaryUsage,
+                    t('detail.labels.primaryUsage'),
                     <QuotaUsageValue
                       key="primary"
                       percent={account.primary_used_percent}
@@ -412,7 +426,7 @@ export function AdminAccountDetail() {
                     />,
                   ],
                   [
-                    strings.labels.secondaryUsage,
+                    t('detail.labels.secondaryUsage'),
                     <QuotaUsageValue
                       key="secondary"
                       percent={account.secondary_used_percent}
@@ -420,10 +434,10 @@ export function AdminAccountDetail() {
                       windowSeconds={account.secondary_window_seconds}
                     />,
                   ],
-                  [strings.labels.quotaUpdatedAt, formatTimestamp(account.usage_updated_at)],
-                  [strings.labels.chatgptAccountID, account.chatgpt_account_id ?? strings.empty],
-                  [strings.labels.lastRefresh, formatTimestamp(account.last_refresh)],
-                  [strings.labels.accessExpiresAt, formatTimestamp(account.access_expires_at)],
+                  [t('detail.labels.quotaUpdatedAt'), formatTimestamp(account.usage_updated_at)],
+                  [t('detail.labels.chatgptAccountID'), account.chatgpt_account_id ?? t('empty')],
+                  [t('detail.labels.lastRefresh'), formatTimestamp(account.last_refresh)],
+                  [t('detail.labels.accessExpiresAt'), formatTimestamp(account.access_expires_at)],
                 ]}
               />
             ) : null}
@@ -431,13 +445,13 @@ export function AdminAccountDetail() {
 
           {!showOAuthMetadata ? <ApiKeyEditPanel account={account} /> : null}
 
-          <PanelCard title={strings.proxyTitle}>
+          <PanelCard title={t('detail.proxyTitle')}>
             <div className="grid items-start gap-3 sm:grid-cols-[minmax(0,220px)_1fr_auto] sm:gap-5">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="account-use-proxy">{strings.proxyEnableLabel}</Label>
+                <Label htmlFor="account-use-proxy">{t('detail.proxyEnableLabel')}</Label>
               </div>
               <p className="pt-[2px] text-[12.5px] leading-[1.55] text-[var(--text-dim)]">
-                {strings.proxyHint}
+                {t('detail.proxyHint')}
               </p>
               <div className="justify-self-start sm:self-center sm:justify-self-auto">
                 <Switch
@@ -451,10 +465,10 @@ export function AdminAccountDetail() {
             </div>
           </PanelCard>
 
-          <PanelCard title={strings.deleteTitle}>
+          <PanelCard title={t('detail.deleteTitle')}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-[1.6] text-[var(--text-dim)]">
-                {strings.deleteHint}
+                {t('detail.deleteHint')}
               </p>
               <Button
                 variant="destructive"
@@ -466,17 +480,17 @@ export function AdminAccountDetail() {
               >
                 <Trash2 />
                 {isDeleting
-                  ? strings.actions.deleting
+                  ? t('detail.actions.deleting')
                   : deleteConfirming
-                    ? strings.actions.confirmDelete
-                    : strings.actions.delete}
+                    ? t('detail.actions.confirmDelete')
+                    : t('detail.actions.delete')}
               </Button>
             </div>
           </PanelCard>
 
-          <PanelCard title={strings.modelsTitle}>
+          <PanelCard title={t('detail.modelsTitle')}>
             {modelsQuery.isLoading ? (
-              <div className="text-[13px] text-[var(--text-dim)]">{strings.modelsLoading}</div>
+              <div className="text-[13px] text-[var(--text-dim)]">{t('detail.modelsLoading')}</div>
             ) : modelsQuery.isError ? (
               <ErrorBanner error={modelsQuery.error} className="mb-4" />
             ) : (
@@ -501,8 +515,8 @@ export function AdminAccountDetail() {
                           size="icon"
                           className="size-7 shrink-0"
                           onClick={() => void handleRemoveModel(m.model_id)}
-                          aria-label={`${strings.removeModelTitle} ${m.model_id}`}
-                          title={`${strings.removeModelTitle} ${m.model_id}`}
+                          aria-label={`${t('detail.removeModelTitle')} ${m.model_id}`}
+                          title={`${t('detail.removeModelTitle')} ${m.model_id}`}
                         >
                           <X className="size-3.5" />
                         </Button>
@@ -511,7 +525,7 @@ export function AdminAccountDetail() {
                   </div>
                 ) : (
                   <p className="text-[13px] leading-[1.6] text-[var(--text-dim)]">
-                    {strings.modelsEmpty}
+                    {t('detail.modelsEmpty')}
                   </p>
                 )}
 
@@ -520,7 +534,7 @@ export function AdminAccountDetail() {
                     ref={addModelInputRef}
                     value={newModelID}
                     onChange={(e) => setNewModelID(e.target.value)}
-                    placeholder={strings.addModelPlaceholder}
+                    placeholder={t('detail.addModelPlaceholder')}
                     className="h-8 text-[13px]"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -533,7 +547,7 @@ export function AdminAccountDetail() {
                     onClick={() => void handleAddModel()}
                     disabled={isAddingModel || newModelID.trim() === ''}
                   >
-                    {isAddingModel ? strings.addingModel : strings.addModelButton}
+                    {isAddingModel ? t('detail.addingModel') : t('detail.addModelButton')}
                   </Button>
                   <Button
                     variant="secondary"
@@ -542,7 +556,9 @@ export function AdminAccountDetail() {
                     disabled={isRefreshingModels}
                   >
                     <RefreshCw className={`size-3.5 ${isRefreshingModels ? 'animate-spin' : ''}`} />
-                    {isRefreshingModels ? strings.refreshingModels : strings.refreshModelsButton}
+                    {isRefreshingModels
+                      ? t('detail.refreshingModels')
+                      : t('detail.refreshModelsButton')}
                   </Button>
                 </div>
               </div>
@@ -581,7 +597,7 @@ function MetadataPanel({
 }
 
 function renderAuthMethodLabel(method: AuthMethod): string {
-  return strings.authMethod[method] ?? method
+  return t(`authMethod.${method}` as 'authMethod.api_key', { defaultValue: method })
 }
 
 function QuotaUsageValue({
@@ -614,13 +630,13 @@ function accountIdentity(account: AccountDetail): string {
 function statusMetaFor(status: string): { label: string; className: string } {
   if (isActiveStatus(status)) {
     return {
-      label: strings.accountStatus.active,
+      label: t('accountStatus.active'),
       className: 'border-[var(--ok)] bg-[var(--ok-soft)] text-[var(--ok)]',
     }
   }
 
   return {
-    label: strings.accountStatus.inactive,
+    label: t('accountStatus.inactive'),
     className: 'border-[var(--err)] bg-[var(--err-soft)] text-[var(--err)]',
   }
 }
@@ -631,7 +647,7 @@ function isActiveStatus(status: string): boolean {
 
 function formatTimestamp(value: string | null | undefined): string {
   if (!value) {
-    return strings.empty
+    return t('empty')
   }
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -642,10 +658,10 @@ function formatTimestamp(value: string | null | undefined): string {
 
 function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
-    return strings.empty
+    return t('empty')
   }
-  const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
-  return `${formatter.format(value)}%`
+  const formatted = new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 }).format(value)
+  return `${formatted}%`
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {

@@ -1,0 +1,104 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "accounts": "Accounts",
+    "playground": "Playground",
+    "requests": "Requests",
+    "clientKeys": "Client Keys",
+    "observability": "Observability",
+    "settings": "Settings",
+    "planned": "planned"
+  },
+  "sidebar": {
+    "adminPortal": "admin portal",
+    "docs": "docs",
+    "github": "github",
+    "expand": "Expand sidebar",
+    "collapse": "Collapse sidebar",
+    "label": "Admin navigation"
+  },
+  "theme": {
+    "label": "Theme",
+    "dark": "Dark",
+    "light": "Light"
+  },
+  "language": {
+    "label": "Language / 语言"
+  },
+  "shell": {
+    "healthy": "healthy",
+    "degraded": "degraded",
+    "unhealthy": "unhealthy",
+    "ellipsis": "…",
+    "activeAccounts_one": "{{count}} active account",
+    "activeAccounts_other": "{{count}} active accounts"
+  },
+  "buildTag": {
+    "label": "build {{version}}"
+  },
+  "breadcrumb": {
+    "dashboard": "dashboard",
+    "accounts": "accounts",
+    "playground": "playground",
+    "requests": "requests",
+    "settings": "settings"
+  },
+  "errorBanner": {
+    "requestFailed": "Request failed",
+    "correlationId": "Correlation id"
+  },
+  "routeError": {
+    "title": "Something went wrong",
+    "body": "The admin portal hit an unexpected error while rendering this page. Navigation still works — pick another section from the left, or reload this page."
+  },
+  "authMethods": {
+    "api_key": {
+      "title": "API key",
+      "badge": "Paste an OpenAI API key"
+    },
+    "oauth_browser": {
+      "title": "OAuth browser",
+      "badge": "Sign in with ChatGPT in your browser"
+    },
+    "oauth_device": {
+      "title": "OAuth device",
+      "badge": "Headless? Use a device code"
+    },
+    "oauth_import": {
+      "title": "Import auth.json",
+      "badge": "Upload your local ~/.codex/auth.json"
+    }
+  },
+  "probe": {
+    "msRtt": "ms rtt",
+    "healthy": "healthy",
+    "unreachable": "unreachable"
+  },
+  "shortcuts": {
+    "title": "Shortcuts"
+  },
+  "stepper": {
+    "setupProgress": "Setup progress"
+  },
+  "actions": {
+    "loading": "Loading",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "close": "Close",
+    "retry": "Retry",
+    "save": "Save changes",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "open": "Open",
+    "delete": "Delete"
+  },
+  "emptyField": "—",
+  "jsonPreview": {
+    "modeLabel": "JSON preview mode",
+    "beautify": "Beautify",
+    "raw": "Raw",
+    "copy": "Copy JSON"
+  }
+}

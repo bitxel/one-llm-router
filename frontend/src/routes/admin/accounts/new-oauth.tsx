@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Canvas, Stripe } from '@/components/neo'
@@ -25,6 +26,7 @@ import {
   oauthBrowserStart,
   oauthCancel,
 } from '@/generated/openapi'
+import { i18n } from '@/i18n'
 import {
   Err003AlreadyConsumed,
   Err003FlowExpired,
@@ -39,6 +41,7 @@ import {
   Err003OAuthUpstreamError,
   PlatformUnknown,
 } from '@/lib/errcode'
+import { tDynamic } from '@/lib/error-message'
 import {
   type OAuthFlowActive,
   type OAuthFlowPending,
@@ -49,13 +52,17 @@ import {
 import { callAdmin } from '@/lib/router-api'
 import { RouterApiError } from '@/lib/router-api-error'
 import { stableId } from '@/lib/utils'
-import { strings } from './new-oauth.strings'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'accounts')
+
 import { invalidateAdminAccountQueries } from './query-keys'
 
 const callbackFieldId = stableId('oauth-browser-callback-url')
 
 const CallbackFormSchema = z.object({
-  callback_url: z.string().trim().min(1, strings.validation.callbackRequired),
+  callback_url: z.string().trim().min(1, 'accounts:newOauth.validation.callbackRequired'),
 })
 
 type CallbackForm = z.infer<typeof CallbackFormSchema>
@@ -97,6 +104,8 @@ interface CallbackSummary {
 }
 
 export function AdminAccountsNewOAuth() {
+  // Subscribes this subtree to languageChanged so module-t() helpers re-render.
+  useTranslation('accounts')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const oauthFlow = useOAuthFlow()
@@ -164,7 +173,7 @@ export function AdminAccountsNewOAuth() {
       return
     }
     if (code === 'cancelled' || code === 'access_denied') {
-      toast.error(strings.toasts.flowCancelled)
+      toast.error(t('newOauth.toasts.flowCancelled'))
       resetToStart({
         callbackForm,
         queryClient,
@@ -298,7 +307,7 @@ export function AdminAccountsNewOAuth() {
         await navigateToAccount(result.account.id, navigate, queryClient, navigatedRef)
         return
       }
-      toast.error(strings.toasts.flowCancelled)
+      toast.error(t('newOauth.toasts.flowCancelled'))
       resetToStart({
         callbackForm,
         queryClient,
@@ -320,7 +329,7 @@ export function AdminAccountsNewOAuth() {
         }
 
         if (err.code === Err003FlowExpired) {
-          toast.error(strings.toasts.flowExpired)
+          toast.error(t('newOauth.toasts.flowExpired'))
           resetToStart({
             callbackForm,
             queryClient,
@@ -360,16 +369,18 @@ export function AdminAccountsNewOAuth() {
 
   return (
     <Canvas variant="narrow">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('newOauth.eyebrow')}>{t('newOauth.stripe')}</Stripe>
       <h1 className="mb-2 max-w-[22ch]">
-        {strings.titleLead} <strong>{strings.titleStrong}</strong>
+        {t('newOauth.titleLead')} <strong>{t('newOauth.titleStrong')}</strong>
       </h1>
       <p className="mb-5 max-w-[58ch] text-[14px] leading-[1.6] text-[var(--text-dim)]">
-        {strings.intro}
+        {t('newOauth.intro')}
       </p>
 
       <div className="space-y-4">
-        {currentError ? <ErrorBanner error={currentError} title={strings.err.default} /> : null}
+        {currentError ? (
+          <ErrorBanner error={currentError} title={t('newOauth.err.default')} />
+        ) : null}
 
         {pendingConflict && !activeBrowserFlow ? (
           <div data-testid="oauth-conflict-banner" className="flex flex-wrap gap-2">
@@ -381,7 +392,7 @@ export function AdminAccountsNewOAuth() {
                 onClick={() => void handleOpenPendingFlow()}
               >
                 <ExternalLink />
-                {strings.actions.openPending}
+                {t('newOauth.actions.openPending')}
               </Button>
             ) : null}
           </div>
@@ -395,7 +406,7 @@ export function AdminAccountsNewOAuth() {
             onClick={() => void handleStartBrowser(reserveAuthorizeTab())}
           >
             <ExternalLink />
-            {strings.actions.start}
+            {t('newOauth.actions.start')}
           </Button>
         ) : null}
 
@@ -415,7 +426,7 @@ export function AdminAccountsNewOAuth() {
                 }}
               >
                 <ExternalLink />
-                {strings.actions.openAgain}
+                {t('newOauth.actions.openAgain')}
               </Button>
               <Button
                 type="button"
@@ -424,7 +435,7 @@ export function AdminAccountsNewOAuth() {
                 disabled={isBusy}
                 onClick={() => void handleCancelPending(false)}
               >
-                {strings.actions.cancelPending}
+                {t('newOauth.actions.cancelPending')}
               </Button>
             </div>
 
@@ -436,27 +447,27 @@ export function AdminAccountsNewOAuth() {
                 htmlFor={callbackFieldId}
                 className="block text-[12.5px] font-medium text-[var(--text)]"
               >
-                {strings.fields.callback.label}
+                {t('newOauth.fields.callback.label')}
                 <span className="mt-1 block text-[11.5px] font-normal leading-[1.5] text-[var(--text-muted)]">
-                  {strings.fields.callback.hint}
+                  {t('newOauth.fields.callback.hint')}
                 </span>
               </label>
               <input
                 id={callbackFieldId}
                 data-testid="oauth-callback-input"
-                aria-label={strings.fields.callback.label}
+                aria-label={t('newOauth.fields.callback.label')}
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
                 className="h-11 w-full border border-[var(--line-3)] bg-[var(--panel-2)] px-3 py-2 font-mono text-[12.5px] leading-[1.6] text-[var(--text)] outline-none transition-colors placeholder:font-sans placeholder:text-[var(--text-faint)] focus:border-[var(--accent)] focus-visible:[box-shadow:var(--focus)]"
                 style={{ borderRadius: 2 }}
-                placeholder={strings.fields.callback.placeholder}
+                placeholder={t('newOauth.fields.callback.placeholder')}
                 {...callbackForm.register('callback_url')}
               />
               <CallbackURLSummary summary={callbackSummary} />
               {callbackForm.formState.errors.callback_url ? (
                 <p className="text-[11.5px] text-[var(--err)]">
-                  {callbackForm.formState.errors.callback_url.message}
+                  {tDynamic(callbackForm.formState.errors.callback_url.message)}
                 </p>
               ) : null}
               {inlineFeedback ? (
@@ -472,7 +483,7 @@ export function AdminAccountsNewOAuth() {
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" disabled={isBusy || !hasCallbackURL}>
-                  {strings.actions.submitCallback}
+                  {t('newOauth.actions.submitCallback')}
                 </Button>
               </div>
             </form>
@@ -485,10 +496,10 @@ export function AdminAccountsNewOAuth() {
             className="space-y-3 text-[12.5px] leading-[1.6] text-[var(--err)]"
           >
             <div className="font-medium">
-              {terminalError.message || strings.terminal.defaultTitle}
+              {terminalError.message || t('newOauth.terminal.defaultTitle')}
             </div>
             <div className="font-mono text-[11.5px]">
-              {terminalError.code || strings.terminal.defaultDetail}
+              {terminalError.code || t('newOauth.terminal.defaultDetail')}
             </div>
             <Button
               type="button"
@@ -507,7 +518,7 @@ export function AdminAccountsNewOAuth() {
               }}
             >
               <RotateCcw />
-              {strings.actions.startAgain}
+              {t('newOauth.actions.startAgain')}
             </Button>
           </div>
         ) : null}
@@ -568,7 +579,7 @@ function FlowStatusStrip({ flow }: { flow: StartedBrowserFlow }) {
     >
       {!flow.listener_bound ? (
         <span data-testid="oauth-paste-only-badge" className="text-[var(--warn)]">
-          {strings.badges.pasteOnly}
+          {t('newOauth.badges.pasteOnly')}
         </span>
       ) : null}
       <span>{formatFlowExpiry(flow.expires_at)}</span>
@@ -586,7 +597,7 @@ function CallbackURLSummary({ summary }: { summary: CallbackSummary | null }) {
       ? 'border-[color-mix(in_oklch,var(--warn)_45%,transparent)] text-[var(--warn)]'
       : 'border-[var(--line-2)] text-[var(--text-muted)]'
   const stateClassName =
-    summary.stateLabel === strings.callbackSummary.statePresent
+    summary.stateLabel === t('newOauth.callbackSummary.statePresent')
       ? 'border-[var(--line-2)] text-[var(--text-muted)]'
       : 'border-[color-mix(in_oklch,var(--warn)_45%,transparent)] text-[var(--warn)]'
   return (
@@ -594,7 +605,9 @@ function CallbackURLSummary({ summary }: { summary: CallbackSummary | null }) {
       data-testid="oauth-callback-summary"
       className="flex min-w-0 flex-wrap items-center gap-2 text-[11.5px]"
     >
-      <span className="font-medium text-[var(--text-dim)]">{strings.callbackSummary.title}</span>
+      <span className="font-medium text-[var(--text-dim)]">
+        {t('newOauth.callbackSummary.title')}
+      </span>
       <code className="min-w-0 max-w-full truncate text-[var(--text)]">{summary.target}</code>
       <span className={`border px-[6px] py-[1px] font-mono uppercase ${codeClassName}`}>
         {summary.codeLabel}
@@ -627,7 +640,7 @@ async function navigateToAccount(
 function reserveAuthorizeTab(): ReservedAuthorizeTab | null {
   const tab = window.open('about:blank', '_blank')
   if (tab === null) {
-    toast.error(strings.toasts.popupBlocked)
+    toast.error(t('newOauth.toasts.popupBlocked'))
     return null
   }
   tab.opener = null
@@ -642,7 +655,7 @@ function openAuthorizeTab(authorizeUrl: string, reservedTab?: ReservedAuthorizeT
   }
   const popup = window.open(authorizeUrl, '_blank', 'noopener,noreferrer')
   if (popup === null) {
-    toast.error(strings.toasts.popupBlocked)
+    toast.error(t('newOauth.toasts.popupBlocked'))
   }
 }
 
@@ -694,24 +707,24 @@ function describeManualCallbackError(err: RouterApiError): InlineFeedback | null
   const data = asRecord(err.data)
   switch (err.code) {
     case Err003OAuthStateMismatch:
-      return { title: strings.err.oauth_state_mismatch }
+      return { title: t('newOauth.err.oauth_state_mismatch') }
     case Err003InvalidCallbackURL: {
       const reason = typeof data.reason === 'string' ? data.reason : ''
       return {
-        title: strings.err.invalid_callback_url,
+        title: t('newOauth.err.invalid_callback_url'),
         detail:
           reason === 'url_prefix_mismatch'
-            ? strings.callbackReason.url_prefix_mismatch
+            ? t('newOauth.callbackReason.url_prefix_mismatch')
             : reason === 'missing_code_and_error'
-              ? strings.callbackReason.missing_code_and_error
+              ? t('newOauth.callbackReason.missing_code_and_error')
               : undefined,
       }
     }
     case Err003NoFlowInProgress:
-      return { title: strings.err.no_flow_in_progress }
+      return { title: t('newOauth.err.no_flow_in_progress') }
     case Err003OAuthInvalidGrant:
       return {
-        title: strings.err.oauth_invalid_grant,
+        title: t('newOauth.err.oauth_invalid_grant'),
         detail: joinParts(
           typeof data.provider_error === 'string' ? data.provider_error : undefined,
           typeof data.provider_message === 'string' ? data.provider_message : undefined,
@@ -719,7 +732,7 @@ function describeManualCallbackError(err: RouterApiError): InlineFeedback | null
       }
     case Err003OAuthUpstreamError:
       return {
-        title: strings.err.oauth_upstream_error,
+        title: t('newOauth.err.oauth_upstream_error'),
         detail: joinParts(
           typeof data.provider_error === 'string' ? data.provider_error : undefined,
           typeof data.provider_message === 'string' ? data.provider_message : undefined,
@@ -727,11 +740,11 @@ function describeManualCallbackError(err: RouterApiError): InlineFeedback | null
         ),
       }
     case Err003OAuthInternalError:
-      return { title: strings.err.oauth_internal_error }
+      return { title: t('newOauth.err.oauth_internal_error') }
     case Err003OAuthStoreFailed:
-      return { title: strings.err.oauth_store_failed }
+      return { title: t('newOauth.err.oauth_store_failed') }
     case PlatformUnknown:
-      return { title: strings.err.transport_error }
+      return { title: t('newOauth.err.transport_error') }
     default:
       return null
   }
@@ -761,20 +774,20 @@ function summarizeCallbackURL(raw: string): CallbackSummary | null {
     return {
       target: `${parsed.host}${parsed.pathname}`,
       codeLabel: hasCode
-        ? strings.callbackSummary.codePresent
+        ? t('newOauth.callbackSummary.codePresent')
         : hasError
-          ? strings.callbackSummary.errorPresent
-          : strings.callbackSummary.codeMissing,
+          ? t('newOauth.callbackSummary.errorPresent')
+          : t('newOauth.callbackSummary.codeMissing'),
       stateLabel: hasState
-        ? strings.callbackSummary.statePresent
-        : strings.callbackSummary.stateMissing,
+        ? t('newOauth.callbackSummary.statePresent')
+        : t('newOauth.callbackSummary.stateMissing'),
       variant: hasCode || hasError ? 'neutral' : 'warning',
     }
   } catch {
     return {
-      target: strings.callbackSummary.invalid,
-      codeLabel: strings.callbackSummary.codeMissing,
-      stateLabel: strings.callbackSummary.stateMissing,
+      target: t('newOauth.callbackSummary.invalid'),
+      codeLabel: t('newOauth.callbackSummary.codeMissing'),
+      stateLabel: t('newOauth.callbackSummary.stateMissing'),
       variant: 'warning',
     }
   }
@@ -783,7 +796,7 @@ function summarizeCallbackURL(raw: string): CallbackSummary | null {
 function formatFlowExpiry(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    return `${strings.status.expiresAt} ${value}`
+    return `${t('newOauth.status.expiresAt')} ${value}`
   }
   const months = [
     'Jan',
@@ -804,5 +817,5 @@ function formatFlowExpiry(value: string): string {
   const day = date.getUTCDate()
   const hour = String(date.getUTCHours()).padStart(2, '0')
   const minute = String(date.getUTCMinutes()).padStart(2, '0')
-  return `${strings.status.expiresAt} ${month} ${day}, ${year}, ${hour}:${minute} UTC`
+  return `${t('newOauth.status.expiresAt')} ${month} ${day}, ${year}, ${hour}:${minute} UTC`
 }

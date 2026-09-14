@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { BookOpen, CircleHelp, Copy, Play, RotateCcw, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { type SubmitHandler, useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -27,11 +28,18 @@ import {
   type PlaygroundRunSuccessData,
   playgroundRun,
 } from '@/generated/openapi'
+import { i18n } from '@/i18n'
 import { api } from '@/lib/api-client'
 import { copyToClipboard } from '@/lib/clipboard'
 import { callAdmin, RouterApiError } from '@/lib/router-api'
 import { adminAccountsListQueryKey } from './accounts/query-keys'
-import { strings } from './playground.strings'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'playground')
+
+// Default model id is provider data, not UI copy — kept as a constant.
+const DEFAULT_MODEL = 'gpt-5.4-mini'
 
 const PROMPT_LIMIT = 16_000
 const MODEL_LIMIT = 128
@@ -51,36 +59,33 @@ const PlaygroundFormSchema = z
   .object({
     selection_mode: z.enum(['auto', 'account']),
     endpoint: z.enum(['responses', 'chat_completions']),
-    account_id: z.number().int().positive(strings.validation.accountRequired).optional(),
+    account_id: z.number().int().positive(t('validation.accountRequired')).optional(),
     session_key: z
       .string()
       .trim()
-      .refine(
-        (value) => countUnicode(value) <= SESSION_KEY_LIMIT,
-        strings.validation.sessionKeyMax,
-      ),
+      .refine((value) => countUnicode(value) <= SESSION_KEY_LIMIT, t('validation.sessionKeyMax')),
     model: z
       .string()
       .trim()
-      .min(1, strings.validation.modelRequired)
-      .refine((value) => countUnicode(value) <= MODEL_LIMIT, strings.validation.modelMax),
+      .min(1, t('validation.modelRequired'))
+      .refine((value) => countUnicode(value) <= MODEL_LIMIT, t('validation.modelMax')),
     text: z
       .string()
       .trim()
-      .min(1, strings.validation.textRequired)
-      .refine((value) => countUnicode(value) <= PROMPT_LIMIT, strings.validation.textMax),
+      .min(1, t('validation.textRequired'))
+      .refine((value) => countUnicode(value) <= PROMPT_LIMIT, t('validation.textMax')),
     max_output_tokens: z.coerce
       .number()
       .int()
-      .min(1, strings.validation.maxOutputRange)
-      .max(4096, strings.validation.maxOutputRange),
+      .min(1, t('validation.maxOutputRange'))
+      .max(4096, t('validation.maxOutputRange')),
     include_raw_response: z.boolean(),
   })
   .superRefine((value, ctx) => {
     if (value.selection_mode === 'account' && !value.account_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: strings.validation.accountRequired,
+        message: t('validation.accountRequired'),
         path: ['account_id'],
       })
     }
@@ -105,13 +110,16 @@ const integrationGuideLanguages: Array<{
   id: IntegrationGuideLanguage
   label: string
 }> = [
-  { id: 'curl', label: strings.guide.tabs.curl },
-  { id: 'python', label: strings.guide.tabs.python },
-  { id: 'javascript', label: strings.guide.tabs.javascript },
-  { id: 'go', label: strings.guide.tabs.go },
+  { id: 'curl', label: t('guide.tabs.curl') },
+  { id: 'python', label: t('guide.tabs.python') },
+  { id: 'javascript', label: t('guide.tabs.javascript') },
+  { id: 'go', label: t('guide.tabs.go') },
 ]
 
 export function AdminPlayground() {
+  // Subscribes this subtree to languageChanged so module-t() helpers
+  // re-render in the new language.
+  useTranslation('playground')
   const [screenError, setScreenError] = useState<unknown>(null)
   const [lastResult, setLastResult] = useState<PlaygroundRunSuccessData | null>(null)
   const [guideOpen, setGuideOpen] = useState(false)
@@ -121,11 +129,11 @@ export function AdminPlayground() {
     resolver: zodResolver(PlaygroundFormSchema),
     defaultValues: {
       selection_mode: 'auto',
-      endpoint: 'responses',
+      endpoint: 'chat_completions',
       account_id: undefined,
       session_key: '',
-      model: strings.defaultModel,
-      text: '',
+      model: DEFAULT_MODEL,
+      text: 'hi',
       max_output_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
       include_raw_response: false,
     },
@@ -151,7 +159,7 @@ export function AdminPlayground() {
   const promptChars = countUnicode(prompt.trim())
   const noRunnableAccounts = accountsQuery.isSuccess && activeAccounts.length === 0
   const guideBaseURL = useMemo(() => currentOrigin(), [])
-  const guideModel = model.trim() || strings.defaultModel
+  const guideModel = model.trim() || DEFAULT_MODEL
   const guideExamples = useMemo(
     () => buildIntegrationGuideExamples(guideBaseURL, guideModel, guideEndpoint),
     [guideEndpoint, guideBaseURL, guideModel],
@@ -176,12 +184,12 @@ export function AdminPlayground() {
     onSuccess: (result) => {
       setLastResult(result)
       setScreenError(null)
-      toast.success(strings.toasts.success)
+      toast.success(t('toasts.success'))
     },
     onError: (error) => {
       setScreenError(error)
       setLastResult(null)
-      toast.error(strings.toasts.failed)
+      toast.error(t('toasts.failed'))
     },
   })
 
@@ -213,13 +221,13 @@ export function AdminPlayground() {
 
   return (
     <Canvas variant="wide">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('eyebrow')} />
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="mb-3 max-w-[15ch] text-balance">
-            {strings.titleLead} <strong>{strings.titleStrong}</strong>
+            {t('titleLead')} <strong>{t('titleStrong')}</strong>
           </h1>
-          <PageIntro>{strings.intro}</PageIntro>
+          <PageIntro>{t('intro')}</PageIntro>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
@@ -232,7 +240,7 @@ export function AdminPlayground() {
             }}
           >
             <BookOpen />
-            {strings.actions.integrationGuide}
+            {t('actions.integrationGuide')}
           </Button>
           <Button
             type="button"
@@ -244,7 +252,7 @@ export function AdminPlayground() {
             disabled={runMutation.isPending || (!lastResult && !screenError)}
           >
             <RotateCcw />
-            {strings.actions.reset}
+            {t('actions.reset')}
           </Button>
         </div>
       </div>
@@ -252,12 +260,12 @@ export function AdminPlayground() {
       {accountsQuery.isError ? (
         <ErrorBanner
           error={accountsQuery.error}
-          title={strings.errors.accountListUnavailable}
+          title={t('errors.accountListUnavailable')}
           className="mb-4"
         />
       ) : null}
       {screenError ? (
-        <ErrorBanner error={screenError} title={strings.errorTitle} className="mb-4" />
+        <ErrorBanner error={screenError} title={t('errorTitle')} className="mb-4" />
       ) : null}
 
       <div
@@ -269,10 +277,10 @@ export function AdminPlayground() {
           onSubmit={form.handleSubmit(submit)}
           data-testid="playground-form"
         >
-          <PanelCard title={strings.formTitle} meta={runMutation.isPending ? 'pending' : undefined}>
-            <Field label={strings.labels.mode} hint={strings.hints.mode}>
+          <PanelCard title={t('formTitle')} meta={runMutation.isPending ? 'pending' : undefined}>
+            <Field label={t('labels.mode')} hint={t('hints.mode')}>
               <fieldset className="grid grid-cols-2 gap-2">
-                <legend className="sr-only">{strings.labels.mode}</legend>
+                <legend className="sr-only">{t('labels.mode')}</legend>
                 <Button
                   type="button"
                   variant={selectionMode === 'auto' ? 'default' : 'secondary'}
@@ -284,7 +292,7 @@ export function AdminPlayground() {
                     })
                   }
                 >
-                  {strings.modes.auto}
+                  {t('modes.auto')}
                 </Button>
                 <Button
                   type="button"
@@ -298,7 +306,7 @@ export function AdminPlayground() {
                   }
                   disabled={activeAccounts.length === 0}
                 >
-                  {strings.modes.account}
+                  {t('modes.account')}
                 </Button>
               </fieldset>
             </Field>
@@ -306,8 +314,8 @@ export function AdminPlayground() {
             {selectionMode === 'account' ? (
               <Field
                 htmlFor="playground-account"
-                label={strings.labels.account}
-                hint={strings.hints.account}
+                label={t('labels.account')}
+                hint={t('hints.account')}
               >
                 <Select
                   value={selectedAccountID ? String(selectedAccountID) : ''}
@@ -320,7 +328,7 @@ export function AdminPlayground() {
                   disabled={activeAccounts.length === 0 || runMutation.isPending}
                 >
                   <SelectTrigger id="playground-account" data-testid="playground-account-select">
-                    <SelectValue placeholder={strings.noActiveAccounts} />
+                    <SelectValue placeholder={t('noActiveAccounts')} />
                   </SelectTrigger>
                   <SelectContent>
                     {activeAccounts.map((account) => (
@@ -343,10 +351,10 @@ export function AdminPlayground() {
                   <FieldLabel
                     optional
                     optionalTestId="playground-session-key-optional"
-                    text={strings.labels.sessionKey}
+                    text={t('labels.sessionKey')}
                   />
                 }
-                hint={strings.hints.sessionKey}
+                hint={t('hints.sessionKey')}
               >
                 <Input
                   id="playground-session-key"
@@ -365,9 +373,9 @@ export function AdminPlayground() {
               </Field>
             )}
 
-            <Field label={strings.labels.endpoint} hint={strings.hints.endpoint}>
+            <Field label={t('labels.endpoint')} hint={t('hints.endpoint')}>
               <fieldset className="grid grid-cols-2 gap-2">
-                <legend className="sr-only">{strings.labels.endpoint}</legend>
+                <legend className="sr-only">{t('labels.endpoint')}</legend>
                 {playgroundEndpoints.map((item) => (
                   <Button
                     key={item.id}
@@ -383,17 +391,13 @@ export function AdminPlayground() {
                     }
                     disabled={runMutation.isPending}
                   >
-                    {strings.endpoints[item.id]}
+                    {t(`endpoints.${item.id}` as 'endpoints.responses')}
                   </Button>
                 ))}
               </fieldset>
             </Field>
 
-            <Field
-              htmlFor="playground-model"
-              label={strings.labels.model}
-              hint={strings.hints.model}
-            >
+            <Field htmlFor="playground-model" label={t('labels.model')} hint={t('hints.model')}>
               <Input
                 id="playground-model"
                 data-testid="playground-model-input"
@@ -412,8 +416,8 @@ export function AdminPlayground() {
 
             <Field
               htmlFor="playground-max-output"
-              label={strings.labels.maxOutputTokens}
-              hint={strings.hints.maxOutputTokens}
+              label={t('labels.maxOutputTokens')}
+              hint={t('hints.maxOutputTokens')}
             >
               <Input
                 id="playground-max-output"
@@ -438,10 +442,10 @@ export function AdminPlayground() {
                 <FieldLabel
                   optional
                   optionalTestId="playground-include-raw-optional"
-                  text={strings.labels.includeRaw}
+                  text={t('labels.includeRaw')}
                 />
               }
-              hint={strings.hints.includeRaw}
+              hint={t('hints.includeRaw')}
             >
               <div className="flex min-h-8 items-center gap-3">
                 <Switch
@@ -456,16 +460,12 @@ export function AdminPlayground() {
                   disabled={runMutation.isPending}
                 />
                 <Badge variant={includeRaw ? 'accent' : 'outline'}>
-                  {includeRaw ? strings.status.enabled : strings.status.off}
+                  {includeRaw ? t('status.enabled') : t('status.off')}
                 </Badge>
               </div>
             </Field>
 
-            <Field
-              htmlFor="playground-text"
-              label={strings.labels.prompt}
-              hint={strings.hints.prompt}
-            >
+            <Field htmlFor="playground-text" label={t('labels.prompt')} hint={t('hints.prompt')}>
               <textarea
                 id="playground-text"
                 data-testid="playground-textarea"
@@ -480,7 +480,7 @@ export function AdminPlayground() {
                 {form.formState.errors.text ? (
                   <span className="text-[var(--err)]">{form.formState.errors.text.message}</span>
                 ) : (
-                  <span className="text-[var(--text-muted)]">{strings.emptyField}</span>
+                  <span className="text-[var(--text-muted)]">{t('emptyField')}</span>
                 )}
                 <span
                   className={
@@ -489,7 +489,7 @@ export function AdminPlayground() {
                       : 'font-mono text-[var(--text-muted)]'
                   }
                 >
-                  {promptChars}/{PROMPT_LIMIT} {strings.charCounter}
+                  {promptChars}/{PROMPT_LIMIT} {t('charCounter')}
                 </span>
               </div>
             </Field>
@@ -500,13 +500,13 @@ export function AdminPlayground() {
                   data-testid="playground-no-active"
                   className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--text-muted)]"
                 >
-                  <span>{strings.noActiveAccounts}</span>
+                  <span>{t('noActiveAccounts')}</span>
                   <a
                     href="/admin/accounts/new"
                     data-testid="playground-new-account-link"
                     className="text-[var(--accent)] underline-offset-4 hover:underline"
                   >
-                    {strings.actions.newAccount}
+                    {t('actions.newAccount')}
                   </a>
                 </div>
               ) : (
@@ -518,23 +518,23 @@ export function AdminPlayground() {
                 data-testid="playground-submit"
               >
                 <Play />
-                {runMutation.isPending ? strings.actions.running : strings.actions.run}
+                {runMutation.isPending ? t('actions.running') : t('actions.run')}
               </Button>
             </div>
           </PanelCard>
         </form>
 
         <PanelCard
-          title={strings.resultTitle}
+          title={t('resultTitle')}
           className="min-w-0"
           meta={
             runMutation.isPending
               ? 'pending'
               : screenError
-                ? strings.resultMetaError
+                ? t('resultMetaError')
                 : lastResult
-                  ? strings.resultMetaDone
-                  : strings.resultMetaIdle
+                  ? t('resultMetaDone')
+                  : t('resultMetaIdle')
           }
         >
           {runMutation.isPending ? (
@@ -544,7 +544,7 @@ export function AdminPlayground() {
               data-testid="playground-pending"
               className="text-[13px] text-[var(--text-dim)]"
             >
-              {strings.actions.running}
+              {t('actions.running')}
             </div>
           ) : null}
           {!runMutation.isPending && !lastResult ? (
@@ -552,7 +552,7 @@ export function AdminPlayground() {
               data-testid="playground-result-empty"
               className="text-[13px] text-[var(--text-dim)]"
             >
-              {strings.emptyResult}
+              {t('emptyResult')}
             </div>
           ) : null}
           {lastResult ? <PlaygroundResult result={lastResult} /> : null}
@@ -593,11 +593,11 @@ function FieldLabel({
     <span className="inline-flex min-w-0 items-center gap-1.5">
       <span>{text}</span>
       <span
-        aria-label={`${strings.labels.optionalField}: ${text}`}
+        aria-label={`${t('labels.optionalField')}: ${text}`}
         className="inline-flex shrink-0 items-center text-[var(--text-muted)]"
         data-testid={optionalTestId}
         role="img"
-        title={strings.labels.optionalField}
+        title={t('labels.optionalField')}
       >
         <CircleHelp aria-hidden="true" className="h-3 w-3" strokeWidth={1.8} />
       </span>
@@ -649,7 +649,7 @@ function IntegrationGuideLayer({
         type="button"
         tabIndex={-1}
         className="absolute inset-0 cursor-pointer bg-[color-mix(in_oklch,var(--bg)_62%,transparent)]"
-        aria-label={strings.actions.closeGuideBackdrop}
+        aria-label={t('actions.closeGuideBackdrop')}
         onClick={onClose}
       />
       <section
@@ -665,7 +665,7 @@ function IntegrationGuideLayer({
               id="playground-integration-guide-title"
               className="text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]"
             >
-              {strings.guide.title}
+              {t('guide.title')}
             </h2>
             <div className="mt-1 truncate font-mono text-[12px] text-[var(--text-muted)]">
               {endpoint}
@@ -675,7 +675,7 @@ function IntegrationGuideLayer({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label={strings.actions.closeGuide}
+            aria-label={t('actions.closeGuide')}
             className="border-0 shadow-none"
             onClick={onClose}
           >
@@ -693,7 +693,7 @@ function IntegrationGuideLayer({
                 htmlFor="playground-integration-guide-api"
                 className="mb-1 block text-[10.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]"
               >
-                {strings.guide.apiLabel}
+                {t('guide.apiLabel')}
               </label>
               <Select
                 value={selectedEndpoint}
@@ -708,18 +708,18 @@ function IntegrationGuideLayer({
                 <SelectContent>
                   {playgroundEndpoints.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {strings.endpoints[item.id]}
+                      {t(`endpoints.${item.id}` as 'endpoints.responses')}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <ResultCell label={strings.guide.endpointLabel}>{endpoint}</ResultCell>
-            <ResultCell label={strings.guide.apiKeyLabel}>{strings.guide.apiKeyValue}</ResultCell>
+            <ResultCell label={t('guide.endpointLabel')}>{endpoint}</ResultCell>
+            <ResultCell label={t('guide.apiKeyLabel')}>{t('guide.apiKeyValue')}</ResultCell>
           </div>
           <div
             role="tablist"
-            aria-label={strings.guide.title}
+            aria-label={t('guide.title')}
             className="mt-5 flex flex-wrap gap-2 border-b border-[var(--line)] pb-3"
           >
             {integrationGuideLanguages.map((language) => (
@@ -755,7 +755,7 @@ function IntegrationGuideLayer({
                 onClick={() => copyText(selected.code)}
               >
                 <Copy />
-                {strings.guide.copy}
+                {t('guide.copy')}
               </Button>
             </div>
             <pre
@@ -779,41 +779,39 @@ function PlaygroundResult({ result }: { result: PlaygroundRunSuccessData }) {
         className="grid gap-px overflow-hidden border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2 2xl:grid-cols-3"
         style={{ borderRadius: 2 }}
       >
-        <SummaryCell label={strings.labels.selectedAccount}>
+        <SummaryCell label={t('labels.selectedAccount')}>
           {result.account.name}{' '}
           <span className="text-[var(--text-muted)]">#{result.account.id}</span>
         </SummaryCell>
-        <SummaryCell label={strings.labels.mode}>
+        <SummaryCell label={t('labels.mode')}>
           {formatSelectionMode(result.run.selection_mode)}
         </SummaryCell>
-        <SummaryCell label={strings.labels.endpoint}>
+        <SummaryCell label={t('labels.endpoint')}>
           {formatEndpoint(result.run.endpoint)}
         </SummaryCell>
-        <SummaryCell label={strings.labels.outcome}>{result.run.outcome}</SummaryCell>
-        <SummaryCell label={strings.labels.latency}>{result.run.latency_ms} ms</SummaryCell>
+        <SummaryCell label={t('labels.outcome')}>{result.run.outcome}</SummaryCell>
+        <SummaryCell label={t('labels.latency')}>{result.run.latency_ms} ms</SummaryCell>
       </div>
 
       <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_260px]">
         <div>
           <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
-            {strings.labels.output}
+            {t('labels.output')}
           </div>
           <pre
             className="min-h-[140px] overflow-auto border border-[var(--line)] bg-[var(--bg-2)] p-3 text-[12.5px] leading-[1.65] whitespace-pre-wrap text-[var(--text)]"
             style={{ borderRadius: 2 }}
           >
-            {result.output.text_available ? result.output.text : strings.emptyOutput}
+            {result.output.text_available ? result.output.text : t('emptyOutput')}
           </pre>
         </div>
         <div className="space-y-3">
-          <ResultCell label={strings.labels.upstreamStatus}>
-            {result.upstream.status_code ?? strings.emptyField}
+          <ResultCell label={t('labels.upstreamStatus')}>
+            {result.upstream.status_code ?? t('emptyField')}
           </ResultCell>
-          <ResultCell label={strings.labels.responseMode}>
-            {result.upstream.response_mode}
-          </ResultCell>
-          <ResultCell label={strings.labels.usage}>{formatUsage(result.usage)}</ResultCell>
-          <ResultCell label={strings.labels.authMethod}>
+          <ResultCell label={t('labels.responseMode')}>{result.upstream.response_mode}</ResultCell>
+          <ResultCell label={t('labels.usage')}>{formatUsage(result.usage)}</ResultCell>
+          <ResultCell label={t('labels.authMethod')}>
             {formatAuthMethod(result.account.auth_method)}
           </ResultCell>
         </div>
@@ -822,13 +820,13 @@ function PlaygroundResult({ result }: { result: PlaygroundRunSuccessData }) {
       {result.output.raw_response_available && result.output.raw_response ? (
         <div className="space-y-2">
           <div className="text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
-            {strings.labels.rawResponse}
+            {t('labels.rawResponse')}
           </div>
           <JsonPreview
             preview={buildJsonPreviewFromValue(result.output.raw_response)}
             className="overflow-hidden border border-[var(--line)] bg-[var(--bg-2)]"
             bodyClassName="max-h-[360px]"
-            copyLabel={strings.actions.copyRawResponse}
+            copyLabel={t('actions.copyRawResponse')}
             onCopy={copyText}
           />
         </div>
@@ -864,7 +862,7 @@ function PlaygroundErrorDetail({ error }: { error: RouterApiError }) {
       style={{ borderRadius: 2 }}
     >
       <div className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
-        {strings.labels.diagnostics}
+        {t('labels.diagnostics')}
       </div>
       <div className="grid gap-2 md:grid-cols-2">
         {rows.map(([key, value]) => (
@@ -878,7 +876,7 @@ function PlaygroundErrorDetail({ error }: { error: RouterApiError }) {
           href={`/admin/accounts/${accountID}`}
           className="mt-3 inline-block font-mono text-[11.5px] text-[var(--accent)] underline-offset-4 hover:underline"
         >
-          {strings.actions.openAccount} #{accountID}
+          {t('actions.openAccount')} #{accountID}
         </a>
       ) : null}
     </div>
@@ -902,17 +900,17 @@ function ResultCell({ label, children }: { label: string; children: React.ReactN
 function formatUsage(usage: Record<string, number | undefined>): string {
   const entries = Object.entries(usage).filter(([, value]) => typeof value === 'number')
   if (entries.length === 0) {
-    return strings.emptyField
+    return t('emptyField')
   }
   return entries.map(([key, value]) => `${key}:${value}`).join(' ')
 }
 
 function formatSelectionMode(mode: PlaygroundRunSuccessData['run']['selection_mode']): string {
-  return strings.modes[mode] ?? mode
+  return t(`modes.${mode}` as 'modes.auto') ?? mode
 }
 
 function formatEndpoint(endpoint: PlaygroundEndpoint): string {
-  return strings.endpoints[endpoint] ?? endpoint
+  return t(`endpoints.${endpoint}` as 'endpoints.responses') ?? endpoint
 }
 
 function formatAccountOption(account: AccountListItem): string {
@@ -936,11 +934,11 @@ function planLabelForAccount(
 }
 
 function formatAccountStatus(status: AccountListItem['status']): string {
-  return strings.accountStatus[status] ?? status
+  return t(`accountStatus.${status}` as 'accountStatus.active') ?? status
 }
 
 function formatAuthMethod(authMethod: AccountListItem['auth_method']): string {
-  return strings.authMethod[authMethod] ?? authMethod
+  return t(`authMethod.${authMethod}` as 'authMethod.api_key') ?? authMethod
 }
 
 function formatDiagnostic(value: unknown): string {
@@ -988,13 +986,13 @@ function buildIntegrationGuideExamples(
   return {
     curl: {
       language: 'curl',
-      label: strings.guide.tabs.curl,
+      label: t('guide.tabs.curl'),
       endpoint,
       code: `curl -sS ${JSON.stringify(`${baseURL}${path}`)} -H "Content-Type: application/json" -H "Authorization: Bearer " -d '${compactPayloadJSON}'`,
     },
     python: {
       language: 'python',
-      label: strings.guide.tabs.python,
+      label: t('guide.tabs.python'),
       endpoint,
       code: `import requests
 
@@ -1014,7 +1012,7 @@ print(response.text)`,
     },
     javascript: {
       language: 'javascript',
-      label: strings.guide.tabs.javascript,
+      label: t('guide.tabs.javascript'),
       endpoint,
       code: `const routerBaseUrl = ${JSON.stringify(baseURL)};
 const routerApiKey = "";
@@ -1033,7 +1031,7 @@ console.log(await response.text());`,
     },
     go: {
       language: 'go',
-      label: strings.guide.tabs.go,
+      label: t('guide.tabs.go'),
       endpoint,
       code: `package main
 
@@ -1122,9 +1120,9 @@ function pythonLiteral(value: unknown, indent: number): string {
 async function copyText(value: string) {
   try {
     await copyToClipboard(value)
-    toast.success(strings.toasts.copyDone)
+    toast.success(t('toasts.copyDone'))
   } catch {
-    toast.error(strings.toasts.copyFailed)
+    toast.error(t('toasts.copyFailed'))
   }
 }
 

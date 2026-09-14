@@ -1,5 +1,6 @@
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 type Theme = 'light' | 'dark'
 
@@ -30,6 +31,7 @@ function apply(theme: Theme) {
  */
 export function SegmentedThemeToggle() {
   const [theme, setTheme] = useState<Theme>(readInitial)
+  const { t } = useTranslation('common')
 
   useEffect(() => {
     apply(theme)
@@ -54,7 +56,7 @@ export function SegmentedThemeToggle() {
   return (
     <div
       role="radiogroup"
-      aria-label="Theme"
+      aria-label={t('theme.label')}
       className="inline-flex h-12 items-center gap-[2px] border p-[2px] sm:h-[26px]"
       style={{
         background: 'var(--panel-2)',
@@ -67,14 +69,14 @@ export function SegmentedThemeToggle() {
         current={theme}
         onSelect={setTheme}
         icon={<Moon className="h-4 w-4 sm:h-3 sm:w-3" strokeWidth={1.8} />}
-        label="Dark"
+        label={t('theme.dark')}
       />
       <Segment
         target="light"
         current={theme}
         onSelect={setTheme}
         icon={<Sun className="h-4 w-4 sm:h-3 sm:w-3" strokeWidth={1.8} />}
-        label="Light"
+        label={t('theme.light')}
       />
     </div>
   )

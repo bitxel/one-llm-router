@@ -1,0 +1,113 @@
+{
+  "eyebrow": "演练场",
+  "titleLead": "探测单条",
+  "titleStrong": "账号链路。",
+  "intro": "通过路由器运行一次提示词。",
+  "formTitle": "运行输入",
+  "resultTitle": "运行结果",
+  "resultMetaIdle": "等待中",
+  "resultMetaDone": "已完成",
+  "resultMetaError": "失败",
+  "noActiveAccounts": "暂无活跃账号。",
+  "charCounter": "字符",
+  "labels": {
+    "mode": "选择模式",
+    "endpoint": "端点",
+    "account": "账号",
+    "authMethod": "认证方式",
+    "sessionKey": "会话键",
+    "model": "模型",
+    "maxOutputTokens": "最大输出",
+    "includeRaw": "包含原始 JSON",
+    "prompt": "提示词",
+    "selectedAccount": "所选账号",
+    "outcome": "结果",
+    "latency": "延迟",
+    "upstreamStatus": "上游状态",
+    "responseMode": "响应模式",
+    "usage": "用量",
+    "output": "输出",
+    "rawResponse": "原始响应",
+    "diagnostics": "诊断信息",
+    "optionalField": "可选字段"
+  },
+  "status": {
+    "enabled": "启用",
+    "off": "关闭"
+  },
+  "hints": {
+    "mode": "自动或固定账号。",
+    "account": "仅限活跃账号。",
+    "sessionKey": "可选的会话粘滞键。",
+    "endpoint": "请求形态。",
+    "model": "提供商模型 ID。",
+    "maxOutputTokens": "项目上限：1..4096。",
+    "includeRaw": "包含限定大小的 JSON。",
+    "prompt": "提交时会去除首尾空白。"
+  },
+  "modes": {
+    "auto": "自动",
+    "account": "指定账号"
+  },
+  "endpoints": {
+    "responses": "Responses",
+    "chat_completions": "Chat Completions"
+  },
+  "actions": {
+    "run": "运行探测",
+    "running": "等待中",
+    "reset": "清空结果",
+    "integrationGuide": "接入指南",
+    "closeGuide": "关闭指南",
+    "closeGuideBackdrop": "关闭接入指南遮罩",
+    "openAccount": "打开账号",
+    "newAccount": "新建账号",
+    "copyRawResponse": "复制原始响应"
+  },
+  "guide": {
+    "title": "接入指南",
+    "apiLabel": "API",
+    "endpointLabel": "端点",
+    "apiKeyLabel": "API 密钥",
+    "apiKeyValue": "无需密钥",
+    "copy": "复制",
+    "tabs": {
+      "curl": "cURL",
+      "python": "Python",
+      "javascript": "JavaScript",
+      "go": "Go"
+    }
+  },
+  "validation": {
+    "textRequired": "提示词不能为空。",
+    "textMax": "提示词不能超过 16000 个字符。",
+    "modelRequired": "模型不能为空。",
+    "modelMax": "模型不能超过 128 个字符。",
+    "accountRequired": "请选择一个活跃账号。",
+    "sessionKeyMax": "会话键不能超过 128 个字符。",
+    "maxOutputRange": "最大输出必须在 1..4096 之间。"
+  },
+  "toasts": {
+    "success": "演练场运行完成",
+    "failed": "演练场运行失败",
+    "copyDone": "已复制",
+    "copyFailed": "复制失败"
+  },
+  "errorTitle": "演练场运行失败",
+  "errors": {
+    "accountListUnavailable": "账号列表不可用"
+  },
+  "emptyOutput": "没有返回文本。",
+  "emptyResult": "尚无结果。",
+  "accountStatus": {
+    "active": "活跃",
+    "disabled": "已停用"
+  },
+  "authMethod": {
+    "api_key": "API 密钥",
+    "oauth_browser": "OAuth 浏览器",
+    "oauth_device": "OAuth 设备码",
+    "oauth_import": "OAuth 导入"
+  },
+  "emptyField": "—"
+}

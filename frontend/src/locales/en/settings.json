@@ -1,0 +1,83 @@
+{
+  "eyebrow": "Settings",
+  "loadErrorTitle": "Settings failed to load",
+  "contractErrorTitle": "Settings response is invalid",
+  "title": "Tune without a",
+  "titleStrong": "restart.",
+  "intro": "Observability toggles apply on the next <0>/v1/*</0> request. Plugin intents persist to <1>config.json</1>; if a plugin is not installed in this build, the switch records operator preference only.",
+  "runtime": {
+    "panelTitle": "Runtime",
+    "logClientRequestBody": "Log client request bodies",
+    "logClientRequestBodyHint": "Attach payloads received from clients to request_records.",
+    "logUpstreamRequestBody": "Log upstream request bodies",
+    "logUpstreamRequestBodyHint": "Attach payloads sent to upstream providers after router/provider adaptation.",
+    "logUpstreamResponseBody": "Log upstream response bodies",
+    "logUpstreamResponseBodyHint": "Attach payloads returned by upstream providers to request_records.",
+    "logRetention": "Log retention",
+    "logRetentionHint": "Days to keep request records and logs before automatic cleanup. 1–365.",
+    "days": "days",
+    "logLevel": "Log level",
+    "logLevelHint": "Minimum slog level emitted by the router.",
+    "selectPlaceholder": "Select",
+    "modelRenames": "Model renames",
+    "modelRenamesHint": "Exact client model ids rewritten before upstream forwarding.",
+    "from": "From",
+    "to": "To",
+    "removeModelRename": "Remove model rename",
+    "addRename": "Add rename",
+    "discard": "Discard",
+    "saveChanges": "Save changes"
+  },
+  "validation": {
+    "retentionRange": "Log retention must be between 1 and 365 days.",
+    "renameFromRequired": "From must be 1-128 characters.",
+    "renameToRequired": "To must be 1-128 characters.",
+    "renameMax": "Each side must be at most 128 characters, up to 32 renames."
+  },
+  "plugins": {
+    "panelTitle": "Plugin intents",
+    "admin_auth": {
+      "label": "Admin authentication",
+      "description": "Records whether admin authentication should be enabled once that plugin is available. This build still uses the trusted-network admin boundary."
+    },
+    "client_keys": {
+      "label": "Client API keys",
+      "description": "Records whether per-caller /v1/* keys should be enforced once that plugin is available."
+    },
+    "live": "live",
+    "notInstalled": "Plugin not yet installed — flipping the switch only records operator intent in <0>config.json</0>."
+  },
+  "database": {
+    "panelTitle": "Database",
+    "driver": "Driver",
+    "host": "Host",
+    "name": "Database"
+  },
+  "proxy": {
+    "panelTitle": "Outbound proxy",
+    "label": "Proxy URL",
+    "hint": "Single global egress proxy (http/https/socks5/socks5h), e.g. socks5://127.0.0.1:7890",
+    "save": "Save proxy",
+    "test": "Test",
+    "testing": "Testing…"
+  },
+  "footer": {
+    "router": "router",
+    "git": "git",
+    "built": "built {{builtAt}}"
+  },
+  "toasts": {
+    "updateSuccess": "Runtime settings updated",
+    "updateFailed": "Update failed — see the banner for details",
+    "pluginSuccess": "Plugin intent recorded: {{id}}={{enabled}}",
+    "pluginFailed": "Could not update plugin intent",
+    "proxySuccess": "Outbound proxy updated",
+    "proxyFailed": "Could not update the outbound proxy",
+    "proxyReachable": "Proxy reachable — the upstream responded through it",
+    "proxyInvalid": "Invalid proxy URL",
+    "proxyInvalidDetail": "Invalid proxy URL — {{detail}}",
+    "proxyUnreachable": "Proxy unreachable",
+    "proxyUnreachableDetail": "Proxy unreachable — {{detail}}",
+    "proxyTestFailed": "Proxy test failed"
+  }
+}

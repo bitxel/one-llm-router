@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import {
   Activity,
   AlertTriangle,
@@ -16,6 +17,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { type DragEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Area,
   AreaChart,
@@ -27,7 +29,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-
 import { Canvas, PageIntro, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
@@ -37,10 +38,10 @@ import {
   type DashboardResponseBody,
   dashboardGet,
 } from '@/generated/openapi'
+import { formatCount, formatDateTime } from '@/lib/intl'
 import { callAdmin } from '@/lib/router-api'
 import { cn } from '@/lib/utils'
 import { adminDashboardRouteApi } from '@/router'
-import { strings } from './dashboard.strings'
 
 type CardID = 'active_accounts' | 'requests' | 'tokens' | 'error_rate' | 'ttft'
 type DashboardDropZone = 'visible' | 'hidden'
@@ -82,19 +83,8 @@ const DEFAULT_RANGE: DashboardRange = '7d'
 const DEFAULT_CARD_ORDER: CardID[] = ['active_accounts', 'requests', 'tokens', 'error_rate', 'ttft']
 const LAYOUT_STORAGE_KEY = 'one-llm-router.dashboard.cards.v1'
 
-const numberFormatter = new Intl.NumberFormat('en-US')
-const percentFormatter = new Intl.NumberFormat('en-US', {
-  style: 'percent',
-  maximumFractionDigits: 1,
-})
-const timeFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-
 export function AdminIndex() {
+  const { t } = useTranslation('dashboard')
   const navigate = useNavigate()
   const routeSearch = adminDashboardRouteApi.useSearch() as DashboardSearch
   const range = routeSearch.range ?? DEFAULT_RANGE
@@ -295,12 +285,12 @@ export function AdminIndex() {
 
   return (
     <Canvas variant="wide">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('eyebrow')} />
 
       <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 flex-1">
-          <h1 className="mb-3 max-w-[16ch] text-balance">{strings.title}</h1>
-          <PageIntro>{strings.intro}</PageIntro>
+          <h1 className="mb-3 max-w-[16ch] text-balance">{t('title')}</h1>
+          <PageIntro>{t('intro')}</PageIntro>
         </div>
 
         <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-3 sm:w-auto sm:grid-cols-[220px_auto]">
@@ -322,8 +312,8 @@ export function AdminIndex() {
               type="button"
               variant="secondary"
               size="icon"
-              aria-label={strings.actions.refresh}
-              title={strings.actions.refresh}
+              aria-label={t('actions.refresh')}
+              title={t('actions.refresh')}
               onClick={() => void dashboardQuery.refetch()}
             >
               <RefreshCw />
@@ -332,8 +322,8 @@ export function AdminIndex() {
               type="button"
               variant="secondary"
               size="icon"
-              aria-label={strings.actions.editDashboard}
-              title={strings.actions.editDashboard}
+              aria-label={t('actions.editDashboard')}
+              title={t('actions.editDashboard')}
               aria-pressed={editMode}
               onClick={() => setEditMode((current) => !current)}
               className={
@@ -349,7 +339,7 @@ export function AdminIndex() {
       </div>
 
       {dashboardQuery.isError ? (
-        <ErrorBanner error={dashboardQuery.error} title={strings.errorTitle} className="mb-4" />
+        <ErrorBanner error={dashboardQuery.error} title={t('errorTitle')} className="mb-4" />
       ) : null}
 
       {showNoActiveAccountsBanner ? <NoActiveAccountsBanner /> : null}
@@ -361,7 +351,7 @@ export function AdminIndex() {
         onDrop={(event) => handleZoneDrop('visible', event)}
       >
         {visibleCardIDs.map((cardID, index) =>
-          renderMetricCard(cardID, dashboard, {
+          renderMetricCard(cardID, dashboard, t, {
             editMode,
             isDragging: draggingCardID === cardID,
             isDropTarget: dropTarget?.zone === 'visible' && dropTarget.cardID === cardID,
@@ -399,6 +389,7 @@ export function AdminIndex() {
 }
 
 function NoActiveAccountsBanner() {
+  const { t } = useTranslation('dashboard')
   return (
     <div
       role="alert"
@@ -413,16 +404,16 @@ function NoActiveAccountsBanner() {
     >
       <AlertTriangle className="mt-[2px] h-[14px] w-[14px] shrink-0" strokeWidth={2} />
       <div className="flex flex-col gap-1">
-        <span className="font-medium">{strings.noActiveAccounts.title}</span>
+        <span className="font-medium">{t('noActiveAccounts.title')}</span>
         <span className="text-[11.5px] text-[var(--text-dim)]">
-          {strings.noActiveAccounts.prefix}{' '}
+          {t('noActiveAccounts.prefix')}{' '}
           <Link
             to="/admin/accounts/new"
             className="text-[var(--accent)] underline-offset-4 hover:underline"
           >
-            {strings.noActiveAccounts.link}
+            {t('noActiveAccounts.link')}
           </Link>
-          {strings.noActiveAccounts.suffix}
+          {t('noActiveAccounts.suffix')}
         </span>
       </div>
     </div>
@@ -436,10 +427,11 @@ function RangeFilter({
   value: DashboardRange
   onChange: (range: DashboardRange) => void
 }) {
+  const { t } = useTranslation('dashboard')
   return (
     <div className="flex w-full flex-col gap-2">
       <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-        {strings.labels.range}
+        {t('labels.range')}
       </span>
       <div
         className="grid grid-cols-4 border border-[var(--line)] bg-[var(--panel)]"
@@ -474,13 +466,14 @@ function AccountFilter({
   value?: number
   onChange: (accountID: number | undefined) => void
 }) {
+  const { t } = useTranslation('dashboard')
   return (
     <div className="flex w-full flex-col gap-2">
       <label
         htmlFor="dashboard-account"
         className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
       >
-        {strings.labels.account}
+        {t('labels.account')}
       </label>
       <select
         id="dashboard-account"
@@ -492,7 +485,7 @@ function AccountFilter({
         className="min-h-11 cursor-pointer border border-[var(--line-2)] bg-[var(--bg-2)] px-[10px] py-[7px] font-mono text-[12.5px] text-[var(--text)] outline-none transition-colors hover:border-[var(--line-3)] focus:border-[var(--line-3)] focus-visible:[box-shadow:0_0_0_1px_var(--line-3)] sm:min-h-8"
         style={{ borderRadius: 2 }}
       >
-        <option value="all">{strings.accountAll}</option>
+        <option value="all">{t('accountAll')}</option>
         {accounts.map((account) => (
           <option key={account.id} value={account.id}>
             {account.label}
@@ -532,10 +525,11 @@ function HiddenCardsArea({
   onZoneDragOver,
   onZoneDrop,
 }: HiddenCardsAreaProps) {
+  const { t } = useTranslation('dashboard')
   return (
     <section
       data-testid="dashboard-hidden-cards"
-      aria-label={strings.hidden.title}
+      aria-label={t('hidden.title')}
       className="mt-4 border border-dashed border-[var(--line-3)] bg-[var(--panel)]"
       style={{ borderRadius: 2 }}
       onDragOver={(event) => onZoneDragOver('hidden', event)}
@@ -543,10 +537,10 @@ function HiddenCardsArea({
     >
       <div className="flex min-h-9 items-center justify-between border-b border-[var(--line)] bg-[var(--panel-head)] px-4 py-2">
         <span className="text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
-          {strings.hidden.title}
+          {t('hidden.title')}
         </span>
         <span className="border border-[var(--line-2)] px-2 py-[2px] font-mono text-[10.5px] text-[var(--text-muted)]">
-          {strings.hidden.meta(hiddenCardIDs.length)}
+          {t('hidden.meta', { count: hiddenCardIDs.length })}
         </span>
       </div>
       <ul className="grid list-none gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
@@ -590,6 +584,7 @@ interface MetricCardControls {
 function renderMetricCard(
   cardID: CardID,
   dashboard: DashboardData | undefined,
+  t: TFunction<'dashboard'>,
   controls?: MetricCardControls,
 ) {
   switch (cardID) {
@@ -598,10 +593,10 @@ function renderMetricCard(
         <MetricCard
           key={cardID}
           id={cardID}
-          title={strings.cards.activeAccounts.title}
+          title={t('cards.activeAccounts.title')}
           icon={<Activity />}
-          value={formatNumber(dashboard?.cards.active_accounts.value)}
-          meta={strings.cards.activeAccounts.meta}
+          value={formatCount(dashboard?.cards.active_accounts.value)}
+          meta={t('cards.activeAccounts.meta')}
           {...controls}
         />
       )
@@ -610,10 +605,10 @@ function renderMetricCard(
         <MetricCard
           key={cardID}
           id={cardID}
-          title={strings.cards.requests.title}
+          title={t('cards.requests.title')}
           icon={<BarChart3 />}
-          value={formatNumber(dashboard?.cards.requests.total)}
-          meta={strings.rangeTotal}
+          value={formatCount(dashboard?.cards.requests.total)}
+          meta={t('rangeTotal')}
           {...controls}
         >
           <RequestsChart data={dashboard?.cards.requests.series ?? []} />
@@ -624,10 +619,10 @@ function renderMetricCard(
         <MetricCard
           key={cardID}
           id={cardID}
-          title={strings.cards.tokens.title}
+          title={t('cards.tokens.title')}
           icon={<SlidersHorizontal />}
-          value={formatNumber(tokenTotal(dashboard))}
-          meta={tokenBreakdownLabel(dashboard)}
+          value={formatCount(tokenTotal(dashboard))}
+          meta={tokenBreakdownLabel(dashboard, t)}
           {...controls}
         >
           <TokensChart data={dashboard?.cards.tokens.series ?? []} />
@@ -638,10 +633,10 @@ function renderMetricCard(
         <MetricCard
           key={cardID}
           id={cardID}
-          title={strings.cards.errorRate.title}
+          title={t('cards.errorRate.title')}
           icon={<ShieldAlert />}
           value={formatPercent(dashboard?.cards.error_rate.value)}
-          meta={errorRateMeta(dashboard)}
+          meta={errorRateMeta(dashboard, t)}
           {...controls}
         >
           <ErrorRateChart data={dashboard?.cards.error_rate.series ?? []} />
@@ -652,10 +647,10 @@ function renderMetricCard(
         <MetricCard
           key={cardID}
           id={cardID}
-          title={strings.cards.ttft.title}
+          title={t('cards.ttft.title')}
           icon={<Clock3 />}
           value={formatMilliseconds(dashboard?.cards.ttft.p95_ms)}
-          meta={ttftMeta(dashboard)}
+          meta={ttftMeta(dashboard, t)}
           {...controls}
         >
           <TTFTChart data={dashboard?.cards.ttft.series ?? []} />
@@ -691,6 +686,7 @@ function HiddenCardTile({
   onDrop: (event: DragEvent<HTMLElement>) => void
   onDragEnd: () => void
 }) {
+  const { t } = useTranslation('dashboard')
   return (
     <li
       data-testid={`dashboard-hidden-card-${id}`}
@@ -714,10 +710,10 @@ function HiddenCardTile({
         </span>
         <div className="min-w-0">
           <div className="truncate text-[12.5px] font-medium text-[var(--text)]">
-            {cardLabel(id)}
+            {cardLabel(id, t)}
           </div>
           <div className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {strings.hidden.itemMeta}
+            {t('hidden.itemMeta')}
           </div>
         </div>
       </div>
@@ -726,8 +722,8 @@ function HiddenCardTile({
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={strings.actions.moveUp(cardLabel(id))}
-          title={strings.actions.moveUp(cardLabel(id))}
+          aria-label={t('actions.moveUp', { card: cardLabel(id, t) })}
+          title={t('actions.moveUp', { card: cardLabel(id, t) })}
           disabled={!canMoveUp}
           onClick={onMoveUp}
         >
@@ -737,8 +733,8 @@ function HiddenCardTile({
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={strings.actions.moveDown(cardLabel(id))}
-          title={strings.actions.moveDown(cardLabel(id))}
+          aria-label={t('actions.moveDown', { card: cardLabel(id, t) })}
+          title={t('actions.moveDown', { card: cardLabel(id, t) })}
           disabled={!canMoveDown}
           onClick={onMoveDown}
         >
@@ -748,8 +744,8 @@ function HiddenCardTile({
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={strings.actions.show(cardLabel(id))}
-          title={strings.actions.show(cardLabel(id))}
+          aria-label={t('actions.show', { card: cardLabel(id, t) })}
+          title={t('actions.show', { card: cardLabel(id, t) })}
           onClick={onShow}
         >
           <Eye />
@@ -779,6 +775,7 @@ function MetricCard({
   onDrop,
   onDragEnd,
 }: MetricCardProps) {
+  const { t } = useTranslation('dashboard')
   const hasChart = Boolean(children)
   return (
     <li
@@ -825,8 +822,8 @@ function MetricCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={strings.actions.moveUp(cardLabel(id))}
-                title={strings.actions.moveUp(cardLabel(id))}
+                aria-label={t('actions.moveUp', { card: cardLabel(id, t) })}
+                title={t('actions.moveUp', { card: cardLabel(id, t) })}
                 disabled={!canMoveUp}
                 onClick={onMoveUp}
               >
@@ -836,8 +833,8 @@ function MetricCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={strings.actions.moveDown(cardLabel(id))}
-                title={strings.actions.moveDown(cardLabel(id))}
+                aria-label={t('actions.moveDown', { card: cardLabel(id, t) })}
+                title={t('actions.moveDown', { card: cardLabel(id, t) })}
                 disabled={!canMoveDown}
                 onClick={onMoveDown}
               >
@@ -847,8 +844,8 @@ function MetricCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={strings.actions.hide(cardLabel(id))}
-                title={strings.actions.hide(cardLabel(id))}
+                aria-label={t('actions.hide', { card: cardLabel(id, t) })}
+                title={t('actions.hide', { card: cardLabel(id, t) })}
                 onClick={onHide}
               >
                 <EyeOff />
@@ -993,46 +990,44 @@ function tokenTotal(dashboard: DashboardData | undefined): number | undefined {
   return totals.input_cached + totals.input_non_cached + totals.output
 }
 
-function tokenBreakdownLabel(dashboard: DashboardData | undefined): string {
-  if (!dashboard) return strings.loading
+function tokenBreakdownLabel(
+  dashboard: DashboardData | undefined,
+  t: TFunction<'dashboard'>,
+): string {
+  if (!dashboard) return t('loading')
   const totals = dashboard.cards.tokens.totals
-  return strings.cards.tokens.meta(
-    formatNumber(totals.input_cached),
-    formatNumber(totals.input_non_cached),
-    formatNumber(totals.output),
-  )
+  return t('cards.tokens.meta', {
+    cached: formatCount(totals.input_cached),
+    nonCached: formatCount(totals.input_non_cached),
+    output: formatCount(totals.output),
+  })
 }
 
-function errorRateMeta(dashboard: DashboardData | undefined): string {
-  if (!dashboard) return strings.loading
+function errorRateMeta(dashboard: DashboardData | undefined, t: TFunction<'dashboard'>): string {
+  if (!dashboard) return t('loading')
   const card = dashboard.cards.error_rate
-  return strings.cards.errorRate.meta(formatNumber(card.errors), formatNumber(card.total))
+  return t('cards.errorRate.meta', {
+    errors: formatCount(card.errors),
+    total: formatCount(card.total),
+  })
 }
 
-function ttftMeta(dashboard: DashboardData | undefined): string {
-  if (!dashboard) return strings.loading
-  return strings.cards.ttft.meta(formatNumber(dashboard.cards.ttft.sample_count))
-}
-
-function formatNumber(value: number | undefined): string {
-  if (typeof value !== 'number' || Number.isNaN(value)) return strings.emptyValue
-  return numberFormatter.format(value)
+function ttftMeta(dashboard: DashboardData | undefined, t: TFunction<'dashboard'>): string {
+  if (!dashboard) return t('loading')
+  return t('cards.ttft.meta', { samples: formatCount(dashboard.cards.ttft.sample_count) })
 }
 
 function formatPercent(value: number | undefined): string {
-  if (typeof value !== 'number' || Number.isNaN(value)) return strings.emptyValue
-  return percentFormatter.format(value)
-}
-
-function formatMilliseconds(value: number | null | undefined): string {
-  if (typeof value !== 'number' || Number.isNaN(value)) return strings.emptyValue
-  return `${numberFormatter.format(Math.round(value))} ms`
+  return formatCount(value, { style: 'percent', maximumFractionDigits: 1 })
 }
 
 function formatTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return timeFormatter.format(date)
+  return formatDateTime(value)
+}
+
+function formatMilliseconds(value: number | null | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-'
+  return `${formatCount(Math.round(value))} ms`
 }
 
 function cardIcon(cardID: CardID): ReactNode {
@@ -1050,18 +1045,18 @@ function cardIcon(cardID: CardID): ReactNode {
   }
 }
 
-function cardLabel(cardID: CardID): string {
+function cardLabel(cardID: CardID, t: TFunction<'dashboard'>): string {
   switch (cardID) {
     case 'active_accounts':
-      return strings.cards.activeAccounts.shortTitle
+      return t('cards.activeAccounts.shortTitle')
     case 'requests':
-      return strings.cards.requests.shortTitle
+      return t('cards.requests.shortTitle')
     case 'tokens':
-      return strings.cards.tokens.shortTitle
+      return t('cards.tokens.shortTitle')
     case 'error_rate':
-      return strings.cards.errorRate.shortTitle
+      return t('cards.errorRate.shortTitle')
     case 'ttft':
-      return strings.cards.ttft.shortTitle
+      return t('cards.ttft.shortTitle')
   }
 }
 

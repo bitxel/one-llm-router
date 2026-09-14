@@ -10,7 +10,9 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { SIDEBAR_ITEMS, Sidebar } from './Sidebar'
+import { i18n } from '@/i18n'
+
+import { SIDEBAR_ITEMS, Sidebar, sidebarSlug } from './Sidebar'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'one-llm-router.sidebar.collapsed'
 
@@ -67,8 +69,9 @@ describe('Sidebar', () => {
 
   it('renders every registered nav entry', async () => {
     renderWithRouter()
+    const t = i18n.getFixedT(null, 'common')
     for (const item of SIDEBAR_ITEMS) {
-      expect(await screen.findByText(item.label)).toBeInTheDocument()
+      expect(await screen.findByText(t(item.labelKey))).toBeInTheDocument()
     }
   })
 
@@ -86,12 +89,11 @@ describe('Sidebar', () => {
 
   it('disables future entries with a stable planning badge', async () => {
     renderWithRouter()
+    const t = i18n.getFixedT(null, 'common')
     for (const item of SIDEBAR_ITEMS.filter((i) => !i.enabled)) {
-      const el = await screen.findByTestId(
-        `sidebar-${item.label.toLowerCase().replaceAll(' ', '-')}`,
-      )
+      const el = await screen.findByTestId(`sidebar-${sidebarSlug(item.to)}`)
       expect(el).toHaveAttribute('aria-disabled', 'true')
-      expect(el).toHaveTextContent(item.badge ?? '')
+      expect(el).toHaveTextContent(t('nav.planned'))
       expect(el.tagName).toBe('SPAN')
       expect(el).not.toHaveAttribute('href')
     }

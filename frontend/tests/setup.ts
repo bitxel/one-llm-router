@@ -2,6 +2,13 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeAll, vi } from 'vitest'
 
+import { i18n, initI18n } from '@/i18n'
+
+// Boot the i18n singleton for every test file and pin English so text
+// assertions are deterministic regardless of the host environment.
+initI18n()
+void i18n.changeLanguage('en')
+
 // Browser API stubs that jsdom does not provide but shadcn/Radix
 // primitives (Dialog, Select) expect on mount.
 beforeAll(() => {

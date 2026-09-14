@@ -242,17 +242,19 @@ export function CreateAccountDialog() {
 
 ## i18n Conventions
 
+Implemented with **react-i18next + i18next** (typed keys, statically bundled catalogs). Supported languages: `en` (fallback) and `zh-CN`; the registry in `src/i18n/locales.ts` is the single source of truth.
+
 ### File Structure
 ```
+src/i18n/
+├── index.ts         # initI18n(): sync init, <html lang> sync, tDynamic()
+├── locales.ts       # SUPPORTED_LOCALES registry (code, Intl locale, prefixes)
+├── detect.ts        # localStorage -> navigator -> 'en' detection
+├── resources.ts     # catalog assembly (en + zh-CN)
+└── i18next.d.ts     # CustomTypeOptions — typed t() keys
 src/locales/
-├── en/
-│   ├── common.json        # Shared strings (buttons, labels, errors)
-│   ├── accounts.json      # Upstream account pages
-│   ├── api-keys.json      # API key management pages
-│   ├── requests.json      # Request history pages
-│   └── usage.json         # Usage dashboard pages
-└── zh-CN/
-    └── (same structure)
+├── en/              # common dashboard accounts requests playground settings setup errors
+└── zh-CN/           # same structure, deep key parity enforced by src/locales/parity.test.ts
 ```
 
 ### Usage
@@ -262,15 +264,25 @@ import { useTranslation } from 'react-i18next'
 
 function AccountStatus({ status }: { status: string }) {
   const { t } = useTranslation('accounts')
-  return <Badge>{t(`status.${status}`)}</Badge>
+  return <Badge>{t(`accountStatus.${status}` as 'accountStatus.active')}</Badge>
 }
 ```
 
 ### Rules
-- Namespace per feature module. Use `common` for shared strings.
-- Key format: `module.section.key` (e.g., `accounts.table.columns.name`).
-- Never hardcode user-facing strings in JSX.
-- Dates use `Intl.DateTimeFormat`, numbers use `Intl.NumberFormat`.
+- Namespace per feature module (`common` for shared chrome, `errors` keyed by the symbols in `lib/errcode.ts`).
+- Key format: `module.section.key`. Components use `useTranslation(ns)`; module-scope helpers use `const t = i18n.getFixedT(null, ns)` (language resolves at call time; the page root must call `useTranslation(ns)` so the subtree re-renders on switch).
+- Never hardcode user-facing strings in JSX. Whitelist: brand names, compact metric units (`2h 30m`), log levels, `<noscript>`, zod library defaults, developer contract-violation messages.
+- Validation messages: store catalog keys in zod schemas (`'setup:validation.dsnRequired'`) and render through `tDynamic(error.message)` from `@/lib/error-message` — never call `t()` at module scope for message text.
+- Dates/numbers go through `@/lib/intl` (locale follows the active language). Never construct `Intl.*` formatters at module scope — they freeze the locale; memoize per locale or construct per call.
+- Language detection: stored choice (`one-llm-router.lang`) beats browser inference; inferred defaults are never persisted — only the switcher (`SegmentedLanguageToggle` in the TopBar) writes.
+- Embedded JSX in translations uses `<Trans>`; catalog entries mark element slots as `<0>`, `<1>`, … in BOTH locales.
+- Catalog parity (`pnpm vitest run src/locales/parity.test.ts`) is a release gate: every locale must have the exact en key set (including `_one/_other` plural suffixes).
+- E2E pins `locale: 'en-US'` in `playwright.config.ts`; unit tests boot i18n pinned to `en` in `tests/setup.ts`.
+
+### Adding a language (runbook)
+1. Copy `src/locales/en/` → `src/locales/<code>/` and translate (keep `_one/_other` suffix keys).
+2. Append one entry to `SUPPORTED_LOCALES` in `src/i18n/locales.ts` (code, Intl locale, native name, browser-tag prefixes).
+3. Done — detection, the TopBar switcher, `<html lang>` sync, typed keys, and the parity gate pick it up automatically.
 
 ## Testing Conventions
 

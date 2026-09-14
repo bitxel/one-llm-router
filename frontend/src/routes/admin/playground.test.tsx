@@ -5,11 +5,14 @@ import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { playgroundRun } from '@/generated/openapi'
+import { i18n } from '@/i18n'
 import { api } from '@/lib/api-client'
 import { callAdmin, RouterApiError } from '@/lib/router-api'
 
+// Resolves English catalog entries (test language is pinned to en).
+const strings = i18n.getFixedT(null, 'playground')
+
 import { AdminPlayground } from './playground'
-import { strings } from './playground.strings'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -137,16 +140,17 @@ describe('AdminPlayground', () => {
       'xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)]',
     )
     expect(screen.getByTestId('playground-session-key-optional')).toHaveAccessibleName(
-      `${strings.labels.optionalField}: ${strings.labels.sessionKey}`,
+      `${strings('labels.optionalField')}: ${strings('labels.sessionKey')}`,
     )
     expect(screen.getByTestId('playground-include-raw-optional')).toHaveAccessibleName(
-      `${strings.labels.optionalField}: ${strings.labels.includeRaw}`,
+      `${strings('labels.optionalField')}: ${strings('labels.includeRaw')}`,
     )
-    expect(await screen.findByDisplayValue(strings.defaultModel)).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('gpt-5.4-mini')).toBeInTheDocument()
     expect(screen.queryByTestId('playground-active-accounts')).not.toBeInTheDocument()
     expect(screen.queryByText('Active account pool')).not.toBeInTheDocument()
-    const automaticMode = screen.getByRole('button', { name: strings.modes.auto })
+    const automaticMode = screen.getByRole('button', { name: strings('modes.auto') })
     expect(automaticMode).toHaveAttribute('aria-pressed', 'true')
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     await user.click(screen.getByTestId('playground-submit'))
 
@@ -154,8 +158,8 @@ describe('AdminPlayground', () => {
     expect(playgroundRunMock).toHaveBeenCalledWith({
       body: {
         selection_mode: 'auto',
-        endpoint: 'responses',
-        model: strings.defaultModel,
+        endpoint: 'chat_completions',
+        model: 'gpt-5.4-mini',
         text: 'hello',
         max_output_tokens: 1024,
         include_raw_response: false,
@@ -163,12 +167,12 @@ describe('AdminPlayground', () => {
     })
     expect(await screen.findByText('Hello from playground.')).toBeInTheDocument()
     const result = screen.getByTestId('playground-result')
-    expect(within(result).getByText(strings.labels.mode)).toBeInTheDocument()
-    expect(within(result).getByText(strings.labels.endpoint)).toBeInTheDocument()
-    expect(within(result).getByText(strings.endpoints.responses)).toBeInTheDocument()
-    expect(within(result).getByText(strings.labels.authMethod)).toBeInTheDocument()
-    expect(within(result).getByText(strings.authMethod.oauth_browser)).toBeInTheDocument()
-    expect(toastSuccessMock).toHaveBeenCalledWith(strings.toasts.success)
+    expect(within(result).getByText(strings('labels.mode'))).toBeInTheDocument()
+    expect(within(result).getByText(strings('labels.endpoint'))).toBeInTheDocument()
+    expect(within(result).getByText(strings('endpoints.responses'))).toBeInTheDocument()
+    expect(within(result).getByText(strings('labels.authMethod'))).toBeInTheDocument()
+    expect(within(result).getByText(strings('authMethod.oauth_browser'))).toBeInTheDocument()
+    expect(toastSuccessMock).toHaveBeenCalledWith(strings('toasts.success'))
   })
 
   it('shows account picker options with runnable account diagnostics', async () => {
@@ -176,17 +180,17 @@ describe('AdminPlayground', () => {
     renderPlayground()
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: strings.modes.account })).toBeEnabled(),
+      expect(screen.getByRole('button', { name: strings('modes.account') })).toBeEnabled(),
     )
-    await user.click(screen.getByRole('button', { name: strings.modes.account }))
+    await user.click(screen.getByRole('button', { name: strings('modes.account') }))
     const form = screen.getByTestId('playground-form')
     const labels = Array.from(form.querySelectorAll('label'))
-    const modeLabel = labels.find((label) => label.textContent?.startsWith(strings.labels.mode))
+    const modeLabel = labels.find((label) => label.textContent?.startsWith(strings('labels.mode')))
     const accountLabel = labels.find((label) =>
-      label.textContent?.startsWith(strings.labels.account),
+      label.textContent?.startsWith(strings('labels.account')),
     )
     const endpointLabel = labels.find((label) =>
-      label.textContent?.startsWith(strings.labels.endpoint),
+      label.textContent?.startsWith(strings('labels.endpoint')),
     )
     if (!modeLabel || !accountLabel || !endpointLabel) {
       throw new Error('Expected playground form labels to be present')
@@ -222,6 +226,7 @@ describe('AdminPlayground', () => {
     renderPlayground()
 
     await user.click(screen.getByTestId('playground-endpoint-chat_completions'))
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     await user.click(screen.getByTestId('playground-submit'))
 
@@ -230,12 +235,12 @@ describe('AdminPlayground', () => {
       body: expect.objectContaining({
         selection_mode: 'auto',
         endpoint: 'chat_completions',
-        model: strings.defaultModel,
+        model: 'gpt-5.4-mini',
         text: 'hello',
       }),
     })
     expect(await screen.findByText('Hello from chat.')).toBeInTheDocument()
-    expect(screen.getAllByText(strings.endpoints.chat_completions).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(strings('endpoints.chat_completions')).length).toBeGreaterThan(0)
 
     await user.click(screen.getByTestId('playground-integration-guide-open'))
     const guide = await screen.findByTestId('playground-integration-guide')
@@ -244,7 +249,7 @@ describe('AdminPlayground', () => {
     expect(code).toHaveTextContent('"messages":[{"role":"user"')
     expect(guide).toHaveTextContent('/v1/chat/completions')
     expect(within(guide).getByTestId('playground-integration-guide-api-select')).toHaveTextContent(
-      strings.endpoints.chat_completions,
+      strings('endpoints.chat_completions'),
     )
   })
 
@@ -259,35 +264,32 @@ describe('AdminPlayground', () => {
     expect(code).not.toHaveTextContent('ROUTER_BASE_URL')
     expect(code).not.toHaveTextContent('ROUTER_API_KEY')
     expect(code).not.toHaveTextContent('-N')
-    expect(code).toHaveTextContent(`curl -sS "${window.location.origin}/v1/responses"`)
+    expect(code).toHaveTextContent(`curl -sS "${window.location.origin}/v1/chat/completions"`)
     expect(code).toHaveTextContent('-H "Authorization: Bearer "')
     expect(code).toHaveTextContent("-d '{")
-    expect(code).toHaveTextContent('/v1/responses')
-    expect(code).toHaveTextContent('"stream":false')
+    expect(code).toHaveTextContent('"messages":[{"role":"user"')
     expect(guide).not.toHaveTextContent('data plane')
     expect(guide).not.toHaveTextContent('Response mode')
     expect(guide).not.toHaveTextContent('SSE-capable')
     expect(within(guide).getByTestId('playground-integration-guide-api-select')).toHaveTextContent(
-      strings.endpoints.responses,
+      strings('endpoints.chat_completions'),
     )
-    const closeButton = within(guide).getByRole('button', { name: strings.actions.closeGuide })
+    const closeButton = within(guide).getByRole('button', { name: strings('actions.closeGuide') })
     expect(closeButton).toHaveTextContent('')
     expect(closeButton).toHaveClass('border-0')
     expect(closeButton).toHaveClass('shadow-none')
 
     await user.click(within(guide).getByTestId('playground-integration-guide-api-select'))
-    await user.click(
-      await screen.findByRole('option', { name: strings.endpoints.chat_completions }),
+    await user.click(await screen.findByRole('option', { name: strings('endpoints.responses') }))
+    expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
+      `curl -sS "${window.location.origin}/v1/responses"`,
     )
     expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
-      `curl -sS "${window.location.origin}/v1/chat/completions"`,
+      '"stream":false',
     )
-    expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
-      '"messages":[{"role":"user"',
-    )
-    expect(guide).toHaveTextContent('/v1/chat/completions')
+    expect(guide).toHaveTextContent('/v1/responses')
 
-    await user.click(within(guide).getByRole('tab', { name: strings.guide.tabs.python }))
+    await user.click(within(guide).getByRole('tab', { name: strings('guide.tabs.python') }))
     expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
       `router_base_url = "${window.location.origin}"`,
     )
@@ -295,7 +297,7 @@ describe('AdminPlayground', () => {
       'router_api_key = ""',
     )
 
-    await user.click(within(guide).getByRole('tab', { name: strings.guide.tabs.javascript }))
+    await user.click(within(guide).getByRole('tab', { name: strings('guide.tabs.javascript') }))
     expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
       `const routerBaseUrl = "${window.location.origin}";`,
     )
@@ -306,12 +308,12 @@ describe('AdminPlayground', () => {
       'credentials: "omit"',
     )
 
-    await user.click(within(guide).getByRole('tab', { name: strings.guide.tabs.go }))
+    await user.click(within(guide).getByRole('tab', { name: strings('guide.tabs.go') }))
     expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
       'package main',
     )
     expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
-      `http.NewRequest(http.MethodPost, "${window.location.origin}/v1/chat/completions"`,
+      `http.NewRequest(http.MethodPost, "${window.location.origin}/v1/responses"`,
     )
     expect(within(guide).getByTestId('playground-integration-guide-code')).toHaveTextContent(
       'req.Header.Set("Authorization", "Bearer ")',
@@ -335,16 +337,17 @@ describe('AdminPlayground', () => {
     const user = userEvent.setup()
     renderPlayground()
 
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     await user.click(screen.getByTestId('playground-raw-switch'))
     await user.click(screen.getByTestId('playground-submit'))
 
-    expect(await screen.findByText(strings.emptyOutput)).toBeInTheDocument()
-    expect(screen.getByText(strings.labels.rawResponse)).toBeInTheDocument()
+    expect(await screen.findByText(strings('emptyOutput'))).toBeInTheDocument()
+    expect(screen.getByText(strings('labels.rawResponse'))).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Beautify' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: 'Raw' })).toHaveAttribute('aria-selected', 'false')
     expect(
-      screen.getByRole('button', { name: strings.actions.copyRawResponse }),
+      screen.getByRole('button', { name: strings('actions.copyRawResponse') }),
     ).toBeInTheDocument()
     expect(screen.getByText(/resp_no_text/)).toBeInTheDocument()
   })
@@ -358,9 +361,10 @@ describe('AdminPlayground', () => {
     renderPlayground()
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: strings.modes.account })).toBeEnabled(),
+      expect(screen.getByRole('button', { name: strings('modes.account') })).toBeEnabled(),
     )
-    await user.click(screen.getByRole('button', { name: strings.modes.account }))
+    await user.click(screen.getByRole('button', { name: strings('modes.account') }))
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     await user.click(screen.getByTestId('playground-submit'))
 
@@ -368,7 +372,7 @@ describe('AdminPlayground', () => {
     expect(playgroundRunMock).toHaveBeenCalledWith({
       body: expect.objectContaining({
         selection_mode: 'account',
-        endpoint: 'responses',
+        endpoint: 'chat_completions',
         account_id: 42,
       }),
     })
@@ -379,6 +383,7 @@ describe('AdminPlayground', () => {
     const user = userEvent.setup()
     renderPlayground()
 
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     await user.click(screen.getByTestId('playground-submit'))
 
@@ -391,8 +396,9 @@ describe('AdminPlayground', () => {
     const user = userEvent.setup()
     renderPlayground()
 
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.click(screen.getByTestId('playground-submit'))
-    expect(await screen.findByText(strings.validation.textRequired)).toBeInTheDocument()
+    expect(await screen.findByText(strings('validation.textRequired'))).toBeInTheDocument()
     expect(screen.getByTestId('playground-textarea')).toHaveFocus()
 
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
@@ -407,12 +413,13 @@ describe('AdminPlayground', () => {
     renderPlayground()
 
     expect(await screen.findByTestId('playground-no-active')).toHaveTextContent(
-      strings.noActiveAccounts,
+      strings('noActiveAccounts'),
     )
     expect(screen.getByTestId('playground-new-account-link')).toHaveAttribute(
       'href',
       '/admin/accounts/new',
     )
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     expect(screen.getByTestId('playground-submit')).toBeDisabled()
     expect(playgroundRunMock).not.toHaveBeenCalled()
@@ -431,6 +438,7 @@ describe('AdminPlayground', () => {
     const user = userEvent.setup()
     renderPlayground()
 
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     await user.click(screen.getByTestId('playground-submit'))
 
@@ -439,7 +447,7 @@ describe('AdminPlayground', () => {
     )
     expect(screen.getByTestId('error-banner')).toHaveTextContent('req-playground')
     expect(screen.getByTestId('playground-textarea')).toHaveValue('hello')
-    expect(toastErrorMock).toHaveBeenCalledWith(strings.toasts.failed)
+    expect(toastErrorMock).toHaveBeenCalledWith(strings('toasts.failed'))
   })
 
   it('links known failed accounts and redacts token-like diagnostics', async () => {
@@ -459,6 +467,7 @@ describe('AdminPlayground', () => {
     const user = userEvent.setup()
     renderPlayground()
 
+    await user.clear(screen.getByTestId('playground-textarea'))
     await user.type(screen.getByTestId('playground-textarea'), 'hello')
     await user.click(screen.getByTestId('playground-submit'))
 

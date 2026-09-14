@@ -28,6 +28,10 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:18080',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // E2E assertions target the English catalog (wizard step headings are
+    // `role="heading"` anchors). Pin the browser locale so the SPA boots
+    // in `en` regardless of the host machine's language preferences.
+    locale: 'en-US',
   },
   projects: [
     {

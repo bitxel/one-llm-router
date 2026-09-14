@@ -2,14 +2,19 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { FileJson, TextCursorInput } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
 import { accountsImportAuthJson } from '@/generated/openapi'
+import { i18n } from '@/i18n'
 import { callAdmin } from '@/lib/router-api'
-import { strings } from './new-import.strings'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'accounts')
+
 import { invalidateAdminAccountQueries } from './query-keys'
 
 interface ImportedAccount {
@@ -27,6 +32,8 @@ interface ImportedAccount {
 type ImportSource = 'file' | 'paste'
 
 export function AdminAccountsNewImport() {
+  // Subscribes this subtree to languageChanged so module-t() helpers re-render.
+  useTranslation('accounts')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [source, setSource] = useState<ImportSource>('file')
@@ -38,11 +45,11 @@ export function AdminAccountsNewImport() {
   async function handleSubmit() {
     const trimmedPastedJSON = pastedJSON.trim()
     if (source === 'file' && !file) {
-      setScreenError(new Error(strings.validation.fileRequired))
+      setScreenError(new Error(t('newImport.validation.fileRequired')))
       return
     }
     if (source === 'paste' && trimmedPastedJSON === '') {
-      setScreenError(new Error(strings.validation.pasteRequired))
+      setScreenError(new Error(t('newImport.validation.pasteRequired')))
       return
     }
 
@@ -55,7 +62,9 @@ export function AdminAccountsNewImport() {
       if (authJSONText === '') {
         setScreenError(
           new Error(
-            source === 'file' ? strings.validation.fileRequired : strings.validation.pasteRequired,
+            source === 'file'
+              ? t('newImport.validation.fileRequired')
+              : t('newImport.validation.pasteRequired'),
           ),
         )
         return
@@ -66,14 +75,14 @@ export function AdminAccountsNewImport() {
       })
       const imported = (await callAdmin(request)) as unknown as { account: ImportedAccount }
       await invalidateAdminAccountQueries(queryClient, imported.account.id)
-      toast.success(strings.toasts.importSuccess)
+      toast.success(t('newImport.toasts.importSuccess'))
       await navigate({
         to: '/admin/accounts/$accountId',
         params: { accountId: String(imported.account.id) },
       })
     } catch (error) {
       setScreenError(error)
-      toast.error(strings.toasts.importFailed)
+      toast.error(t('newImport.toasts.importFailed'))
     } finally {
       setIsSubmitting(false)
     }
@@ -81,21 +90,21 @@ export function AdminAccountsNewImport() {
 
   return (
     <Canvas variant="narrow">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('newImport.eyebrow')}>{t('newImport.stripe')}</Stripe>
       <div className="mb-8 max-w-[70ch]">
         <h1 className="mb-3 max-w-[18ch] text-balance">
-          {strings.titleLead} <strong>{strings.titleStrong}</strong>
+          {t('newImport.titleLead')} <strong>{t('newImport.titleStrong')}</strong>
         </h1>
         <p className="max-w-[64ch] text-[14px] leading-[1.7] text-[var(--text-dim)]">
-          {strings.intro}
+          {t('newImport.intro')}
         </p>
       </div>
 
       {screenError ? <ErrorBanner error={screenError} className="mb-4" /> : null}
 
-      <PanelCard title={strings.panelTitle} meta={strings.panelMeta}>
+      <PanelCard title={t('newImport.panelTitle')} meta={t('newImport.panelMeta')}>
         <div className="space-y-4">
-          <Field label={strings.labels.source}>
+          <Field label={t('newImport.labels.source')}>
             <div className="inline-flex border border-[var(--line-2)] bg-[var(--bg-2)] p-[3px]">
               <Button
                 type="button"
@@ -105,7 +114,7 @@ export function AdminAccountsNewImport() {
                 data-testid="import-source-file"
               >
                 <FileJson aria-hidden="true" />
-                {strings.actions.fileMode}
+                {t('newImport.actions.fileMode')}
               </Button>
               <Button
                 type="button"
@@ -115,13 +124,13 @@ export function AdminAccountsNewImport() {
                 data-testid="import-source-paste"
               >
                 <TextCursorInput aria-hidden="true" />
-                {strings.actions.pasteMode}
+                {t('newImport.actions.pasteMode')}
               </Button>
             </div>
           </Field>
 
           {source === 'file' ? (
-            <Field label={strings.labels.file}>
+            <Field label={t('newImport.labels.file')}>
               <div className="space-y-2">
                 <input
                   type="file"
@@ -134,12 +143,12 @@ export function AdminAccountsNewImport() {
                   className="block w-full text-[13px] text-[var(--text)] file:mr-4 file:border file:border-[var(--line)] file:bg-[var(--panel-hi)] file:px-3 file:py-2 file:text-[12px] file:font-medium file:text-[var(--text)]"
                 />
                 <p className="text-[12.5px] leading-[1.6] text-[var(--text-dim)]">
-                  {strings.hints.file}
+                  {t('newImport.hints.file')}
                 </p>
               </div>
             </Field>
           ) : (
-            <Field label={strings.labels.paste}>
+            <Field label={t('newImport.labels.paste')}>
               <div className="space-y-2">
                 <textarea
                   data-testid="import-auth-json-textarea"
@@ -150,7 +159,7 @@ export function AdminAccountsNewImport() {
                   style={{ borderColor: 'var(--line-2)', borderRadius: 2 }}
                 />
                 <p className="text-[12.5px] leading-[1.6] text-[var(--text-dim)]">
-                  {strings.hints.paste}
+                  {t('newImport.hints.paste')}
                 </p>
               </div>
             </Field>
@@ -163,7 +172,7 @@ export function AdminAccountsNewImport() {
             disabled={isSubmitting}
             data-testid="import-auth-json-submit"
           >
-            {isSubmitting ? strings.loading : strings.actions.upload}
+            {isSubmitting ? t('newImport.loading') : t('newImport.actions.upload')}
           </Button>
         </div>
       </PanelCard>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 
+import { SegmentedLanguageToggle } from './SegmentedLanguageToggle'
 import { SegmentedThemeToggle } from './SegmentedThemeToggle'
 
 export interface TopBarTag {
@@ -61,6 +62,7 @@ export function TopBar({ slash, tags = [], actions }: TopBarProps) {
           </span>
         ))}
         {actions}
+        <SegmentedLanguageToggle />
         <SegmentedThemeToggle />
       </div>
     </header>

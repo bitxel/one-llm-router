@@ -33,6 +33,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Canvas, Field, PageIntro, PanelCard, Stripe } from '@/components/neo'
@@ -66,10 +67,15 @@ import {
   requestsList,
   requestsOptions,
 } from '@/generated/openapi'
+import { i18n } from '@/i18n'
 import { copyToClipboard } from '@/lib/clipboard'
+import { intlLocale } from '@/lib/intl'
 import { callAdmin } from '@/lib/router-api'
 import { adminRequestsRouteApi } from '@/router'
-import { strings } from './requests.strings'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'requests')
 
 const DEFAULT_LIMIT = 50
 const REQUEST_OUTCOMES: readonly RequestOutcome[] = [
@@ -136,19 +142,33 @@ type RequestColumnID =
   | 'latency'
   | 'error'
 
-const REQUEST_COLUMNS: Array<{ id: RequestColumnID; label: string }> = [
-  { id: 'created_at', label: strings.labels.createdAt },
-  { id: 'request_id', label: strings.labels.requestId },
-  { id: 'client_ip', label: strings.labels.clientIp },
-  { id: 'route', label: strings.labels.route },
-  { id: 'account', label: strings.labels.account },
-  { id: 'model', label: strings.labels.model },
-  { id: 'status', label: strings.labels.status },
-  { id: 'outcome', label: strings.labels.outcome },
-  { id: 'mode', label: strings.labels.mode },
-  { id: 'tokens', label: strings.labels.tokens },
-  { id: 'latency', label: strings.labels.latency },
-  { id: 'error', label: strings.labels.error },
+type ColumnLabelKey =
+  | 'labels.createdAt'
+  | 'labels.requestId'
+  | 'labels.clientIp'
+  | 'labels.route'
+  | 'labels.account'
+  | 'labels.model'
+  | 'labels.status'
+  | 'labels.outcome'
+  | 'labels.mode'
+  | 'labels.tokens'
+  | 'labels.latency'
+  | 'labels.error'
+
+const REQUEST_COLUMNS: Array<{ id: RequestColumnID; labelKey: ColumnLabelKey }> = [
+  { id: 'created_at', labelKey: 'labels.createdAt' },
+  { id: 'request_id', labelKey: 'labels.requestId' },
+  { id: 'client_ip', labelKey: 'labels.clientIp' },
+  { id: 'route', labelKey: 'labels.route' },
+  { id: 'account', labelKey: 'labels.account' },
+  { id: 'model', labelKey: 'labels.model' },
+  { id: 'status', labelKey: 'labels.status' },
+  { id: 'outcome', labelKey: 'labels.outcome' },
+  { id: 'mode', labelKey: 'labels.mode' },
+  { id: 'tokens', labelKey: 'labels.tokens' },
+  { id: 'latency', labelKey: 'labels.latency' },
+  { id: 'error', labelKey: 'labels.error' },
 ]
 const DEFAULT_REQUEST_COLUMNS = REQUEST_COLUMNS.map((column) => column.id)
 const REQUEST_COLUMNS_STORAGE_KEY = 'one-llm-router.requests.columns.v2'
@@ -156,6 +176,9 @@ const REQUEST_COLUMNS_PREVIOUS_STORAGE_KEYS = ['one-llm-router.requests.columns.
 const MAX_CURSOR_RESOLUTION_PAGES = 200
 
 export function AdminRequests() {
+  // Subscribes this subtree to languageChanged so module-t() helpers
+  // re-render in the new language.
+  useTranslation('requests')
   const navigate = useNavigate()
   const routeSearch = adminRequestsRouteApi.useSearch() as RequestRouteSearch
   const [draftSearch, setDraftSearch] = useState(routeSearch.search ?? '')
@@ -333,29 +356,25 @@ export function AdminRequests() {
 
   return (
     <Canvas variant="wide">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('eyebrow')} />
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="mb-3 max-w-none whitespace-nowrap">
-            {strings.titleLead} <strong>{strings.titleStrong}</strong>
+            {t('titleLead')} <strong>{t('titleStrong')}</strong>
           </h1>
-          <PageIntro>{strings.intro}</PageIntro>
+          <PageIntro>{t('intro')}</PageIntro>
         </div>
       </div>
 
       {listQuery.isError ? (
-        <ErrorBanner error={listQuery.error} title={strings.listErrorTitle} className="mb-4" />
+        <ErrorBanner error={listQuery.error} title={t('listErrorTitle')} className="mb-4" />
       ) : null}
       {optionsQuery.isError ? (
-        <ErrorBanner
-          error={optionsQuery.error}
-          title={strings.optionsErrorTitle}
-          className="mb-4"
-        />
+        <ErrorBanner error={optionsQuery.error} title={t('optionsErrorTitle')} className="mb-4" />
       ) : null}
 
       <PanelCard
-        title={strings.filtersTitle}
+        title={t('filtersTitle')}
         meta={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
@@ -369,13 +388,13 @@ export function AdminRequests() {
               onClick={() => setAdvancedFiltersOpen((open) => !open)}
             >
               <SlidersHorizontal />
-              <span>{strings.advancedFiltersTitle}</span>
+              <span>{t('advancedFiltersTitle')}</span>
               {advancedFilterCount > 0 ? (
                 <span
                   className="border border-[var(--accent-hair)] bg-[var(--accent-soft)] px-1.5 py-[1px] font-mono text-[10.5px] text-[var(--accent)]"
                   style={{ borderRadius: 2 }}
                 >
-                  {strings.advancedFiltersMeta(advancedFilterCount)}
+                  {t('advancedFiltersMeta', { count: advancedFilterCount })}
                 </span>
               ) : null}
               <ChevronDown
@@ -393,42 +412,42 @@ export function AdminRequests() {
               data-testid="requests-reset"
             >
               <RotateCcw />
-              {strings.actions.reset}
+              {t('actions.reset')}
             </Button>
           </div>
         }
         metaClassName="max-w-none border-transparent bg-transparent p-0 text-[var(--text-muted)]"
       >
-        <Field label={strings.labels.timeRange}>
+        <Field label={t('labels.timeRange')}>
           <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
             <FilterButton
               active={!routeSearch.start && !routeSearch.end}
               onClick={() => updateSearch({ start: undefined, end: undefined })}
             >
-              {strings.ranges.all}
+              {t('ranges.all')}
             </FilterButton>
             <FilterButton
               active={isQuickRange(routeSearch, 'hour')}
               onClick={() => updateSearch(quickRangePatch('hour'))}
             >
-              {strings.ranges.hour}
+              {t('ranges.hour')}
             </FilterButton>
             <FilterButton
               active={isQuickRange(routeSearch, 'day')}
               onClick={() => updateSearch(quickRangePatch('day'))}
             >
-              {strings.ranges.day}
+              {t('ranges.day')}
             </FilterButton>
             <FilterButton
               active={isQuickRange(routeSearch, 'week')}
               onClick={() => updateSearch(quickRangePatch('week'))}
             >
-              {strings.ranges.week}
+              {t('ranges.week')}
             </FilterButton>
             <DateTimePicker
-              label={strings.labels.start}
+              label={t('labels.start')}
               value={routeSearch.start}
-              placeholder={strings.timeBoundary.fromAny}
+              placeholder={t('timeBoundary.fromAny')}
               defaultTime="00:00"
               onChange={(value) =>
                 updateSearch({
@@ -438,9 +457,9 @@ export function AdminRequests() {
               }
             />
             <DateTimePicker
-              label={strings.labels.end}
+              label={t('labels.end')}
               value={routeSearch.end}
-              placeholder={strings.timeBoundary.toNow}
+              placeholder={t('timeBoundary.toNow')}
               defaultTime="23:59"
               onChange={(value) =>
                 updateSearch({
@@ -452,7 +471,7 @@ export function AdminRequests() {
           </div>
         </Field>
 
-        <Field label={strings.labels.accounts}>
+        <Field label={t('labels.accounts')}>
           <AccountFacet
             accounts={optionAccounts}
             selected={filters.accountIDs}
@@ -465,12 +484,12 @@ export function AdminRequests() {
           />
         </Field>
 
-        <Field label={strings.labels.models}>
+        <Field label={t('labels.models')}>
           <StringFacet
             values={optionModels}
             selected={filters.models}
             isLoading={optionsQuery.isLoading}
-            emptyLabel={strings.noFacets}
+            emptyLabel={t('noFacets')}
             onToggle={(value) =>
               updateSearch({ model: csvFromStrings(toggleString(filters.models, value)) })
             }
@@ -485,33 +504,33 @@ export function AdminRequests() {
             <form onSubmit={submitSearch}>
               <Field
                 htmlFor="requests-search"
-                label={strings.labels.search}
-                hint={strings.labels.searchHint}
+                label={t('labels.search')}
+                hint={t('labels.searchHint')}
               >
                 <div className="flex flex-col gap-2 md:flex-row">
                   <Input
                     id="requests-search"
                     data-testid="requests-search-input"
                     value={draftSearch}
-                    placeholder={strings.placeholders.search}
+                    placeholder={t('placeholders.search')}
                     onChange={(event) => setDraftSearch(event.target.value)}
                     autoComplete="off"
                     spellCheck={false}
                   />
                   <Button type="submit" data-testid="requests-search-apply">
                     <Search />
-                    {strings.actions.apply}
+                    {t('actions.apply')}
                   </Button>
                 </div>
               </Field>
             </form>
 
-            <Field label={strings.labels.outcomes}>
+            <Field label={t('labels.outcomes')}>
               <StringFacet
                 values={optionOutcomes}
                 selected={filters.outcomes}
                 isLoading={optionsQuery.isLoading}
-                emptyLabel={strings.noFacets}
+                emptyLabel={t('noFacets')}
                 onToggle={(value) =>
                   updateSearch({
                     outcome: csvFromStrings(toggleString(filters.outcomes, value)),
@@ -520,12 +539,12 @@ export function AdminRequests() {
               />
             </Field>
 
-            <Field label={strings.labels.responseModes}>
+            <Field label={t('labels.responseModes')}>
               <StringFacet
                 values={optionModes}
                 selected={filters.responseModes}
                 isLoading={optionsQuery.isLoading}
-                emptyLabel={strings.noFacets}
+                emptyLabel={t('noFacets')}
                 onToggle={(value) =>
                   updateSearch({
                     response_mode: csvFromStrings(toggleString(filters.responseModes, value)),
@@ -538,7 +557,7 @@ export function AdminRequests() {
       </PanelCard>
 
       <PanelCard
-        title={strings.tableTitle}
+        title={t('tableTitle')}
         meta={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ColumnSelector
@@ -556,7 +575,7 @@ export function AdminRequests() {
               data-testid="requests-refresh"
             >
               <RefreshCw />
-              {strings.actions.refresh}
+              {t('actions.refresh')}
             </Button>
           </div>
         }
@@ -581,14 +600,14 @@ export function AdminRequests() {
             />
             <div className="flex items-center gap-2">
               <span className="hidden font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--text-muted)] sm:inline">
-                {strings.labels.pageSize}
+                {t('labels.pageSize')}
               </span>
               <Select
                 value={String(routeSearch.limit ?? DEFAULT_LIMIT)}
                 onValueChange={(value) => updateSearch({ limit: Number(value) })}
               >
                 <SelectTrigger
-                  aria-label={strings.labels.pageSize}
+                  aria-label={t('labels.pageSize')}
                   data-testid="requests-limit-select"
                   className="h-11 min-h-11 w-[86px] font-mono text-[11.5px] sm:h-8 sm:min-h-8"
                 >
@@ -644,7 +663,7 @@ function RequestTable({
         data-testid="requests-loading"
         className="text-[13px] text-[var(--text-dim)]"
       >
-        {strings.loading}
+        {t('loading')}
       </div>
     )
   }
@@ -654,7 +673,7 @@ function RequestTable({
   if (records.length === 0) {
     return (
       <div data-testid="requests-empty" className="text-[13px] text-[var(--text-dim)]">
-        {strings.empty}
+        {t('empty')}
       </div>
     )
   }
@@ -665,19 +684,19 @@ function RequestTable({
       <table className="min-w-[720px] w-full border-collapse text-left text-[12.5px]">
         <thead>
           <tr className="border-b border-[var(--line)] text-[10.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {show('created_at') ? <Th>{strings.labels.createdAt}</Th> : null}
-            {show('request_id') ? <Th>{strings.labels.requestId}</Th> : null}
-            {show('client_ip') ? <Th>{strings.labels.clientIp}</Th> : null}
-            {show('route') ? <Th>{strings.labels.route}</Th> : null}
-            {show('account') ? <Th>{strings.labels.account}</Th> : null}
-            {show('model') ? <Th>{strings.labels.model}</Th> : null}
-            {show('status') ? <Th>{strings.labels.status}</Th> : null}
-            {show('outcome') ? <Th>{strings.labels.outcome}</Th> : null}
-            {show('mode') ? <Th>{strings.labels.mode}</Th> : null}
-            {show('tokens') ? <Th>{strings.labels.tokens}</Th> : null}
-            {show('latency') ? <Th>{strings.labels.latency}</Th> : null}
-            {show('error') ? <Th>{strings.labels.error}</Th> : null}
-            <Th stickyRight>{strings.labels.actions}</Th>
+            {show('created_at') ? <Th>{t('labels.createdAt')}</Th> : null}
+            {show('request_id') ? <Th>{t('labels.requestId')}</Th> : null}
+            {show('client_ip') ? <Th>{t('labels.clientIp')}</Th> : null}
+            {show('route') ? <Th>{t('labels.route')}</Th> : null}
+            {show('account') ? <Th>{t('labels.account')}</Th> : null}
+            {show('model') ? <Th>{t('labels.model')}</Th> : null}
+            {show('status') ? <Th>{t('labels.status')}</Th> : null}
+            {show('outcome') ? <Th>{t('labels.outcome')}</Th> : null}
+            {show('mode') ? <Th>{t('labels.mode')}</Th> : null}
+            {show('tokens') ? <Th>{t('labels.tokens')}</Th> : null}
+            {show('latency') ? <Th>{t('labels.latency')}</Th> : null}
+            {show('error') ? <Th>{t('labels.error')}</Th> : null}
+            <Th stickyRight>{t('labels.actions')}</Th>
           </tr>
         </thead>
         <tbody>
@@ -704,7 +723,7 @@ function RequestTable({
                     className="max-w-[132px] truncate whitespace-nowrap"
                     title={record.client_ip}
                   >
-                    {record.client_ip || strings.emptyField}
+                    {record.client_ip || t('emptyField')}
                   </div>
                 </Td>
               ) : null}
@@ -730,7 +749,7 @@ function RequestTable({
                     className="max-w-[160px] truncate font-mono text-[10.5px] text-[var(--text-muted)]"
                     title={record.session_key ?? undefined}
                   >
-                    {record.session_key ?? strings.emptyField}
+                    {record.session_key ?? t('emptyField')}
                   </div>
                 </Td>
               ) : null}
@@ -740,7 +759,7 @@ function RequestTable({
                     className="max-w-[160px] truncate whitespace-nowrap"
                     title={record.model ?? undefined}
                   >
-                    {record.model ?? strings.emptyField}
+                    {record.model ?? t('emptyField')}
                   </div>
                 </Td>
               ) : null}
@@ -763,7 +782,7 @@ function RequestTable({
               ) : null}
               {show('tokens') ? <Td mono>{formatUsage(record.token_usage)}</Td> : null}
               {show('latency') ? <Td mono>{record.latency_ms} ms</Td> : null}
-              {show('error') ? <Td mono>{record.error_code ?? strings.emptyField}</Td> : null}
+              {show('error') ? <Td mono>{record.error_code ?? t('emptyField')}</Td> : null}
               <Td stickyRight>
                 <Button
                   type="button"
@@ -774,7 +793,7 @@ function RequestTable({
                   data-testid={`request-open-${record.id}`}
                   aria-label={`Open request detail ${record.request_id}`}
                 >
-                  {strings.actions.open}
+                  {t('actions.open')}
                 </Button>
               </Td>
             </tr>
@@ -807,14 +826,14 @@ function ColumnSelector({
         onClick={() => setOpen((current) => !current)}
       >
         <Columns3 />
-        {strings.labels.columns}
+        {t('labels.columns')}
       </Button>
       {open ? (
         <>
           <button
             type="button"
             className="fixed inset-0 z-40 cursor-default bg-transparent"
-            aria-label={strings.actions.close}
+            aria-label={t('actions.close')}
             tabIndex={-1}
             onClick={() => setOpen(false)}
           />
@@ -826,10 +845,13 @@ function ColumnSelector({
           >
             <div className="mb-2 flex items-center justify-between gap-3 border-b border-[var(--line)] px-2 pb-2">
               <div className="text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
-                {strings.columnsTitle}
+                {t('columnsTitle')}
               </div>
               <div className="font-mono text-[10.5px] text-[var(--text-muted)]">
-                {strings.columnsMeta(visibleColumns.length, REQUEST_COLUMNS.length)}
+                {t('columnsMeta', {
+                  selected: visibleColumns.length,
+                  total: REQUEST_COLUMNS.length,
+                })}
               </div>
             </div>
             <div className="grid gap-1">
@@ -846,7 +868,7 @@ function ColumnSelector({
                     disabled={disabled}
                     onClick={() => onToggle(column.id)}
                   >
-                    <span>{column.label}</span>
+                    <span>{t(column.labelKey)}</span>
                     <span
                       className={
                         active
@@ -891,7 +913,7 @@ function PaginationControls({
         variant="ghost"
         size="sm"
         disabled={!canPrevious}
-        aria-label={strings.pagination.previous}
+        aria-label={t('pagination.previous')}
         onClick={onPrevious}
         className="h-11 min-h-11 w-11 border-0 px-0 text-[var(--text-dim)] shadow-none hover:bg-[var(--panel-hi)] disabled:opacity-35 sm:h-8 sm:min-h-8 sm:w-8"
       >
@@ -900,17 +922,17 @@ function PaginationControls({
       <span
         role="status"
         aria-current="page"
-        aria-label={strings.pagination.current(currentPage)}
+        aria-label={t('pagination.current', { page: currentPage })}
         className="inline-flex h-11 min-w-[74px] items-center justify-center border-x border-[var(--line-2)] bg-[var(--panel)] px-2 font-mono text-[11.5px] font-medium text-[var(--text)] sm:h-8 sm:min-w-[86px] sm:px-3"
       >
-        {strings.pagination.page(currentPage)}
+        {t('pagination.page', { page: currentPage })}
       </span>
       <Button
         type="button"
         variant="ghost"
         size="sm"
         disabled={!hasNext}
-        aria-label={strings.pagination.next}
+        aria-label={t('pagination.next')}
         onClick={onNext}
         className="h-11 min-h-11 w-11 border-0 px-0 text-[var(--text-dim)] shadow-none hover:bg-[var(--panel-hi)] disabled:opacity-35 sm:h-8 sm:min-h-8 sm:w-8"
       >
@@ -951,7 +973,7 @@ function CopyRequestIDButton({ requestID }: { requestID: string }) {
       variant="ghost"
       size="icon"
       className="h-11 min-h-11 w-11 shrink-0 p-0 text-[var(--text-muted)] hover:text-[var(--text)] sm:h-4 sm:min-h-4 sm:w-4 [&>svg]:h-4 [&>svg]:w-4 sm:[&>svg]:h-3.5 sm:[&>svg]:w-3.5"
-      aria-label={`${strings.actions.copyRequestId} ${requestID}`}
+      aria-label={`${t('actions.copyRequestId')} ${requestID}`}
       onClick={() => copyText(requestID)}
     >
       <Clipboard />
@@ -996,7 +1018,7 @@ function RequestDetailLayer({
         type="button"
         tabIndex={-1}
         className="absolute inset-0 bg-[color-mix(in_oklch,var(--bg)_62%,transparent)]"
-        aria-label={strings.actions.close}
+        aria-label={t('actions.close')}
         onClick={onClose}
       />
       <section
@@ -1012,7 +1034,7 @@ function RequestDetailLayer({
               id="request-detail-title"
               className="text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]"
             >
-              {strings.detailTitle}
+              {t('detailTitle')}
             </h2>
             {record ? (
               <div
@@ -1030,7 +1052,7 @@ function RequestDetailLayer({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label={strings.actions.close}
+              aria-label={t('actions.close')}
               className="border-0 shadow-none"
               onClick={onClose}
             >
@@ -1041,16 +1063,16 @@ function RequestDetailLayer({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {isError ? (
-            <ErrorBanner error={error} title={strings.detailErrorTitle} className="mb-4" />
+            <ErrorBanner error={error} title={t('detailErrorTitle')} className="mb-4" />
           ) : null}
           {isLoading ? (
             <div role="status" className="text-[13px] text-[var(--text-dim)]">
-              {strings.detailMetaLoading}
+              {t('detailMetaLoading')}
             </div>
           ) : null}
           {!isLoading && !isError && !record ? (
             <div data-testid="request-detail-empty" className="text-[13px] text-[var(--text-dim)]">
-              {strings.detailEmpty}
+              {t('detailEmpty')}
             </div>
           ) : null}
           {record ? (
@@ -1089,12 +1111,12 @@ function RequestDetailSummary({ record }: { record: RequestLogDetail }) {
       className="grid border border-[var(--line)] bg-[var(--panel-hi)] md:grid-cols-2 xl:grid-cols-6"
       style={{ borderRadius: 2 }}
     >
-      <SummaryCell label={strings.labels.account}>{accountLabel(record)}</SummaryCell>
-      <SummaryCell label={strings.labels.model}>{record.model ?? strings.emptyField}</SummaryCell>
-      <SummaryCell label={strings.labels.status}>
+      <SummaryCell label={t('labels.account')}>{accountLabel(record)}</SummaryCell>
+      <SummaryCell label={t('labels.model')}>{record.model ?? t('emptyField')}</SummaryCell>
+      <SummaryCell label={t('labels.status')}>
         <Badge variant={statusBadgeVariant(record.status_code)}>{record.status_code}</Badge>
       </SummaryCell>
-      <SummaryCell label={strings.labels.outcome}>
+      <SummaryCell label={t('labels.outcome')}>
         <Badge variant={outcomeBadgeVariant(record.outcome)}>{record.outcome}</Badge>
       </SummaryCell>
       <SummaryCell
@@ -1103,7 +1125,7 @@ function RequestDetailSummary({ record }: { record: RequestLogDetail }) {
       >
         <TokenUsageDetail usage={tokenUsage} tooltip={tokenUsageTooltip} />
       </SummaryCell>
-      <SummaryCell label={strings.labels.latency}>
+      <SummaryCell label={t('labels.latency')}>
         <LatencyDetail totalMs={record.latency_ms} ttftMs={record.ttft_ms} />
       </SummaryCell>
     </div>
@@ -1134,9 +1156,9 @@ function SummaryCell({
 function TokenUsageLabel({ tooltip }: { tooltip: string }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      <span>{strings.labels.tokenUsage}</span>
+      <span>{t('labels.tokenUsage')}</span>
       <InlineTooltip
-        aria-label={strings.labels.tokenUsageHelp}
+        aria-label={t('labels.tokenUsageHelp')}
         content={tooltip}
         role="img"
         testId="request-detail-token-usage-help"
@@ -1155,7 +1177,7 @@ function TokenUsageDetail({ usage, tooltip }: { usage: TokenUsageParts | null; t
         contentClassName="left-0"
         testId="request-detail-token-usage"
       >
-        {strings.emptyField}
+        {t('emptyField')}
       </InlineTooltip>
     )
   }
@@ -1238,49 +1260,49 @@ function RequestFlowTrace({ record }: { record: RequestLogDetail }) {
   const nodes: FlowTraceNode[] = [
     {
       id: 'client',
-      label: strings.flow.client,
-      meta: record.client_ip || strings.emptyField,
+      label: t('flow.client'),
+      meta: record.client_ip || t('emptyField'),
       icon: Monitor,
     },
     {
       id: 'router',
-      label: strings.flow.router,
+      label: t('flow.router'),
       meta: route,
       icon: Router,
     },
     {
       id: 'llm-server',
-      label: strings.flow.llmServer,
+      label: t('flow.llmServer'),
       meta: baseURL,
       icon: Server,
     },
     {
       id: 'router-return',
-      label: strings.flow.router,
-      meta: strings.flow.responseRouter,
+      label: t('flow.router'),
+      meta: t('flow.responseRouter'),
       icon: Router,
     },
     {
       id: 'client-return',
-      label: strings.flow.client,
-      meta: record.client_ip || strings.emptyField,
+      label: t('flow.client'),
+      meta: record.client_ip || t('emptyField'),
       icon: Monitor,
     },
   ]
   const edges: FlowTraceStep[] = [
     {
       id: 'client-to-router',
-      title: strings.flow.clientToRouter,
+      title: t('flow.clientToRouter'),
       icon: Braces,
       value: record.client_request_body,
       rows: [
         {
-          label: strings.labels.route,
+          label: t('labels.route'),
           value: route,
           mono: true,
         },
         {
-          label: strings.labels.requestId,
+          label: t('labels.requestId'),
           value: middleEllipsis(record.request_id),
           title: record.request_id,
           mono: true,
@@ -1289,51 +1311,51 @@ function RequestFlowTrace({ record }: { record: RequestLogDetail }) {
     },
     {
       id: 'router-to-server',
-      title: strings.flow.routerToServer,
+      title: t('flow.routerToServer'),
       icon: SendHorizontal,
       value: record.upstream_request_body,
       rows: [
         {
-          label: strings.labels.baseURL,
+          label: t('labels.baseURL'),
           value: baseURL,
           title: baseURL,
           mono: true,
         },
         {
-          label: strings.labels.endpoint,
+          label: t('labels.endpoint'),
           value: endpoint,
           title: endpoint,
           mono: true,
         },
         {
-          label: strings.labels.account,
+          label: t('labels.account'),
           value: accountLabel(record),
         },
         {
-          label: strings.labels.model,
-          value: record.model ?? strings.emptyField,
+          label: t('labels.model'),
+          value: record.model ?? t('emptyField'),
           mono: true,
         },
       ],
     },
     {
       id: 'server-to-router',
-      title: strings.flow.serverToRouter,
+      title: t('flow.serverToRouter'),
       icon: Reply,
       value: record.upstream_response_body,
       rows: [
         {
-          label: strings.labels.status,
+          label: t('labels.status'),
           value: (
             <Badge variant={statusBadgeVariant(record.status_code)}>{record.status_code}</Badge>
           ),
         },
         {
-          label: strings.labels.outcome,
+          label: t('labels.outcome'),
           value: <Badge variant={outcomeBadgeVariant(record.outcome)}>{record.outcome}</Badge>,
         },
         {
-          label: strings.labels.latency,
+          label: t('labels.latency'),
           value: <LatencyDetail totalMs={record.latency_ms} ttftMs={record.ttft_ms} />,
           mono: true,
         },
@@ -1353,10 +1375,10 @@ function RequestFlowTrace({ record }: { record: RequestLogDetail }) {
     >
       <header className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[var(--line)] bg-[var(--panel-head)] px-3 py-2 sm:px-4">
         <div className="text-[11.5px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
-          {strings.flow.title}
+          {t('flow.title')}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-[var(--text-muted)]">
-          <span className="truncate">{record.account?.provider ?? strings.emptyField}</span>
+          <span className="truncate">{record.account?.provider ?? t('emptyField')}</span>
           <span className="text-[var(--line-3)]">/</span>
           <span>{record.response_mode}</span>
           <span className="text-[var(--line-3)]">/</span>
@@ -1463,7 +1485,7 @@ function FlowPayloadSection({
   value?: string | null
   rows: FlowPayloadRow[]
 }) {
-  const preview = buildJsonPreviewFromText(value, strings.bodyNotCaptured)
+  const preview = buildJsonPreviewFromText(value, t('bodyNotCaptured'))
   return (
     <section className="min-w-0 max-w-full overflow-hidden border border-[var(--line)] bg-[var(--panel-hi)] shadow-[0_1px_0_rgba(0,0,0,0.08)]">
       <header className="flex min-h-11 items-center justify-between gap-3 px-3 pt-3 pb-2">
@@ -1512,21 +1534,21 @@ function LatencyDetail({ totalMs, ttftMs }: { totalMs: number; ttftMs?: number |
   if (typeof ttftMs !== 'number') {
     return (
       <span className="whitespace-nowrap">
-        {strings.labels.totalLatency} {formatLatencyValue(totalMs)}
+        {t('labels.totalLatency')} {formatLatencyValue(totalMs)}
       </span>
     )
   }
 
   return (
     <span className="whitespace-nowrap">
-      {strings.labels.ttft} {formatLatencyValue(ttftMs)} / {strings.labels.totalLatency}{' '}
+      {t('labels.ttft')} {formatLatencyValue(ttftMs)} / {t('labels.totalLatency')}{' '}
       {formatLatencyValue(totalMs)}
     </span>
   )
 }
 
 function formatLatencyValue(value: number | null | undefined): string {
-  return typeof value === 'number' ? `${value} ms` : strings.emptyField
+  return typeof value === 'number' ? `${value} ms` : t('emptyField')
 }
 
 function AccountFacet({
@@ -1541,10 +1563,10 @@ function AccountFacet({
   onToggle: (id: number) => void
 }) {
   if (isLoading) {
-    return <div className="text-[13px] text-[var(--text-dim)]">{strings.optionsLoading}</div>
+    return <div className="text-[13px] text-[var(--text-dim)]">{t('optionsLoading')}</div>
   }
   if (accounts.length === 0) {
-    return <div className="text-[13px] text-[var(--text-dim)]">{strings.noFacets}</div>
+    return <div className="text-[13px] text-[var(--text-dim)]">{t('noFacets')}</div>
   }
   return (
     <div className="flex flex-wrap gap-2">
@@ -1641,7 +1663,7 @@ function DateTimePicker({
           <button
             type="button"
             className="fixed inset-0 z-40 cursor-default bg-transparent"
-            aria-label={strings.actions.close}
+            aria-label={t('actions.close')}
             tabIndex={-1}
             onClick={() => setOpen(false)}
           />
@@ -1657,20 +1679,20 @@ function DateTimePicker({
                 type="button"
                 variant="ghost"
                 size="sm"
-                aria-label={strings.actions.previousMonth}
+                aria-label={t('actions.previousMonth')}
                 className="min-h-11 w-11 px-0 sm:min-h-7 sm:w-auto sm:px-[10px]"
                 onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
               >
                 <ChevronLeft />
               </Button>
               <div className="font-mono text-[12px] text-[var(--text)]">
-                {monthFormatter.format(visibleMonth)}
+                {monthFormatter(visibleMonth)}
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                aria-label={strings.actions.nextMonth}
+                aria-label={t('actions.nextMonth')}
                 className="min-h-11 w-11 px-0 sm:min-h-7 sm:w-auto sm:px-[10px]"
                 onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
               >
@@ -1718,7 +1740,7 @@ function DateTimePicker({
             <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--line)] pt-3">
               <label className="grid gap-1">
                 <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                  {strings.labels.time}
+                  {t('labels.time')}
                 </span>
                 <Input
                   type="time"
@@ -1736,7 +1758,7 @@ function DateTimePicker({
                   className="min-h-11 sm:min-h-7"
                   onClick={clearDraft}
                 >
-                  {strings.actions.clear}
+                  {t('actions.clear')}
                 </Button>
                 <Button
                   type="button"
@@ -1744,7 +1766,7 @@ function DateTimePicker({
                   className="min-h-11 sm:min-h-7"
                   onClick={applyDraft}
                 >
-                  {strings.actions.apply}
+                  {t('actions.apply')}
                 </Button>
               </div>
             </div>
@@ -1769,7 +1791,7 @@ function StringFacet<T extends string>({
   onToggle: (value: T) => void
 }) {
   if (isLoading) {
-    return <div className="text-[13px] text-[var(--text-dim)]">{strings.optionsLoading}</div>
+    return <div className="text-[13px] text-[var(--text-dim)]">{t('optionsLoading')}</div>
   }
   if (values.length === 0) {
     return <div className="text-[13px] text-[var(--text-dim)]">{emptyLabel}</div>
@@ -2103,9 +2125,7 @@ function isQuickRange(search: RequestRouteSearch, range: 'hour' | 'day' | 'week'
 
 function formatPickerValue(value: string): string {
   const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? strings.timeBoundary.custom
-    : pickerValueFormatter.format(date)
+  return Number.isNaN(date.getTime()) ? t('timeBoundary.custom') : pickerValueFormatter(date)
 }
 
 function localDateOnly(value: string | undefined): Date | null {
@@ -2191,37 +2211,47 @@ function formatLocalTimestamp(value: string): LocalTimestampParts {
     return { date: value, time: '' }
   }
   return {
-    date: localDateFormatter.format(date),
-    time: localTimeFormatter.format(date),
+    date: localDateFormatter(date),
+    time: localTimeFormatter(date),
   }
 }
 
-const localDateFormatter = new Intl.DateTimeFormat(undefined, {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-})
+// Constructed per call (volumes are picker-scale) so the locale follows
+// the active UI language instead of freezing at module load.
+function localDateFormatter(date: Date): string {
+  return new Intl.DateTimeFormat(intlLocale(), {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
 
-const localTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: '2-digit',
-  hour12: false,
-  minute: '2-digit',
-  second: '2-digit',
-  timeZoneName: 'short',
-})
+function localTimeFormatter(date: Date): string {
+  return new Intl.DateTimeFormat(intlLocale(), {
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  }).format(date)
+}
 
-const pickerValueFormatter = new Intl.DateTimeFormat(undefined, {
-  day: '2-digit',
-  hour: '2-digit',
-  hour12: false,
-  minute: '2-digit',
-  month: '2-digit',
-})
+function pickerValueFormatter(date: Date): string {
+  return new Intl.DateTimeFormat(intlLocale(), {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+  }).format(date)
+}
 
-const monthFormatter = new Intl.DateTimeFormat(undefined, {
-  month: 'long',
-  year: 'numeric',
-})
+function monthFormatter(date: Date): string {
+  return new Intl.DateTimeFormat(intlLocale(), {
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
 
 function middleEllipsis(value: string, head = 9, tail = 6): string {
   if (value.length <= head + tail + 3) {
@@ -2233,11 +2263,11 @@ function middleEllipsis(value: string, head = 9, tail = 6): string {
 function accountLabel(record: RequestLogRow): string {
   if (record.account?.name) return record.account.name
   if (record.upstream_account_id) return `#${record.upstream_account_id}`
-  return strings.emptyField
+  return t('emptyField')
 }
 
 function serverBaseURL(record: RequestLogRow): string {
-  return record.account?.base_url ?? strings.flow.baseURLNotCaptured
+  return record.account?.base_url ?? t('flow.baseURLNotCaptured')
 }
 
 function serverEndpoint(record: RequestLogRow): string {
@@ -2249,7 +2279,7 @@ function serverEndpoint(record: RequestLogRow): string {
   const inferred =
     upstreamEndpointFromContract(bridgeString(bridge, 'upstream_contract')) ??
     upstreamEndpointFromBridgeID(bridgeString(bridge, 'bridge_id'))
-  return inferred ?? strings.emptyField
+  return inferred ?? t('emptyField')
 }
 
 function metadataString(
@@ -2325,12 +2355,12 @@ function outcomeBadgeVariant(outcome: RequestOutcome): BadgeVariant {
 }
 
 function formatUsage(value: Record<string, unknown> | null | undefined): string {
-  if (!value) return strings.emptyField
+  if (!value) return t('emptyField')
   if (typeof value.total_tokens === 'number') return String(value.total_tokens)
   const entries = Object.entries(value)
     .filter(([, item]) => typeof item === 'number')
     .slice(0, 3)
-  if (entries.length === 0) return strings.emptyField
+  if (entries.length === 0) return t('emptyField')
   return entries.map(([key, item]) => `${key}:${item}`).join(' ')
 }
 
@@ -2350,7 +2380,7 @@ function tokenUsageParts(
   const explicitTotal = usageNumber(value, 'total', 'total_tokens')
 
   const label = [input, cached, output, reasoning]
-    .map((item) => (item === null ? strings.emptyField : formatTokenCount(item)))
+    .map((item) => (item === null ? t('emptyField') : formatTokenCount(item)))
     .join(' / ')
   const hasKnownUsage =
     input !== null ||
@@ -2363,19 +2393,19 @@ function tokenUsageParts(
   const tooltipParts: string[] = []
   const computedTotal = explicitTotal ?? (input !== null && output !== null ? input + output : null)
   if (computedTotal !== null) {
-    tooltipParts.push(`${strings.labels.totalTokens}: ${formatTokenCount(computedTotal)}`)
+    tooltipParts.push(`${t('labels.totalTokens')}: ${formatTokenCount(computedTotal)}`)
   }
   if (input !== null) {
-    tooltipParts.push(`${strings.labels.inputTokens}: ${formatTokenCount(input)}`)
+    tooltipParts.push(`${t('labels.inputTokens')}: ${formatTokenCount(input)}`)
   }
   if (cached !== null) {
-    tooltipParts.push(`${strings.labels.cachedInputTokens}: ${formatTokenCount(cached)}`)
+    tooltipParts.push(`${t('labels.cachedInputTokens')}: ${formatTokenCount(cached)}`)
   }
   if (output !== null) {
-    tooltipParts.push(`${strings.labels.outputTokens}: ${formatTokenCount(output)}`)
+    tooltipParts.push(`${t('labels.outputTokens')}: ${formatTokenCount(output)}`)
   }
   if (reasoning !== null) {
-    tooltipParts.push(`${strings.labels.reasoningTokens}: ${formatTokenCount(reasoning)}`)
+    tooltipParts.push(`${t('labels.reasoningTokens')}: ${formatTokenCount(reasoning)}`)
   }
 
   return {
@@ -2386,10 +2416,10 @@ function tokenUsageParts(
 
 function tokenUsageLegendTooltip(): string {
   return [
-    strings.labels.inputTokens,
-    strings.labels.cachedInputTokens,
-    strings.labels.outputTokens,
-    strings.labels.reasoningTokens,
+    t('labels.inputTokens'),
+    t('labels.cachedInputTokens'),
+    t('labels.outputTokens'),
+    t('labels.reasoningTokens'),
   ].join('\n')
 }
 
@@ -2410,8 +2440,8 @@ function formatTokenCount(value: number): string {
 async function copyText(value: string) {
   try {
     await copyToClipboard(value)
-    toast.success(strings.copyDone)
+    toast.success(t('copyDone'))
   } catch {
-    toast.error(strings.copyFailed)
+    toast.error(t('copyFailed'))
   }
 }

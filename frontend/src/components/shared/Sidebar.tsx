@@ -11,6 +11,7 @@ import {
   Users,
 } from 'lucide-react'
 import { type ComponentType, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
@@ -19,6 +20,10 @@ import { cn } from '@/lib/utils'
  * `Dashboard`, `Accounts`, `Playground`, `Requests`, and `Settings` are
  * live in the current build. The remaining entries stay visible-but-disabled
  * so the shell shape does not jump as future features land.
+ *
+ * Labels are `common` catalog keys (translated at render time). The
+ * `data-testid` slug is derived from the route path — never from the
+ * translated label — so the test contract survives language switches.
  *
  * Styling follows v9 Neo-Retro (`specs/002-.../mocks/v9-neoretro-grafana.html`):
  * each row is a dense text line with an accent top-stripe on the active
@@ -34,41 +39,55 @@ import { cn } from '@/lib/utils'
  *     previous `bg-(--color-surface-card)` assertion hook).
  */
 
+/** Stable DOM slug derived from the route path (language-independent). */
+export function sidebarSlug(to: string): string {
+  const tail = to.replace(/^\/admin\/?/, '')
+  return tail === '' ? 'dashboard' : tail
+}
+
 export interface SidebarNavItem {
   to: string
-  label: string
+  /** `common` namespace key for the translated label. */
+  labelKey:
+    | 'nav.dashboard'
+    | 'nav.accounts'
+    | 'nav.playground'
+    | 'nav.requests'
+    | 'nav.clientKeys'
+    | 'nav.observability'
+    | 'nav.settings'
   icon: ComponentType<{ className?: string }>
   enabled: boolean
-  badge?: string
+  badge?: 'planned'
   idx: string
 }
 
 export const SIDEBAR_ITEMS: readonly SidebarNavItem[] = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, enabled: true, idx: '01' },
+  { to: '/admin', labelKey: 'nav.dashboard', icon: LayoutDashboard, enabled: true, idx: '01' },
   {
     to: '/admin/accounts',
-    label: 'Accounts',
+    labelKey: 'nav.accounts',
     icon: Users,
     enabled: true,
     idx: '02',
   },
   {
     to: '/admin/playground',
-    label: 'Playground',
+    labelKey: 'nav.playground',
     icon: FlaskConical,
     enabled: true,
     idx: '03',
   },
   {
     to: '/admin/requests',
-    label: 'Requests',
+    labelKey: 'nav.requests',
     icon: List,
     enabled: true,
     idx: '04',
   },
   {
     to: '/admin/client-keys',
-    label: 'Client Keys',
+    labelKey: 'nav.clientKeys',
     icon: Key,
     enabled: false,
     badge: 'planned',
@@ -76,13 +95,13 @@ export const SIDEBAR_ITEMS: readonly SidebarNavItem[] = [
   },
   {
     to: '/admin/observability',
-    label: 'Observability',
+    labelKey: 'nav.observability',
     icon: BarChart3,
     enabled: false,
     badge: 'planned',
     idx: '06',
   },
-  { to: '/admin/settings', label: 'Settings', icon: Settings, enabled: true, idx: '07' },
+  { to: '/admin/settings', labelKey: 'nav.settings', icon: Settings, enabled: true, idx: '07' },
 ]
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'one-llm-router.sidebar.collapsed'
@@ -98,9 +117,10 @@ function readInitialCollapsed(): boolean {
 
 export function Sidebar() {
   const location = useLocation()
+  const { t } = useTranslation('common')
   const [collapsed, setCollapsed] = useState(readInitialCollapsed)
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose
-  const toggleLabel = collapsed ? 'Expand sidebar' : 'Collapse sidebar'
+  const toggleLabel = collapsed ? t('sidebar.expand') : t('sidebar.collapse')
 
   useEffect(() => {
     try {
@@ -112,7 +132,7 @@ export function Sidebar() {
 
   return (
     <nav
-      aria-label="Admin navigation"
+      aria-label={t('sidebar.label')}
       data-collapsed={collapsed || undefined}
       className={cn(
         'flex w-full shrink-0 flex-col border-b border-[var(--line)] bg-[var(--panel)] md:h-full md:border-r md:border-b-0',
@@ -127,7 +147,7 @@ export function Sidebar() {
       >
         <div className={cn('min-w-0', collapsed && 'md:sr-only')}>
           <span className="block font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">
-            admin portal
+            {t('sidebar.adminPortal')}
           </span>
         </div>
         <button
@@ -152,14 +172,15 @@ export function Sidebar() {
               location.pathname === item.to ||
               (item.to !== '/admin' && location.pathname.startsWith(`${item.to}/`)))
           const Icon = item.icon
-          const slug = item.label.toLowerCase().replaceAll(' ', '-')
+          const label = t(item.labelKey)
+          const slug = sidebarSlug(item.to)
           if (!item.enabled) {
             return (
               <li key={item.to} className="shrink-0 md:shrink">
                 <span
                   aria-disabled="true"
                   data-testid={`sidebar-${slug}`}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? label : undefined}
                   className={cn(
                     'flex min-h-11 min-w-[118px] cursor-not-allowed items-center justify-center gap-2 border-r border-b-2 border-r-[var(--line)] border-b-transparent px-3 py-2 text-[12.5px] text-[var(--text-faint)]',
                     'md:min-h-0 md:min-w-0 md:justify-start md:gap-[10px] md:border-r-0 md:border-b md:border-l-2 md:border-l-transparent md:border-b-[var(--line)] md:px-4 md:py-[10px]',
@@ -175,7 +196,7 @@ export function Sidebar() {
                     {item.idx}
                   </span>
                   <Icon className="h-[14px] w-[14px] opacity-60" />
-                  <span className={cn('truncate', collapsed && 'md:sr-only')}>{item.label}</span>
+                  <span className={cn('truncate', collapsed && 'md:sr-only')}>{label}</span>
                   {item.badge ? (
                     <span
                       className={cn(
@@ -188,7 +209,7 @@ export function Sidebar() {
                         borderRadius: 2,
                       }}
                     >
-                      {item.badge}
+                      {t('nav.planned')}
                     </span>
                   ) : null}
                 </span>
@@ -201,7 +222,7 @@ export function Sidebar() {
                 to={item.to}
                 data-testid={`sidebar-${slug}`}
                 data-active={active || undefined}
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? label : undefined}
                 className={cn(
                   'flex min-h-11 min-w-[118px] items-center justify-center gap-2 border-r border-b-2 border-r-[var(--line)] px-3 py-2 text-[12.5px] transition-colors',
                   'md:min-h-0 md:min-w-0 md:justify-start md:gap-[10px] md:border-r-0 md:border-b md:border-l-2 md:border-b-[var(--line)] md:px-4 md:py-[10px]',
@@ -224,7 +245,7 @@ export function Sidebar() {
                   {item.idx}
                 </span>
                 <Icon className="h-[14px] w-[14px]" />
-                <span className={cn('truncate', collapsed && 'md:sr-only')}>{item.label}</span>
+                <span className={cn('truncate', collapsed && 'md:sr-only')}>{label}</span>
               </Link>
             </li>
           )
@@ -238,7 +259,7 @@ export function Sidebar() {
         )}
       >
         <span className="block font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          docs
+          {t('sidebar.docs')}
         </span>
         <a
           href="https://github.com/bitxel/one-llm-router"

@@ -10,10 +10,12 @@ import {
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-
+import { i18n } from '@/i18n'
 import { ACCOUNT_AUTH_METHOD_IDS } from '@/lib/account-auth-methods'
 import { AdminAccountsNewAccountPicker } from './new-account-picker'
-import { strings } from './new-account-picker.strings'
+
+// Resolves English catalog entries (test language is pinned to en).
+const strings = i18n.getFixedT(null, 'accounts')
 
 function RouteProbe() {
   const location = useLocation()
@@ -84,10 +86,10 @@ describe('AdminAccountsNewAccountPicker', () => {
     expect(cards.map((card) => card.getAttribute('data-auth-method'))).toEqual(
       ACCOUNT_AUTH_METHOD_IDS,
     )
-    expect(screen.getByText(strings.cards.apiKey.title)).toBeInTheDocument()
-    expect(screen.getByText(strings.cards.oauthBrowser.title)).toBeInTheDocument()
-    expect(screen.getByText(strings.cards.oauthDevice.title)).toBeInTheDocument()
-    expect(screen.getByText(strings.cards.oauthImport.title)).toBeInTheDocument()
+    expect(screen.getByText(strings('picker.cards.apiKey.title'))).toBeInTheDocument()
+    expect(screen.getByText(strings('picker.cards.oauthBrowser.title'))).toBeInTheDocument()
+    expect(screen.getByText(strings('picker.cards.oauthDevice.title'))).toBeInTheDocument()
+    expect(screen.getByText(strings('picker.cards.oauthImport.title'))).toBeInTheDocument()
     expect(screen.queryByText('Paste an OpenAI API key')).not.toBeInTheDocument()
     expect(screen.queryByText('Sign in with ChatGPT in your browser')).not.toBeInTheDocument()
     expect(screen.queryByText('Headless? Use a device code')).not.toBeInTheDocument()

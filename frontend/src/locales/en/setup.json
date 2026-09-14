@@ -1,0 +1,193 @@
+{
+  "tag": {
+    "configuring": "configuring"
+  },
+  "steps": {
+    "welcome": "Welcome",
+    "database": "Database",
+    "upstreamAccount": "Upstream account",
+    "pluginIntents": "Plugin intents",
+    "commit": "Commit"
+  },
+  "progress": "Step {{idx}} of 05",
+  "actions": {
+    "back": "Back",
+    "backTo": "Back to {{step}}",
+    "skipForNow": "Skip for now",
+    "toContinue": "to continue",
+    "continue": "Continue",
+    "testing": "testing…",
+    "commitAndFinish": "Commit and finish",
+    "committing": "Committing…"
+  },
+  "welcome": {
+    "srTitle": "Welcome to one-llm-router.",
+    "titleLead": "A single endpoint for",
+    "titleStrong": "every Codex client.",
+    "intro": "Point your Codex fleet at this router once and let it pool upstream accounts, keep session continuity, and record every call. Under two minutes of setup, one <0>config.json</0>, no secret in an env file.",
+    "provideTitle": "What you'll provide",
+    "provideMeta": "≈ 90 seconds",
+    "storageLabel": "Storage",
+    "storageText": "A database — SQLite is the default and needs nothing but a writable directory.",
+    "upstreamLabel": "Upstream",
+    "upstreamText": "Optional first upstream onboarding. API key can seed inline; browser OAuth, device OAuth, and imported auth.json hand off immediately after setup.",
+    "pluginsLabel": "Plugins",
+    "pluginsText": "Initial intents for auth plugins — leaving them all off is a perfectly fine default in this build."
+  },
+  "database": {
+    "titleLead": "Give the router somewhere to",
+    "titleStrong": "keep receipts.",
+    "intro": "Every routed request, every operator change, every upstream account lives in one OLTP engine. Pick it once; the schema is migratable, the engine choice isn't one-way.",
+    "engineGroupLabel": "Database engine",
+    "connectionTitle": "Connection",
+    "driverMeta": "driver = {{driver}}",
+    "dsnLabel": "DSN",
+    "dsnHintSqlite": "File path, <0>file:</0> URI, or full driver DSN.",
+    "dsnHintPostgres": "Postgres DSN, e.g. <0>postgres://user:pw@host:5432/db</0>.",
+    "dsnHintMysql": "MySQL DSN, e.g. <0>user:pw@tcp(host:3306)/db</0>.",
+    "test": "Test",
+    "testing": "Testing…",
+    "probeErrorLabel": "error",
+    "probeVersionLabel": "version",
+    "probeDriverLabel": "driver",
+    "probeSchemaLabel": "schema",
+    "probeSchemaClean": "clean",
+    "probeMigrationsPending": "migrations pending on commit",
+    "probeFailedHint": "probe failed",
+    "testFailedTitle": "Database test failed",
+    "schemaMigrationTitle": "Schema migration",
+    "schemaMigrationHint": "Applied automatically at boot. You can always re-apply from the CLI.",
+    "autoApply": "Auto-apply on startup ·",
+    "envOverrideTitle": "Environment override",
+    "envOverrideMeta": "inert — nothing set",
+    "envUnset": "(unset)"
+  },
+  "engines": {
+    "sqlite3": {
+      "num": "01 — Default",
+      "title": "SQLite",
+      "pitch": "One file on disk, no daemon, no credentials. Enabled with WAL + foreign keys out of the box. Best place to start."
+    },
+    "postgres": {
+      "num": "02 — Scale",
+      "title": "PostgreSQL",
+      "pitch": "Reuse your team's Postgres: backups, replication, observability. All migrations are idempotent and reviewable."
+    },
+    "mysql": {
+      "num": "03 — Parity",
+      "title": "MySQL",
+      "pitch": "DATETIME(6) for microsecond timestamps. Feature-parity with Postgres across migrations, pool, and indexes."
+    }
+  },
+  "account": {
+    "skipped": {
+      "titleLead": "Account seeding",
+      "titleStrong": "deferred.",
+      "intro": "You chose to skip upstream-account registration. The router will still migrate the database and write <0>config.json</0> on commit; you just have to add at least one account under <1>Admin → Accounts</1> before <2>/v1/*</2> traffic can land. That screen supports browser-OAuth, device-OAuth, and <3>auth.json</3> import onboarding.",
+      "body": "Until an active account exists, every <0>/v1/*</0> call returns <1>503 no_available_account</1> and the admin dashboard flags the router as <2>degraded</2>. You can resume the flow at any time from Admin.",
+      "panelTitle": "Skipped",
+      "panelMeta": "no key on disk",
+      "chooseInstead": "Choose an auth method instead"
+    },
+    "titleLead": "Choose your first",
+    "titleStrong": "upstream path.",
+    "intro": "The setup wizard and <0>Admin → Accounts</0> now expose the same four auth modes. API key can seed inline during commit; browser OAuth, device OAuth, and <1>auth.json</1> import continue immediately after setup lands.",
+    "fieldsetLabel": "Upstream auth methods",
+    "selected": "selected",
+    "choose": "choose",
+    "methodDetails": {
+      "api_key": "Seeds the first upstream inline during setup. Fastest path to a ready router when you already have a key.",
+      "oauth_browser": "Commit setup first, then continue immediately into the 003 browser sign-in flow under Admin -> Accounts.",
+      "oauth_device": "Best for SSH or remote hosts. Setup commits first, then opens the device-code onboarding screen.",
+      "oauth_import": "Finish setup, then land directly on the import screen to transplant an existing Codex CLI session."
+    },
+    "form": {
+      "nickname": "Nickname",
+      "nicknameHint": "1–64 characters.",
+      "provider": "Provider",
+      "providerHint": "The setup seed stays OpenAI-only. Browser, device, and import still reuse the same provider after commit.",
+      "apiKey": "API key",
+      "apiKeyHint": "Stored verbatim (plaintext) in upstream_accounts in this build; encryption-at-rest arrives with the key-vault plugin in a later spec.",
+      "baseURL": "Base URL",
+      "baseURLOptional": "optional",
+      "baseURLHint": "Override for Azure OpenAI or compatible proxies. Leave empty for the default."
+    },
+    "handoff": {
+      "panelTitle": "Post-commit handoff",
+      "panelMeta": "same router, no second wizard",
+      "oauth_browser": "Setup will finish first, then open the browser OAuth screen under Admin → Accounts so you can start the PKCE sign-in flow there.",
+      "oauth_device": "Setup will finish first, then open the device-code screen under Admin → Accounts so you can approve from a second browser.",
+      "oauth_import": "Setup will finish first, then open the import screen under Admin → Accounts so you can upload your local auth.json.",
+      "payloadTitle": "commit payload",
+      "payloadBody": "<0>first_account</0> is omitted for this mode. Setup still writes <1>config.json</1> and migrations first; account creation continues immediately after commit on the matching 003 route."
+    }
+  },
+  "validation": {
+    "dsnRequired": "DSN is required",
+    "nameRequired": "name is required",
+    "nameMax": "name must be at most 64 characters",
+    "apiKeyRequired": "API key is required"
+  },
+  "pluginsStep": {
+    "panelTitle": "Plugin intents",
+    "titleLead": "Set plugin",
+    "titleStrong": "intents.",
+    "intro": "Switching these on now records operator preference in <0>config.json</0>. If the matching plugin is not installed in this build, flipping the switch is intent-only and causes no behavioural change.",
+    "badge": "intent only",
+    "admin_auth": {
+      "label": "Admin authentication",
+      "description": "Records whether admin sign-in should be enforced once that plugin is available. Today the admin API still uses the trusted-network boundary."
+    },
+    "client_keys": {
+      "label": "Client API keys",
+      "description": "Records whether per-caller /v1/* keys should be enforced once that plugin is available."
+    }
+  },
+  "review": {
+    "titleLead": "Land on disk, then",
+    "titleStrong": "serve traffic.",
+    "introPrefix": "Clicking commit runs the schema migration,",
+    "introSuffix": "atomically writes config.json, and unlatches the setup gate. Takes a few seconds.",
+    "branchSkip": "skips upstream-account seeding (add one in Admin → Accounts to unblock /v1/* traffic),",
+    "branchApiKey": "inserts your API-key seed account,",
+    "branchOAuthPrefix": "finishes setup first, then hands you directly into the",
+    "branchOAuthSuffix": "screen,",
+    "methodBrowser": "browser OAuth",
+    "methodDevice": "device OAuth",
+    "methodImport": "auth.json import",
+    "browserSignIn": "browser sign-in",
+    "deviceCode": "device code",
+    "importAuth": "auth.json import",
+    "panelTitle": "Review",
+    "panelMeta": "ready to commit",
+    "driver": "Driver",
+    "dsn": "DSN",
+    "account": "Account",
+    "authMethod": "Auth method",
+    "adminAuth": "Admin auth",
+    "clientKeys": "Client keys",
+    "deferredShort": "— deferred · add in Admin → Accounts before /v1/* traffic",
+    "providerOpenai": "· provider openai",
+    "deferredContinue": "— deferred · continue with {{method}} immediately after commit",
+    "onIntentOnly": "on (intent only — plugin not installed)",
+    "off": "off",
+    "authSkip": "skip for now",
+    "commitFailedTitle": "Commit failed"
+  },
+  "rail": {
+    "installerSection": "Installer",
+    "notesSection": "Operator notes",
+    "noteImage": {
+      "title": "Shipping the same image twice?",
+      "body": "Set <0>ROUTER_DB_URL</0> before boot and the router skips this wizard entirely — same binary, different environments."
+    },
+    "noteKeys": {
+      "title": "Keys never persist mid-wizard",
+      "body": "Fields clear on refresh; DSN + API key only land on disk once you click <0>Commit and finish</0>."
+    },
+    "shortcutNext": "Next step",
+    "shortcutBack": "Back",
+    "shortcutTestDB": "Test DB",
+    "shortcutTheme": "Toggle theme"
+  }
+}

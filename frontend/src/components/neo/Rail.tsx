@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { useTranslation } from 'react-i18next'
+
 import { cn } from '@/lib/utils'
 
 /**
@@ -118,13 +120,14 @@ export function MiniCard({ title, children }: { title: string; children: ReactNo
 }
 
 export function ShortcutList({ items }: { items: readonly { label: string; keys: string }[] }) {
+  const { t } = useTranslation('common')
   return (
     <div
       className="overflow-hidden border border-[var(--line)] bg-[var(--panel)]"
       style={{ borderRadius: 2 }}
     >
       <div className="border-b border-[var(--line)] bg-[var(--panel-head)] px-[14px] py-[8px] text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
-        Shortcuts
+        {t('shortcuts.title')}
       </div>
       <div className="px-[14px] py-[8px]">
         {items.map((it, i) => (

@@ -1,4 +1,5 @@
 import type { TopBarTag } from '@/components/neo'
+import { i18n } from '@/i18n'
 
 export interface RouterSystemSummary {
   router_version?: string | null
@@ -10,5 +11,6 @@ export function buildVersionTag(system?: RouterSystemSummary | null): TopBarTag 
   const rawVersion = system?.router_version
   const version = typeof rawVersion === 'string' ? rawVersion.trim() : ''
   if (!version) return null
-  return { kind: 'plain', label: `build ${version}` }
+  const t = i18n.getFixedT(null, 'common')
+  return { kind: 'plain', label: t('buildTag.label', { version }) }
 }

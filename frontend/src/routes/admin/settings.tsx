@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
+import { Trans, useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -24,42 +25,46 @@ import type { PluginIntent, SettingsPatch, SettingsPayload } from '@/hooks/use-s
 import { useSettings, useUpdateSettings } from '@/hooks/use-settings'
 import { api, RouterApiError } from '@/lib/api-client'
 import { Err009InvalidProxyURL } from '@/lib/errcode'
+import { tDynamic } from '@/lib/error-message'
 
+// Custom validation messages are `settings` catalog keys resolved at
+// render time via tDynamic(); zod library defaults stay English and
+// pass through untouched.
 const RuntimeFormSchema = z.object({
   log_client_request_body: z.boolean(),
   log_upstream_request_body: z.boolean(),
   log_upstream_response_body: z.boolean(),
-  log_retention_days: z.coerce.number().int().min(1).max(365),
+  log_retention_days: z.coerce
+    .number()
+    .int()
+    .min(1, 'settings:validation.retentionRange')
+    .max(365, 'settings:validation.retentionRange'),
   log_level: z.enum(['debug', 'info', 'warn', 'error']),
   model_renames: z
     .array(
       z.object({
-        from: z.string().trim().min(1).max(128),
-        to: z.string().trim().min(1).max(128),
+        from: z
+          .string()
+          .trim()
+          .min(1, 'settings:validation.renameFromRequired')
+          .max(128, 'settings:validation.renameMax'),
+        to: z
+          .string()
+          .trim()
+          .min(1, 'settings:validation.renameToRequired')
+          .max(128, 'settings:validation.renameMax'),
       }),
     )
-    .max(32),
+    .max(32, 'settings:validation.renameMax'),
 })
 type RuntimeForm = z.infer<typeof RuntimeFormSchema>
 
-const PLUGIN_INTENTS = [
-  {
-    id: 'admin_auth',
-    label: 'Admin authentication',
-    description:
-      'Records whether admin authentication should be enabled once that plugin is available. This build still uses the trusted-network admin boundary.',
-  },
-  {
-    id: 'client_keys',
-    label: 'Client API keys',
-    description:
-      'Records whether per-caller `/v1/*` keys should be enforced once that plugin is available.',
-  },
-] as const
+const PLUGIN_IDS = ['admin_auth', 'client_keys'] as const
 
-type PluginIntentID = (typeof PLUGIN_INTENTS)[number]['id']
+type PluginIntentID = (typeof PLUGIN_IDS)[number]
 
 export function AdminSettings() {
+  const { t } = useTranslation('settings')
   const settings = useSettings()
   const update = useUpdateSettings()
 
@@ -69,8 +74,8 @@ export function AdminSettings() {
   if (settings.isError) {
     return (
       <Canvas variant="narrow">
-        <Stripe eyebrow="Settings" />
-        <ErrorBanner error={settings.error} title="Settings failed to load" />
+        <Stripe eyebrow={t('eyebrow')} />
+        <ErrorBanner error={settings.error} title={t('loadErrorTitle')} />
       </Canvas>
     )
   }
@@ -80,8 +85,8 @@ export function AdminSettings() {
   if (settingsContractError) {
     return (
       <Canvas variant="narrow">
-        <Stripe eyebrow="Settings" />
-        <ErrorBanner error={settingsContractError} title="Settings response is invalid" />
+        <Stripe eyebrow={t('eyebrow')} />
+        <ErrorBanner error={settingsContractError} title={t('contractErrorTitle')} />
       </Canvas>
     )
   }
@@ -95,6 +100,7 @@ interface FormProps {
 }
 
 function SettingsForm({ data, onPatch }: FormProps) {
+  const { t } = useTranslation('settings')
   const form = useForm<RuntimeForm>({
     resolver: zodResolver(RuntimeFormSchema),
     defaultValues: data.runtime,
@@ -112,26 +118,26 @@ function SettingsForm({ data, onPatch }: FormProps) {
     async (next: RuntimeForm) => {
       try {
         await onPatch({ runtime: next })
-        toast.success('Runtime settings updated')
+        toast.success(t('toasts.updateSuccess'))
       } catch (err) {
-        toast.error('Update failed — see the banner for details')
+        toast.error(t('toasts.updateFailed'))
         throw err
       }
     },
-    [onPatch],
+    [onPatch, t],
   )
 
   const patchPlugin = useCallback(
     async (id: 'admin_auth' | 'client_keys', enabled: boolean) => {
       try {
         await onPatch({ plugins: { [id]: { enabled } } })
-        toast.success(`Plugin intent recorded: ${id}=${enabled}`)
+        toast.success(t('toasts.pluginSuccess', { id, enabled }))
       } catch (err) {
-        toast.error('Could not update plugin intent')
+        toast.error(t('toasts.pluginFailed'))
         throw err
       }
     },
-    [onPatch],
+    [onPatch, t],
   )
 
   const pluginIntents = pluginIntentMap(data)
@@ -152,14 +158,16 @@ function SettingsForm({ data, onPatch }: FormProps) {
 
   return (
     <Canvas variant="narrow">
-      <Stripe eyebrow="Settings" />
+      <Stripe eyebrow={t('eyebrow')} />
       <h1 className="mb-3 max-w-[22ch]">
-        Tune without a <strong>restart.</strong>
+        {t('title')} <strong>{t('titleStrong')}</strong>
       </h1>
       <PageIntro className="mb-7">
-        Observability toggles apply on the next <code>/v1/*</code> request. Plugin intents persist
-        to <code>config.json</code>; if a plugin is not installed in this build, the switch records
-        operator preference only.
+        <Trans i18nKey="intro" ns="settings">
+          Observability toggles apply on the next <code>/v1/*</code> request. Plugin intents persist
+          to <code>config.json</code>; if a plugin is not installed in this build, the switch
+          records operator preference only.
+        </Trans>
       </PageIntro>
 
       {form.formState.errors.root ? (
@@ -171,32 +179,32 @@ function SettingsForm({ data, onPatch }: FormProps) {
       ) : null}
 
       <form onSubmit={form.handleSubmit(submit)} data-testid="runtime-form">
-        <PanelCard title="Runtime" meta="applied on next /v1/*">
+        <PanelCard title={t('runtime.panelTitle')}>
           <ToggleField
             id="log_client_request_body"
-            label="Log client request bodies"
-            hint="Attach payloads received from clients to request_records."
+            label={t('runtime.logClientRequestBody')}
+            hint={t('runtime.logClientRequestBodyHint')}
             checked={form.watch('log_client_request_body')}
             onChange={(v) => form.setValue('log_client_request_body', v, { shouldDirty: true })}
           />
           <ToggleField
             id="log_upstream_request_body"
-            label="Log upstream request bodies"
-            hint="Attach payloads sent to upstream providers after router/provider adaptation."
+            label={t('runtime.logUpstreamRequestBody')}
+            hint={t('runtime.logUpstreamRequestBodyHint')}
             checked={form.watch('log_upstream_request_body')}
             onChange={(v) => form.setValue('log_upstream_request_body', v, { shouldDirty: true })}
           />
           <ToggleField
             id="log_upstream_response_body"
-            label="Log upstream response bodies"
-            hint="Attach payloads returned by upstream providers to request_records."
+            label={t('runtime.logUpstreamResponseBody')}
+            hint={t('runtime.logUpstreamResponseBodyHint')}
             checked={form.watch('log_upstream_response_body')}
             onChange={(v) => form.setValue('log_upstream_response_body', v, { shouldDirty: true })}
           />
           <Field
             htmlFor="log_retention_days"
-            label="Log retention"
-            hint="Days to keep request records and logs before automatic cleanup. 1–365."
+            label={t('runtime.logRetention')}
+            hint={t('runtime.logRetentionHint')}
           >
             <div className="flex items-center gap-3">
               <Input
@@ -207,19 +215,17 @@ function SettingsForm({ data, onPatch }: FormProps) {
                 className="w-28"
                 {...form.register('log_retention_days', { valueAsNumber: true })}
               />
-              <span className="font-mono text-[11.5px] text-[var(--text-muted)]">days</span>
+              <span className="font-mono text-[11.5px] text-[var(--text-muted)]">
+                {t('runtime.days')}
+              </span>
             </div>
             {form.formState.errors.log_retention_days ? (
               <p className="mt-2 text-[11.5px] text-[var(--err)]">
-                {form.formState.errors.log_retention_days.message}
+                {tDynamic(form.formState.errors.log_retention_days.message)}
               </p>
             ) : null}
           </Field>
-          <Field
-            htmlFor="log_level"
-            label="Log level"
-            hint="Minimum slog level emitted by the router."
-          >
+          <Field htmlFor="log_level" label={t('runtime.logLevel')} hint={t('runtime.logLevelHint')}>
             <div className="w-40">
               <Select
                 value={form.watch('log_level')}
@@ -228,7 +234,7 @@ function SettingsForm({ data, onPatch }: FormProps) {
                 }
               >
                 <SelectTrigger id="log_level">
-                  <SelectValue placeholder="Select" />
+                  <SelectValue placeholder={t('runtime.selectPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="debug">debug</SelectItem>
@@ -239,10 +245,7 @@ function SettingsForm({ data, onPatch }: FormProps) {
               </Select>
             </div>
           </Field>
-          <Field
-            label="Model renames"
-            hint="Exact client model ids rewritten before upstream forwarding."
-          >
+          <Field label={t('runtime.modelRenames')} hint={t('runtime.modelRenamesHint')}>
             <div className="flex flex-col gap-3">
               {modelRenameFields.fields.map((field, index) => (
                 <div
@@ -250,26 +253,26 @@ function SettingsForm({ data, onPatch }: FormProps) {
                   className="grid gap-2 rounded-[2px] border border-[var(--line)] bg-[var(--panel-2)] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                 >
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor={`model_renames.${index}.from`}>From</Label>
+                    <Label htmlFor={`model_renames.${index}.from`}>{t('runtime.from')}</Label>
                     <Input
                       id={`model_renames.${index}.from`}
                       {...form.register(`model_renames.${index}.from`)}
                     />
                     {form.formState.errors.model_renames?.[index]?.from ? (
                       <p className="text-[11.5px] text-[var(--err)]">
-                        {form.formState.errors.model_renames[index]?.from?.message}
+                        {tDynamic(form.formState.errors.model_renames[index]?.from?.message)}
                       </p>
                     ) : null}
                   </div>
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor={`model_renames.${index}.to`}>To</Label>
+                    <Label htmlFor={`model_renames.${index}.to`}>{t('runtime.to')}</Label>
                     <Input
                       id={`model_renames.${index}.to`}
                       {...form.register(`model_renames.${index}.to`)}
                     />
                     {form.formState.errors.model_renames?.[index]?.to ? (
                       <p className="text-[11.5px] text-[var(--err)]">
-                        {form.formState.errors.model_renames[index]?.to?.message}
+                        {tDynamic(form.formState.errors.model_renames[index]?.to?.message)}
                       </p>
                     ) : null}
                   </div>
@@ -277,7 +280,7 @@ function SettingsForm({ data, onPatch }: FormProps) {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label="Remove model rename"
+                    aria-label={t('runtime.removeModelRename')}
                     onClick={() => modelRenameFields.remove(index)}
                     className="self-end justify-self-start sm:justify-self-end"
                   >
@@ -287,7 +290,7 @@ function SettingsForm({ data, onPatch }: FormProps) {
               ))}
               {form.formState.errors.model_renames?.root ? (
                 <p className="text-[11.5px] text-[var(--err)]">
-                  {form.formState.errors.model_renames.root.message}
+                  {tDynamic(form.formState.errors.model_renames.root.message)}
                 </p>
               ) : null}
               <div>
@@ -298,7 +301,7 @@ function SettingsForm({ data, onPatch }: FormProps) {
                   onClick={() => modelRenameFields.append({ from: '', to: '' })}
                 >
                   <Plus />
-                  Add rename
+                  {t('runtime.addRename')}
                 </Button>
               </div>
             </div>
@@ -311,10 +314,10 @@ function SettingsForm({ data, onPatch }: FormProps) {
               onClick={() => form.reset(data.runtime)}
               className="w-full sm:w-auto"
             >
-              Discard
+              {t('runtime.discard')}
             </Button>
             <Button type="submit" disabled={!form.formState.isDirty} className="w-full sm:w-auto">
-              Save changes
+              {t('runtime.saveChanges')}
             </Button>
           </div>
         </PanelCard>
@@ -322,38 +325,40 @@ function SettingsForm({ data, onPatch }: FormProps) {
 
       <OutboundProxyCard proxyUrl={data.network.proxy_url_masked} onPatch={onPatch} />
 
-      <PanelCard title="Plugin intents" meta="persisted to config.json" metaMuted>
-        {PLUGIN_INTENTS.map((plugin) => {
-          const installed = data.plugins.some((p) => p.id === plugin.id)
-          const checked = pluginEnabled(plugin.id)
+      <PanelCard title={t('plugins.panelTitle')}>
+        {PLUGIN_IDS.map((pluginId) => {
+          const installed = data.plugins.some((p) => p.id === pluginId)
+          const checked = pluginEnabled(pluginId)
           return (
             <div
-              key={plugin.id}
+              key={pluginId}
               className="grid items-start gap-3 py-3 sm:grid-cols-[minmax(0,220px)_1fr_auto] sm:gap-5 [&+&]:border-t [&+&]:border-[var(--line)]"
             >
               <div className="flex flex-col gap-[6px]">
-                <Label htmlFor={`plugin-${plugin.id}`}>{plugin.label}</Label>
+                <Label htmlFor={`plugin-${pluginId}`}>{t(`plugins.${pluginId}.label`)}</Label>
                 {installed ? (
-                  <Badge variant="success">live</Badge>
+                  <Badge variant="success">{t('plugins.live')}</Badge>
                 ) : (
-                  <Badge variant="outline">{pluginIntentStatus(plugin.id)}</Badge>
+                  <Badge variant="outline">{pluginIntentStatus(pluginId)}</Badge>
                 )}
               </div>
               <div className="flex flex-col gap-1 pt-[2px] text-[12.5px] leading-[1.55] text-[var(--text-dim)]">
-                <span>{plugin.description}</span>
+                <span>{t(`plugins.${pluginId}.description`)}</span>
                 {!installed ? (
                   <span className="text-[11.5px] text-[var(--text-muted)]">
-                    Plugin not yet installed — flipping the switch only records operator intent in{' '}
-                    <code>config.json</code>.
+                    <Trans i18nKey="plugins.notInstalled" ns="settings">
+                      Plugin not yet installed — flipping the switch only records operator intent in{' '}
+                      <code>config.json</code>.
+                    </Trans>
                   </span>
                 ) : null}
               </div>
               <div className="justify-self-start sm:self-center sm:justify-self-auto">
                 <Switch
-                  id={`plugin-${plugin.id}`}
+                  id={`plugin-${pluginId}`}
                   checked={checked}
-                  onCheckedChange={(v) => patchPlugin(plugin.id, v)}
-                  data-testid={`plugin-switch-${plugin.id}`}
+                  onCheckedChange={(v) => patchPlugin(pluginId, v)}
+                  data-testid={`plugin-switch-${pluginId}`}
                 />
               </div>
             </div>
@@ -361,14 +366,14 @@ function SettingsForm({ data, onPatch }: FormProps) {
         })}
       </PanelCard>
 
-      <PanelCard title="Database" meta="read-only" metaMuted>
-        <Field label="Driver">
+      <PanelCard title={t('database.panelTitle')}>
+        <Field label={t('database.driver')}>
           <span className="font-mono text-[12.5px] text-[var(--text)]">{data.db.driver}</span>
         </Field>
-        <Field label="Host">
+        <Field label={t('database.host')}>
           <span className="font-mono text-[12.5px] text-[var(--text)]">{data.db.host || '—'}</span>
         </Field>
-        <Field label="Database">
+        <Field label={t('database.name')}>
           <span className="font-mono text-[12.5px] text-[var(--text)]">
             {data.db.database_name || '—'}
           </span>
@@ -377,14 +382,16 @@ function SettingsForm({ data, onPatch }: FormProps) {
 
       <footer className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--line)] pt-4 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         <span>
-          router <span className="text-[var(--text-dim)]">{data.system.router_version}</span>
+          {t('footer.router')}{' '}
+          <span className="text-[var(--text-dim)]">{data.system.router_version}</span>
         </span>
         <span aria-hidden>·</span>
         <span>
-          git <span className="text-[var(--text-dim)]">{data.system.router_git_sha}</span>
+          {t('footer.git')}{' '}
+          <span className="text-[var(--text-dim)]">{data.system.router_git_sha}</span>
         </span>
         <span aria-hidden>·</span>
-        <span>built {data.system.router_built_at}</span>
+        <span>{t('footer.built', { builtAt: data.system.router_built_at })}</span>
       </footer>
     </Canvas>
   )
@@ -410,13 +417,13 @@ function validateSettingsContract(data: SettingsPayload): Error | null {
       'settings payload contract violation: network.proxy_url_masked must be a string',
     )
   }
-  for (const plugin of PLUGIN_INTENTS) {
-    const intent = data.plugin_intents.find((item) => item.id === plugin.id)
+  for (const pluginId of PLUGIN_IDS) {
+    const intent = data.plugin_intents.find((item) => item.id === pluginId)
     if (!intent) {
-      return new Error(`settings payload contract violation: missing plugin_intents.${plugin.id}`)
+      return new Error(`settings payload contract violation: missing plugin_intents.${pluginId}`)
     }
     if (typeof intent.enabled !== 'boolean' || typeof intent.status !== 'string') {
-      return new Error(`settings payload contract violation: invalid plugin_intents.${plugin.id}`)
+      return new Error(`settings payload contract violation: invalid plugin_intents.${pluginId}`)
     }
   }
   return null
@@ -434,6 +441,7 @@ function OutboundProxyCard({
   proxyUrl: string
   onPatch: (patch: SettingsPatch) => Promise<SettingsPayload>
 }) {
+  const { t } = useTranslation('settings')
   const [value, setValue] = useState(proxyUrl)
   const [busy, setBusy] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -444,14 +452,14 @@ function OutboundProxyCard({
       try {
         const saved = await onPatch({ network: { proxy_url: next } })
         setValue(saved.network.proxy_url_masked)
-        toast.success('Outbound proxy updated')
+        toast.success(t('toasts.proxySuccess'))
       } catch {
-        toast.error('Could not update the outbound proxy')
+        toast.error(t('toasts.proxyFailed'))
       } finally {
         setBusy(false)
       }
     },
-    [onPatch],
+    [onPatch, t],
   )
 
   const test = useCallback(async () => {
@@ -464,30 +472,30 @@ function OutboundProxyCard({
       await api.post<{ reachable: boolean }>('/api/admin/settings/proxy/test', {
         proxy_url: candidate,
       })
-      toast.success('Proxy reachable — the upstream responded through it')
+      toast.success(t('toasts.proxyReachable'))
     } catch (err) {
       if (err instanceof RouterApiError) {
         const detail = (err.data as { detail?: string } | null)?.detail
         if (err.code === Err009InvalidProxyURL) {
-          toast.error(detail ? `Invalid proxy URL — ${detail}` : 'Invalid proxy URL')
+          toast.error(
+            detail ? t('toasts.proxyInvalidDetail', { detail }) : t('toasts.proxyInvalid'),
+          )
         } else {
-          toast.error(detail ? `Proxy unreachable — ${detail}` : 'Proxy test failed')
+          toast.error(
+            detail ? t('toasts.proxyUnreachableDetail', { detail }) : t('toasts.proxyUnreachable'),
+          )
         }
       } else {
-        toast.error('Proxy test failed')
+        toast.error(t('toasts.proxyTestFailed'))
       }
     } finally {
       setTesting(false)
     }
-  }, [value])
+  }, [value, t])
 
   return (
-    <PanelCard title="Outbound proxy">
-      <Field
-        htmlFor="network_proxy_url"
-        label="Proxy URL"
-        hint="Single global egress proxy (http/https/socks5/socks5h), e.g. socks5://127.0.0.1:7890"
-      >
+    <PanelCard title={t('proxy.panelTitle')}>
+      <Field htmlFor="network_proxy_url" label={t('proxy.label')} hint={t('proxy.hint')}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             id="network_proxy_url"
@@ -505,7 +513,7 @@ function OutboundProxyCard({
               disabled={busy || value.trim() === ''}
               onClick={() => submit(value.trim())}
             >
-              Save proxy
+              {t('proxy.save')}
             </Button>
             <Button
               type="button"
@@ -514,7 +522,7 @@ function OutboundProxyCard({
               onClick={() => void test()}
               data-testid="network-proxy-test"
             >
-              {testing ? 'Testing…' : 'Test'}
+              {testing ? t('proxy.testing') : t('proxy.test')}
             </Button>
           </div>
         </div>
@@ -525,9 +533,9 @@ function OutboundProxyCard({
 
 function pluginIntentMap(data: SettingsPayload): Map<PluginIntentID, PluginIntent> {
   return new Map(
-    PLUGIN_INTENTS.map((plugin) => [
-      plugin.id,
-      data.plugin_intents.find((intent) => intent.id === plugin.id) as PluginIntent,
+    PLUGIN_IDS.map((id) => [
+      id,
+      data.plugin_intents.find((intent) => intent.id === id) as PluginIntent,
     ]),
   )
 }
@@ -570,9 +578,10 @@ function ToggleField({
 }
 
 function SettingsSkeleton() {
+  const { t } = useTranslation('settings')
   return (
     <Canvas variant="narrow">
-      <Stripe eyebrow="Settings" />
+      <Stripe eyebrow={t('eyebrow')} />
       <div className="flex flex-col gap-4">
         <Skeleton className="h-48 w-full" />
         <Skeleton className="h-56 w-full" />

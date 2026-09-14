@@ -1,0 +1,83 @@
+{
+  "eyebrow": "设置",
+  "loadErrorTitle": "设置加载失败",
+  "contractErrorTitle": "设置响应无效",
+  "title": "无需重启，",
+  "titleStrong": "即可调优。",
+  "intro": "可观测性开关将在下一次 <0>/v1/*</0> 请求时生效。插件意向会持久化到 <1>config.json</1>；若本构建未安装对应插件，开关仅记录运维偏好。",
+  "runtime": {
+    "panelTitle": "运行时",
+    "logClientRequestBody": "记录客户端请求体",
+    "logClientRequestBodyHint": "将客户端发来的请求体附加到 request_records。",
+    "logUpstreamRequestBody": "记录上游请求体",
+    "logUpstreamRequestBodyHint": "将经路由器/提供商适配后发往上游的请求体附加到记录。",
+    "logUpstreamResponseBody": "记录上游响应体",
+    "logUpstreamResponseBodyHint": "将上游返回的响应体附加到 request_records。",
+    "logRetention": "日志保留期",
+    "logRetentionHint": "请求记录与日志在自动清理前的保留天数。1–365。",
+    "days": "天",
+    "logLevel": "日志级别",
+    "logLevelHint": "路由器输出的 slog 最低级别。",
+    "selectPlaceholder": "请选择",
+    "modelRenames": "模型重命名",
+    "modelRenamesHint": "在上游转发前重写的客户端模型 ID（精确匹配）。",
+    "from": "原模型",
+    "to": "目标模型",
+    "removeModelRename": "删除该模型重命名",
+    "addRename": "添加重命名",
+    "discard": "放弃更改",
+    "saveChanges": "保存更改"
+  },
+  "validation": {
+    "retentionRange": "日志保留期必须在 1–365 天之间。",
+    "renameFromRequired": "原模型须为 1-128 个字符。",
+    "renameToRequired": "目标模型须为 1-128 个字符。",
+    "renameMax": "每侧最多 128 个字符，最多 32 条重命名。"
+  },
+  "plugins": {
+    "panelTitle": "插件意向",
+    "admin_auth": {
+      "label": "管理员认证",
+      "description": "记录该插件可用后是否启用管理员认证。本构建仍使用可信网络的管理边界。"
+    },
+    "client_keys": {
+      "label": "客户端 API 密钥",
+      "description": "记录该插件可用后是否强制校验按调用方划分的 /v1/* 密钥。"
+    },
+    "live": "已生效",
+    "notInstalled": "插件尚未安装——拨动开关仅在 <0>config.json</0> 中记录运维意向。"
+  },
+  "database": {
+    "panelTitle": "数据库",
+    "driver": "驱动",
+    "host": "主机",
+    "name": "数据库"
+  },
+  "proxy": {
+    "panelTitle": "出站代理",
+    "label": "代理 URL",
+    "hint": "全局唯一出站代理（http/https/socks5/socks5h），例如 socks5://127.0.0.1:7890",
+    "save": "保存代理",
+    "test": "测试",
+    "testing": "测试中…"
+  },
+  "footer": {
+    "router": "router",
+    "git": "git",
+    "built": "构建于 {{builtAt}}"
+  },
+  "toasts": {
+    "updateSuccess": "运行时设置已更新",
+    "updateFailed": "更新失败——详情见错误横幅",
+    "pluginSuccess": "插件意向已记录：{{id}}={{enabled}}",
+    "pluginFailed": "无法更新插件意向",
+    "proxySuccess": "出站代理已更新",
+    "proxyFailed": "无法更新出站代理",
+    "proxyReachable": "代理可达——上游已通过它响应",
+    "proxyInvalid": "代理 URL 无效",
+    "proxyInvalidDetail": "代理 URL 无效——{{detail}}",
+    "proxyUnreachable": "代理不可达",
+    "proxyUnreachableDetail": "代理不可达——{{detail}}",
+    "proxyTestFailed": "代理测试失败"
+  }
+}

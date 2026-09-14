@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
@@ -21,10 +22,11 @@ interface WizardStepperProps {
  * on later steps).
  */
 export function WizardStepper({ steps, current, complete }: WizardStepperProps) {
+  const { t } = useTranslation('common')
   return (
     <ol
       className="flex w-full items-center"
-      aria-label="Setup progress"
+      aria-label={t('stepper.setupProgress')}
       data-testid="wizard-stepper"
     >
       {steps.map((step, index) => {

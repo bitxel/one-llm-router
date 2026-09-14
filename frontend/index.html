@@ -18,6 +18,24 @@
         see <code>docs/</code>.
       </p>
     </noscript>
+    <script>
+      // Pre-bundle language hint: mirrors src/i18n/detect.ts (stored
+      // choice first, then a zh-prefix browser match) so <html lang> is
+      // correct from the first paint, before the JS bundle executes.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('one-llm-router.lang')
+          var langs = navigator.languages || [navigator.language || 'en']
+          var prefersChinese = langs.some(function (tag) {
+            return (tag || '').toLowerCase().indexOf('zh') === 0
+          })
+          document.documentElement.lang =
+            stored === 'zh-CN' || (!stored && prefersChinese) ? 'zh-CN' : 'en'
+        } catch (e) {
+          /* storage/navigator unavailable — keep the static lang="en" */
+        }
+      })()
+    </script>
     <div id="root" class="h-full"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

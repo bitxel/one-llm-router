@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ArrowRight, CheckCircle2, SkipForward, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { type SubmitHandler, useForm } from 'react-hook-form'
+import { Trans, useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import {
@@ -30,15 +31,18 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ACCOUNT_AUTH_METHODS, type AccountAuthMethod } from '@/lib/account-auth-methods'
 import { api, RouterApiError } from '@/lib/api-client'
+import { tDynamic } from '@/lib/error-message'
 
-// Step labels double as the e2e test's `role="heading"` anchors — see
-// `frontend/tests/e2e/wizard-happy-path.spec.ts`. Keep them stable.
+// Step labels are `setup` catalog keys. Their English renderings double
+// as the e2e test's `role="heading"` anchors — see
+// `frontend/tests/e2e/wizard-happy-path.spec.ts` (Playwright pins
+// `locale: 'en-US'`). Keep the English strings stable.
 const STEPS = [
-  { idx: '01', label: 'Welcome' },
-  { idx: '02', label: 'Database' },
-  { idx: '03', label: 'Upstream account' },
-  { idx: '04', label: 'Plugin intents' },
-  { idx: '05', label: 'Commit' },
+  { idx: '01', labelKey: 'steps.welcome' },
+  { idx: '02', labelKey: 'steps.database' },
+  { idx: '03', labelKey: 'steps.upstreamAccount' },
+  { idx: '04', labelKey: 'steps.pluginIntents' },
+  { idx: '05', labelKey: 'steps.commit' },
 ] as const
 
 type Driver = 'sqlite3' | 'postgres' | 'mysql'
@@ -49,19 +53,20 @@ type SetupAuthMethod = AccountAuthMethod
 //   - DSN length: DSNMaxLen = 4096
 //   - Account name: ValidAccountName (1-64 chars after trim, no control chars)
 //   - Base URL length: BaseURLMaxLen = 256
+// Custom messages are `setup` catalog keys rendered through tDynamic().
 const WizardSchema = z.object({
   db: z.object({
     driver: z.enum(['sqlite3', 'postgres', 'mysql']) as z.ZodType<Driver>,
-    url: z.string().trim().min(1, 'DSN is required').max(4096),
+    url: z.string().trim().min(1, 'setup:validation.dsnRequired').max(4096),
   }),
   account: z.object({
     name: z
       .string()
       .trim()
-      .min(1, 'name is required')
-      .max(64, 'name must be at most 64 characters'),
+      .min(1, 'setup:validation.nameRequired')
+      .max(64, 'setup:validation.nameMax'),
     provider: z.literal('openai'),
-    api_key: z.string().trim().min(1, 'API key is required'),
+    api_key: z.string().trim().min(1, 'setup:validation.apiKeyRequired'),
     base_url: z.string().trim().max(256).optional().or(z.literal('')),
   }),
   plugins: z.object({
@@ -77,21 +82,39 @@ const DEFAULTS: WizardForm = {
   plugins: { admin_auth: false, client_keys: false },
 }
 
-const SETUP_AUTH_METHOD_DETAILS = {
-  api_key:
-    'Seeds the first upstream inline during setup. Fastest path to a ready router when you already have a key.',
-  oauth_browser:
-    'Commit setup first, then continue immediately into the 003 browser sign-in flow under Admin -> Accounts.',
-  oauth_device:
-    'Best for SSH or remote hosts. Setup commits first, then opens the device-code onboarding screen.',
-  oauth_import:
-    'Finish setup, then land directly on the import screen to transplant an existing Codex CLI session.',
-} as const satisfies Record<SetupAuthMethod, string>
-
-const SETUP_AUTH_METHODS = ACCOUNT_AUTH_METHODS.map((method) => ({
-  ...method,
-  detail: SETUP_AUTH_METHOD_DETAILS[method.id],
-}))
+// Per-method setup copy. Title/badge live in the `common` catalog
+// (shared with the admin accounts picker, resolved via tCommon); the
+// long detail sentence is setup-specific. Keys stay literal so both
+// t() forms stay type-checked.
+const AUTH_METHOD_COPY: Record<
+  SetupAuthMethod,
+  {
+    titleKey: `authMethods.${SetupAuthMethod}.title`
+    badgeKey: `authMethods.${SetupAuthMethod}.badge`
+    detailKey: `account.methodDetails.${SetupAuthMethod}`
+  }
+> = {
+  api_key: {
+    titleKey: 'authMethods.api_key.title',
+    badgeKey: 'authMethods.api_key.badge',
+    detailKey: 'account.methodDetails.api_key',
+  },
+  oauth_browser: {
+    titleKey: 'authMethods.oauth_browser.title',
+    badgeKey: 'authMethods.oauth_browser.badge',
+    detailKey: 'account.methodDetails.oauth_browser',
+  },
+  oauth_device: {
+    titleKey: 'authMethods.oauth_device.title',
+    badgeKey: 'authMethods.oauth_device.badge',
+    detailKey: 'account.methodDetails.oauth_device',
+  },
+  oauth_import: {
+    titleKey: 'authMethods.oauth_import.title',
+    badgeKey: 'authMethods.oauth_import.badge',
+    detailKey: 'account.methodDetails.oauth_import',
+  },
+}
 
 interface ProbeResult {
   ok: boolean
@@ -108,35 +131,39 @@ interface CommitResult {
 
 const ENGINE_COPY: Record<
   Driver,
-  { num: string; title: string; version: string; pitch: string; features: readonly string[] }
+  {
+    numKey: string
+    titleKey: string
+    version: string
+    pitchKey: string
+    features: readonly string[]
+  }
 > = {
   sqlite3: {
-    num: '01 — Default',
-    title: 'SQLite',
+    numKey: 'engines.sqlite3.num',
+    titleKey: 'engines.sqlite3.title',
     version: '3.40+',
-    pitch:
-      'One file on disk, no daemon, no credentials. Enabled with WAL + foreign keys out of the box. Best place to start.',
+    pitchKey: 'engines.sqlite3.pitch',
     features: ['embedded', 'pure-go', 'zero-ops'],
   },
   postgres: {
-    num: '02 — Scale',
-    title: 'PostgreSQL',
+    numKey: 'engines.postgres.num',
+    titleKey: 'engines.postgres.title',
     version: '14+',
-    pitch:
-      "Reuse your team's Postgres: backups, replication, observability. All migrations are idempotent and reviewable.",
+    pitchKey: 'engines.postgres.pitch',
     features: ['lib/pq', 'TLS', 'replica-ready'],
   },
   mysql: {
-    num: '03 — Parity',
-    title: 'MySQL',
+    numKey: 'engines.mysql.num',
+    titleKey: 'engines.mysql.title',
     version: '8.0+',
-    pitch:
-      'DATETIME(6) for microsecond timestamps. Feature-parity with Postgres across migrations, pool, and indexes.',
+    pitchKey: 'engines.mysql.pitch',
     features: ['go-sql-driver', 'TLS', 'µs'],
   },
 }
 
 export function SetupWizard() {
+  const { t } = useTranslation('setup')
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [complete, setComplete] = useState<Set<number>>(() => new Set())
@@ -346,8 +373,8 @@ export function SetupWizard() {
   return (
     <Canvas variant="rail">
       <main className="min-w-0">
-        <Stripe eyebrow={`Step ${active.idx} of 05`} titleSide="right">
-          {active.label}
+        <Stripe eyebrow={t('progress', { idx: active.idx })} titleSide="right">
+          {t(active.labelKey)}
         </Stripe>
         {step === 0 ? <WelcomeStep /> : null}
         {step === 1 ? (
@@ -388,7 +415,9 @@ export function SetupWizard() {
             className="w-full sm:w-auto"
           >
             <ArrowLeft />
-            {step === 0 ? 'Back' : `Back to ${STEPS[step - 1].label}`}
+            {step === 0
+              ? t('actions.back')
+              : t('actions.backTo', { step: t(STEPS[step - 1].labelKey) })}
           </Button>
           <div className="flex flex-col gap-3 font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--text-muted)] sm:flex-row sm:items-center sm:gap-4">
             {step === 2 && !accountSkipped ? (
@@ -399,11 +428,11 @@ export function SetupWizard() {
                 data-testid="wizard-skip-account"
                 className="w-full sm:w-auto"
               >
-                <SkipForward /> Skip for now
+                <SkipForward /> {t('actions.skipForNow')}
               </Button>
             ) : null}
             <span className="hidden sm:inline">
-              <Kbd>⌘</Kbd> <Kbd>↵</Kbd> to continue
+              <Kbd>⌘</Kbd> <Kbd>↵</Kbd> {t('actions.toContinue')}
             </span>
             {step < STEPS.length - 1 ? (
               <Button
@@ -414,11 +443,11 @@ export function SetupWizard() {
               >
                 {step === 1 && probing ? (
                   <>
-                    <Zap className="animate-pulse" /> testing…
+                    <Zap className="animate-pulse" /> {t('actions.testing')}
                   </>
                 ) : (
                   <>
-                    Continue
+                    {t('actions.continue')}
                     <ArrowRight />
                   </>
                 )}
@@ -442,10 +471,10 @@ export function SetupWizard() {
                 className="w-full sm:w-auto"
               >
                 {committing ? (
-                  'Committing…'
+                  t('actions.committing')
                 ) : (
                   <>
-                    Commit and finish
+                    {t('actions.commitAndFinish')}
                     <CheckCircle2 />
                   </>
                 )}
@@ -456,31 +485,37 @@ export function SetupWizard() {
       </main>
 
       <Rail>
-        <RailSection title="Installer">
+        <RailSection title={t('rail.installerSection')}>
           <RailSteps
-            steps={STEPS.map((s) => ({ idx: s.idx, label: s.label }))}
+            steps={STEPS.map((s) => ({ idx: s.idx, label: t(s.labelKey) }))}
             currentIndex={step}
             completedIndices={complete}
           />
         </RailSection>
 
-        <RailSection title="Operator notes">
-          <MiniCard title="Shipping the same image twice?">
-            Set <code>ROUTER_DB_URL</code> before boot and the router skips this wizard entirely —
-            same binary, different environments.
+        <RailSection title={t('rail.notesSection')}>
+          <MiniCard title={t('rail.noteImage.title')}>
+            <Trans i18nKey="rail.noteImage.body" ns="setup">
+              Set <code>ROUTER_DB_URL</code> before boot and the router skips this wizard entirely —
+              same binary, different environments.
+            </Trans>
           </MiniCard>
-          <MiniCard title="Keys never persist mid-wizard">
-            Fields clear on refresh; DSN + API key only land on disk once you click{' '}
-            <em className="not-italic text-[var(--accent)]">Commit and finish</em>.
+          <MiniCard title={t('rail.noteKeys.title')}>
+            <Trans i18nKey="rail.noteKeys.body" ns="setup">
+              Fields clear on refresh; DSN + API key only land on disk once you click{' '}
+              <em className="not-italic text-[var(--accent)]">Commit and finish</em>.
+            </Trans>
           </MiniCard>
         </RailSection>
 
         <ShortcutList
           items={[
-            { label: 'Next step', keys: '⌘ ↵' },
-            { label: 'Back', keys: '⌘ [' },
-            ...(watchedDriver === 'sqlite3' ? [] : [{ label: 'Test DB', keys: '⌘ T' } as const]),
-            { label: 'Toggle theme', keys: '⌘ ⇧ L' },
+            { label: t('rail.shortcutNext'), keys: '⌘ ↵' },
+            { label: t('rail.shortcutBack'), keys: '⌘ [' },
+            ...(watchedDriver === 'sqlite3'
+              ? []
+              : [{ label: t('rail.shortcutTestDB'), keys: '⌘ T' } as const]),
+            { label: t('rail.shortcutTheme'), keys: '⌘ ⇧ L' },
           ]}
         />
       </Rail>
@@ -493,39 +528,40 @@ export function SetupWizard() {
 // ---------------------------------------------------------------------------
 
 function WelcomeStep() {
+  const { t } = useTranslation('setup')
   return (
     <>
       <h1 className="mb-3 max-w-[28ch]">
-        <span className="sr-only">Welcome to one-llm-router. </span>A single endpoint for{' '}
-        <strong>every Codex client.</strong>
+        <span className="sr-only">{t('welcome.srTitle')}</span>
+        {t('welcome.titleLead')} <strong>{t('welcome.titleStrong')}</strong>
       </h1>
       <p className="mb-7 max-w-[60ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
-        Point your Codex fleet at this router once and let it pool upstream accounts, keep session
-        continuity, and record every call. Under two minutes of setup, one <code>config.json</code>,
-        no secret in an env file.
+        <Trans i18nKey="welcome.intro" ns="setup">
+          Point your Codex fleet at this router once and let it pool upstream accounts, keep session
+          continuity, and record every call. Under two minutes of setup, one{' '}
+          <code>config.json</code>, no secret in an env file.
+        </Trans>
       </p>
 
-      <PanelCard title="What you'll provide" metaMuted meta="≈ 90 seconds">
+      <PanelCard title={t('welcome.provideTitle')} metaMuted meta={t('welcome.provideMeta')}>
         <ul className="flex flex-col gap-[6px] text-[13px] text-[var(--text-dim)]">
           <li className="flex gap-3">
             <span className="w-16 font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--accent)]">
-              Storage
+              {t('welcome.storageLabel')}
             </span>
-            A database — SQLite is the default and needs nothing but a writable directory.
+            {t('welcome.storageText')}
           </li>
           <li className="flex gap-3">
             <span className="w-16 font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--accent)]">
-              Upstream
+              {t('welcome.upstreamLabel')}
             </span>
-            Optional first upstream onboarding. API key can seed inline; browser OAuth, device
-            OAuth, and imported <code>auth.json</code> hand off immediately after setup.
+            {t('welcome.upstreamText')}
           </li>
           <li className="flex gap-3">
             <span className="w-16 font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--accent)]">
-              Plugins
+              {t('welcome.pluginsLabel')}
             </span>
-            Initial intents for auth plugins — leaving them all off is a perfectly fine default in
-            this build.
+            {t('welcome.pluginsText')}
           </li>
         </ul>
       </PanelCard>
@@ -549,21 +585,22 @@ function DatabaseStep({
   probeError: unknown
   onProbe: () => void
 }) {
+  const { t } = useTranslation('setup')
+  const { t: tCommon } = useTranslation('common')
   const driver = form.watch('db.driver')
   return (
     <>
       <h1 className="mb-3 max-w-[22ch]">
-        Give the router somewhere to <strong>keep receipts.</strong>
+        {t('database.titleLead')} <strong>{t('database.titleStrong')}</strong>
       </h1>
       <p className="mb-7 max-w-[60ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
-        Every routed request, every operator change, every upstream account lives in one OLTP
-        engine. Pick it once; the schema is migratable, the engine choice isn't one-way.
+        {t('database.intro')}
       </p>
 
       <div
         className="mb-4 grid gap-2 sm:grid-cols-3"
         role="radiogroup"
-        aria-label="Database engine"
+        aria-label={t('database.engineGroupLabel')}
       >
         {(Object.keys(ENGINE_COPY) as Driver[]).map((d) => {
           const copy = ENGINE_COPY[d]
@@ -575,34 +612,34 @@ function DatabaseStep({
               onSelect={(v) =>
                 form.setValue('db.driver', v as Driver, { shouldDirty: true, shouldTouch: true })
               }
-              num={copy.num}
-              title={copy.title}
+              num={t(copy.numKey as 'engines.sqlite3.num')}
+              title={t(copy.titleKey as 'engines.sqlite3.title')}
               version={copy.version}
               features={copy.features}
             >
-              {copy.pitch}
+              {t(copy.pitchKey as 'engines.sqlite3.pitch')}
             </EngineCard>
           )
         })}
       </div>
 
-      <PanelCard title="Connection" meta={`driver = ${driver}`}>
+      <PanelCard title={t('database.connectionTitle')} meta={t('database.driverMeta', { driver })}>
         <Field
           htmlFor="db.url"
           label="DSN"
           hint={
             driver === 'sqlite3' ? (
-              <>
+              <Trans i18nKey="database.dsnHintSqlite" ns="setup">
                 File path, <code className="mono">file:</code> URI, or full driver DSN.
-              </>
+              </Trans>
             ) : driver === 'postgres' ? (
-              <>
+              <Trans i18nKey="database.dsnHintPostgres" ns="setup">
                 Postgres DSN, e.g. <code className="mono">postgres://user:pw@host:5432/db</code>.
-              </>
+              </Trans>
             ) : (
-              <>
+              <Trans i18nKey="database.dsnHintMysql" ns="setup">
                 MySQL DSN, e.g. <code className="mono">user:pw@tcp(host:3306)/db</code>.
-              </>
+              </Trans>
             )
           }
         >
@@ -622,37 +659,40 @@ function DatabaseStep({
                 data-testid="wizard-probe"
                 type="button"
               >
-                {probing ? 'Testing…' : 'Test'}
+                {probing ? t('database.testing') : t('database.test')}
               </Button>
             )}
           </div>
           {form.formState.errors.db?.url ? (
             <p className="mt-2 text-[11.5px] text-[var(--err)]">
-              {form.formState.errors.db.url.message}
+              {tDynamic(form.formState.errors.db.url.message)}
             </p>
           ) : null}
           {probe ? (
             <ProbeRow
               status={probe.ok ? 'ok' : 'err'}
               latencyMs={probe.latency_ms}
-              statusLabel={probe.ok ? 'healthy' : 'unreachable'}
+              statusLabel={probe.ok ? tCommon('probe.healthy') : tCommon('probe.unreachable')}
               log={
                 probe.ok ? (
                   <>
-                    <ProbeLogKw>driver</ProbeLogKw> {driver}
+                    <ProbeLogKw>{t('database.probeDriverLabel')}</ProbeLogKw> {driver}
                     {probe.server_version ? (
                       <>
                         {' '}
-                        · <ProbeLogKw>version</ProbeLogKw> {probe.server_version}
+                        · <ProbeLogKw>{t('database.probeVersionLabel')}</ProbeLogKw>{' '}
+                        {probe.server_version}
                       </>
                     ) : null}
                     <br />
-                    <ProbeLogKw>schema</ProbeLogKw> <ProbeLogOk>clean</ProbeLogOk> · migrations
-                    pending on commit
+                    <ProbeLogKw>{t('database.probeSchemaLabel')}</ProbeLogKw>{' '}
+                    <ProbeLogOk>{t('database.probeSchemaClean')}</ProbeLogOk> ·{' '}
+                    {t('database.probeMigrationsPending')}
                   </>
                 ) : (
                   <>
-                    <ProbeLogKw>error</ProbeLogKw> {probe.hint ?? 'probe failed'}
+                    <ProbeLogKw>{t('database.probeErrorLabel')}</ProbeLogKw>{' '}
+                    {probe.hint ?? t('database.probeFailedHint')}
                   </>
                 )
               }
@@ -660,25 +700,26 @@ function DatabaseStep({
           ) : null}
           {probeError ? (
             <div className="mt-3">
-              <ErrorBanner error={probeError} title="Database test failed" />
+              <ErrorBanner error={probeError} title={t('database.testFailedTitle')} />
             </div>
           ) : null}
         </Field>
 
-        <Field
-          label="Schema migration"
-          hint="Applied automatically at boot. You can always re-apply from the CLI."
-        >
+        <Field label={t('database.schemaMigrationTitle')} hint={t('database.schemaMigrationHint')}>
           <div className="pt-2 text-[12.5px] text-[var(--text)]">
-            Auto-apply on startup ·{' '}
+            {t('database.autoApply')}{' '}
             <span className="mono text-[var(--text-muted)]">migrate up 000001_init</span>
           </div>
         </Field>
       </PanelCard>
 
-      <PanelCard title="Environment override" meta="inert — nothing set" metaMuted>
-        <EnvLine k="ROUTER_DB_DRIVER" value="(unset)" />
-        <EnvLine k="ROUTER_DB_URL" value="(unset)" />
+      <PanelCard
+        title={t('database.envOverrideTitle')}
+        meta={t('database.envOverrideMeta')}
+        metaMuted
+      >
+        <EnvLine k="ROUTER_DB_DRIVER" value={t('database.envUnset')} />
+        <EnvLine k="ROUTER_DB_URL" value={t('database.envUnset')} />
       </PanelCard>
     </>
   )
@@ -696,25 +737,38 @@ function AccountStep({
   onSelectAuthMethod: (method: SetupAuthMethod) => void
   onUndoSkip: () => void
 }) {
+  const { t } = useTranslation('setup')
+  const { t: tCommon } = useTranslation('common')
   if (skipped) {
     return (
       <>
         <h1 className="mb-3 max-w-[22ch]">
-          Account seeding <strong>deferred.</strong>
+          {t('account.skipped.titleLead')} <strong>{t('account.skipped.titleStrong')}</strong>
         </h1>
-        <p className="mb-7 max-w-[60ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
+        <Trans
+          i18nKey="account.skipped.intro"
+          ns="setup"
+          parent="p"
+          className="mb-7 max-w-[60ch] text-[14px] leading-[1.65] text-[var(--text-dim)]"
+        >
           You chose to skip upstream-account registration. The router will still migrate the
           database and write <code>config.json</code> on commit; you just have to add at least one
           account under <em className="not-italic text-[var(--accent)]">Admin → Accounts</em> before{' '}
           <code>/v1/*</code> traffic can land. That screen supports browser-OAuth, device-OAuth, and{' '}
           <code>auth.json</code> import onboarding.
-        </p>
-        <PanelCard title="Skipped" meta="no key on disk" metaMuted>
+        </Trans>
+        <PanelCard
+          title={t('account.skipped.panelTitle')}
+          meta={t('account.skipped.panelMeta')}
+          metaMuted
+        >
           <p className="text-[12.5px] leading-[1.55] text-[var(--text-dim)]">
-            Until an active account exists, every <code>/v1/*</code> call returns{' '}
-            <span className="mono text-[var(--err)]">503 no_available_account</span> and the admin
-            dashboard flags the router as <span className="mono">degraded</span>. You can resume the
-            flow at any time from Admin.
+            <Trans i18nKey="account.skipped.body" ns="setup">
+              Until an active account exists, every <code>/v1/*</code> call returns{' '}
+              <span className="mono text-[var(--err)]">503 no_available_account</span> and the admin
+              dashboard flags the router as <span className="mono">degraded</span>. You can resume
+              the flow at any time from Admin.
+            </Trans>
           </p>
           <div className="mt-4">
             <Button
@@ -723,27 +777,35 @@ function AccountStep({
               onClick={onUndoSkip}
               data-testid="wizard-unskip-account"
             >
-              Choose an auth method instead
+              {t('account.skipped.chooseInstead')}
             </Button>
           </div>
         </PanelCard>
       </>
     )
   }
+  const authMethods = ACCOUNT_AUTH_METHODS.map((method) => ({
+    id: method.id,
+    title: tCommon(AUTH_METHOD_COPY[method.id].titleKey),
+    badge: tCommon(AUTH_METHOD_COPY[method.id].badgeKey),
+    detail: t(AUTH_METHOD_COPY[method.id].detailKey),
+  }))
   return (
     <>
       <h1 className="mb-3 max-w-[22ch]">
-        Choose your first <strong>upstream path.</strong>
+        {t('account.titleLead')} <strong>{t('account.titleStrong')}</strong>
       </h1>
       <p className="mb-7 max-w-[60ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
-        The setup wizard and <em className="not-italic text-[var(--accent)]">Admin → Accounts</em>{' '}
-        now expose the same four auth modes. API key can seed inline during commit; browser OAuth,
-        device OAuth, and <code>auth.json</code> import continue immediately after setup lands.
+        <Trans i18nKey="account.intro" ns="setup">
+          The setup wizard and <em className="not-italic text-[var(--accent)]">Admin → Accounts</em>{' '}
+          now expose the same four auth modes. API key can seed inline during commit; browser OAuth,
+          device OAuth, and <code>auth.json</code> import continue immediately after setup lands.
+        </Trans>
       </p>
 
-      <fieldset className="mb-4 grid gap-2 sm:grid-cols-2" aria-label="Upstream auth methods">
-        <legend className="sr-only">Upstream auth methods</legend>
-        {SETUP_AUTH_METHODS.map((method) => {
+      <fieldset className="mb-4 grid gap-2 sm:grid-cols-2" aria-label={t('account.fieldsetLabel')}>
+        <legend className="sr-only">{t('account.fieldsetLabel')}</legend>
+        {authMethods.map((method) => {
           const selected = authMethod === method.id
           const inputID = `setup-auth-method-${method.id}`
           return (
@@ -774,7 +836,7 @@ function AccountStep({
                   <Badge variant={selected ? 'accent' : 'outline'}>{method.badge}</Badge>
                 </div>
                 <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                  {selected ? 'selected' : 'choose'}
+                  {selected ? t('account.selected') : t('account.choose')}
                 </span>
               </div>
               <p className="max-w-[42ch] text-[12.5px] leading-[1.6] text-[var(--text-dim)]">
@@ -786,8 +848,12 @@ function AccountStep({
       </fieldset>
 
       {authMethod === 'api_key' ? (
-        <PanelCard title="Upstream">
-          <Field htmlFor="account.name" label="Nickname" hint="1–64 characters.">
+        <PanelCard title={tCommon('authMethods.api_key.title')}>
+          <Field
+            htmlFor="account.name"
+            label={t('account.form.nickname')}
+            hint={t('account.form.nicknameHint')}
+          >
             <Input
               id="account.name"
               data-testid="account.name"
@@ -797,21 +863,21 @@ function AccountStep({
             />
             {form.formState.errors.account?.name ? (
               <p className="mt-2 text-[11.5px] text-[var(--err)]">
-                {form.formState.errors.account.name.message}
+                {tDynamic(form.formState.errors.account.name.message)}
               </p>
             ) : null}
           </Field>
           <Field
             htmlFor="account.provider"
-            label="Provider"
-            hint="The setup seed stays OpenAI-only. Browser, device, and import still reuse the same provider after commit."
+            label={t('account.form.provider')}
+            hint={t('account.form.providerHint')}
           >
             <Input id="account.provider" value="openai" readOnly disabled aria-readonly="true" />
           </Field>
           <Field
             htmlFor="account.api_key"
-            label="API key"
-            hint="Stored verbatim (plaintext) in upstream_accounts in this build; encryption-at-rest arrives with the key-vault plugin in a later spec."
+            label={t('account.form.apiKey')}
+            hint={t('account.form.apiKeyHint')}
           >
             <Input
               id="account.api_key"
@@ -822,7 +888,7 @@ function AccountStep({
             />
             {form.formState.errors.account?.api_key ? (
               <p className="mt-2 text-[11.5px] text-[var(--err)]">
-                {form.formState.errors.account.api_key.message}
+                {tDynamic(form.formState.errors.account.api_key.message)}
               </p>
             ) : null}
           </Field>
@@ -830,10 +896,13 @@ function AccountStep({
             htmlFor="account.base_url"
             label={
               <>
-                Base URL <span className="font-normal text-[var(--text-muted)]">(optional)</span>
+                {t('account.form.baseURL')}{' '}
+                <span className="font-normal text-[var(--text-muted)]">
+                  ({t('account.form.baseURLOptional')})
+                </span>
               </>
             }
-            hint="Override for Azure OpenAI or compatible proxies. Leave empty for the default."
+            hint={t('account.form.baseURLHint')}
           >
             <Input
               id="account.base_url"
@@ -844,22 +913,24 @@ function AccountStep({
           </Field>
         </PanelCard>
       ) : (
-        <PanelCard title="Post-commit handoff" meta="same router, no second wizard" metaMuted>
+        <PanelCard
+          title={t('account.handoff.panelTitle')}
+          meta={t('account.handoff.panelMeta')}
+          metaMuted
+        >
           <p className="max-w-[60ch] text-[12.5px] leading-[1.65] text-[var(--text-dim)]">
-            {authMethod === 'oauth_browser'
-              ? 'Setup will finish first, then open the browser OAuth screen under Admin → Accounts so you can start the PKCE sign-in flow there.'
-              : authMethod === 'oauth_device'
-                ? 'Setup will finish first, then open the device-code screen under Admin → Accounts so you can approve from a second browser.'
-                : 'Setup will finish first, then open the import screen under Admin → Accounts so you can upload your local auth.json.'}
+            {t(`account.handoff.${authMethod}` as 'account.handoff.oauth_browser')}
           </p>
           <div className="mt-4 border border-[var(--line)] bg-[var(--panel-2)] px-4 py-3 text-[12px] leading-[1.6] text-[var(--text-dim)]">
             <span className="font-mono uppercase tracking-[0.08em] text-[var(--accent)]">
-              commit payload
+              {t('account.handoff.payloadTitle')}
             </span>
             <p className="mt-2">
-              <code>first_account</code> is omitted for this mode. Setup still writes{' '}
-              <code>config.json</code> and migrations first; account creation continues immediately
-              after commit on the matching 003 route.
+              <Trans i18nKey="account.handoff.payloadBody" ns="setup">
+                <code>first_account</code> is omitted for this mode. Setup still writes{' '}
+                <code>config.json</code> and migrations first; account creation continues
+                immediately after commit on the matching 003 route.
+              </Trans>
             </p>
           </div>
         </PanelCard>
@@ -869,31 +940,34 @@ function AccountStep({
 }
 
 function PluginsStep({ form }: StepProps) {
+  const { t } = useTranslation('setup')
   return (
     <>
       <h1 className="mb-3 max-w-[22ch]">
-        Set plugin <strong>intents.</strong>
+        {t('pluginsStep.titleLead')} <strong>{t('pluginsStep.titleStrong')}</strong>
       </h1>
       <p className="mb-7 max-w-[60ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
-        Switching these on now records operator preference in <code>config.json</code>. If the
-        matching plugin is not installed in this build, flipping the switch is intent-only and
-        causes no behavioural change.
+        <Trans i18nKey="pluginsStep.intro" ns="setup">
+          Switching these on now records operator preference in <code>config.json</code>. If the
+          matching plugin is not installed in this build, flipping the switch is intent-only and
+          causes no behavioural change.
+        </Trans>
       </p>
 
-      <PanelCard title="Plugin intents">
+      <PanelCard title={t('pluginsStep.panelTitle')}>
         <PluginRow
           id="admin_auth"
-          label="Admin authentication"
-          badge="intent only"
-          description="Records whether admin sign-in should be enforced once that plugin is available. Today the admin API still uses the trusted-network boundary."
+          label={t('pluginsStep.admin_auth.label')}
+          badge={t('pluginsStep.badge')}
+          description={t('pluginsStep.admin_auth.description')}
           checked={form.watch('plugins.admin_auth')}
           onChange={(v) => form.setValue('plugins.admin_auth', v, { shouldDirty: true })}
         />
         <PluginRow
           id="client_keys"
-          label="Client API keys"
-          badge="intent only"
-          description="Records whether per-caller `/v1/*` keys should be enforced once that plugin is available."
+          label={t('pluginsStep.client_keys.label')}
+          badge={t('pluginsStep.badge')}
+          description={t('pluginsStep.client_keys.description')}
           checked={form.watch('plugins.client_keys')}
           onChange={(v) => form.setValue('plugins.client_keys', v, { shouldDirty: true })}
         />
@@ -955,108 +1029,92 @@ function ReviewStep({
   commitError: unknown
   accountSkipped: boolean
 }) {
+  const { t } = useTranslation('setup')
+  const methodLabel =
+    authMethod === 'oauth_browser'
+      ? t('review.methodBrowser')
+      : authMethod === 'oauth_device'
+        ? t('review.methodDevice')
+        : t('review.methodImport')
   return (
     <>
       <h1 className="mb-3 max-w-[22ch]">
-        Land on disk, then <strong>serve traffic.</strong>
+        {t('review.titleLead')} <strong>{t('review.titleStrong')}</strong>
       </h1>
       <p className="mb-7 max-w-[60ch] text-[14px] leading-[1.65] text-[var(--text-dim)]">
-        Clicking commit runs the schema migration,{' '}
+        {t('review.introPrefix')}{' '}
         {accountSkipped ? (
-          <>
-            skips upstream-account seeding (add one in{' '}
-            <em className="not-italic text-[var(--accent)]">Admin → Accounts</em> to unblock{' '}
-            <code>/v1/*</code> traffic),
-          </>
+          t('review.branchSkip')
         ) : authMethod === 'api_key' ? (
-          <>inserts your API-key seed account,</>
+          t('review.branchApiKey')
         ) : (
           <>
-            finishes setup first, then hands you directly into the{' '}
-            <span className="text-[var(--accent)]">
-              {authMethod === 'oauth_browser'
-                ? 'browser OAuth'
-                : authMethod === 'oauth_device'
-                  ? 'device OAuth'
-                  : 'auth.json import'}
-            </span>{' '}
-            screen,
+            {t('review.branchOAuthPrefix')}{' '}
+            <span className="text-[var(--accent)]">{methodLabel}</span>{' '}
+            {t('review.branchOAuthSuffix')}
           </>
         )}{' '}
-        atomically writes <code>config.json</code>, and unlatches the setup gate. Takes a few
-        seconds.
+        {t('review.introSuffix')}
       </p>
 
-      <PanelCard title="Review" meta="ready to commit">
+      <PanelCard title={t('review.panelTitle')} meta={t('review.panelMeta')}>
         <dl className="grid gap-x-6 gap-y-2 py-1 sm:grid-cols-[minmax(0,180px)_1fr] sm:gap-y-3">
           <dt className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Driver
+            {t('review.driver')}
           </dt>
           <dd className="font-mono text-[12.5px] text-[var(--text)]">
             {form.getValues('db.driver')}
           </dd>
 
           <dt className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            DSN
+            {t('review.dsn')}
           </dt>
           <dd className="truncate font-mono text-[12.5px] text-[var(--text)]">
             {form.getValues('db.url')}
           </dd>
 
           <dt className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Account
+            {t('review.account')}
           </dt>
           <dd className="font-mono text-[12.5px] text-[var(--text)]">
             {accountSkipped ? (
-              <span className="text-[var(--warn)]">
-                — deferred · add in Admin → Accounts before /v1/* traffic
-              </span>
+              <span className="text-[var(--warn)]">{t('review.deferredShort')}</span>
             ) : authMethod === 'api_key' ? (
               <>
                 {form.getValues('account.name')}{' '}
-                <span className="text-[var(--text-muted)]">· provider openai</span>
+                <span className="text-[var(--text-muted)]">{t('review.providerOpenai')}</span>
               </>
             ) : (
               <span className="text-[var(--accent)]">
-                — deferred · continue with{' '}
-                {authMethod === 'oauth_browser'
-                  ? 'browser sign-in'
-                  : authMethod === 'oauth_device'
-                    ? 'device code'
-                    : 'auth.json import'}{' '}
-                immediately after commit
+                {t('review.deferredContinue', { method: methodLabel })}
               </span>
             )}
           </dd>
 
           <dt className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Auth method
+            {t('review.authMethod')}
           </dt>
           <dd className="font-mono text-[12.5px] text-[var(--text)]">
-            {accountSkipped ? 'skip for now' : authMethod === 'api_key' ? 'api_key' : authMethod}
+            {accountSkipped ? t('review.authSkip') : authMethod}
           </dd>
 
           <dt className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Admin auth
+            {t('review.adminAuth')}
           </dt>
           <dd className="text-[12.5px] text-[var(--text)]">
-            {form.getValues('plugins.admin_auth')
-              ? 'on (intent only — plugin not installed)'
-              : 'off'}
+            {form.getValues('plugins.admin_auth') ? t('review.onIntentOnly') : t('review.off')}
           </dd>
 
           <dt className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Client keys
+            {t('review.clientKeys')}
           </dt>
           <dd className="text-[12.5px] text-[var(--text)]">
-            {form.getValues('plugins.client_keys')
-              ? 'on (intent only — plugin not installed)'
-              : 'off'}
+            {form.getValues('plugins.client_keys') ? t('review.onIntentOnly') : t('review.off')}
           </dd>
         </dl>
         {commitError ? (
           <div className="mt-4">
-            <ErrorBanner error={commitError} title="Commit failed" />
+            <ErrorBanner error={commitError} title={t('review.commitFailedTitle')} />
           </div>
         ) : null}
       </PanelCard>

@@ -2,15 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, Pause, Play, RefreshCw, Settings } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-
 import { Canvas, PageIntro, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { i18n } from '@/i18n'
 import { api } from '@/lib/api-client'
+import { intlLocale } from '@/lib/intl'
 import { planTypeLabel } from '@/lib/plan-label'
-import { strings } from './list.strings'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'accounts')
+
 import { adminAccountsListQueryKey, invalidateAdminAccountQueries } from './query-keys'
 import { formatQuotaDetail } from './quota-format'
 
@@ -47,9 +53,10 @@ interface AccountsListPayload {
 
 type QuotaLane = 'primary' | 'secondary'
 
-const quotaNumberFormatter = new Intl.NumberFormat('en-US', {
-  maximumFractionDigits: 2,
-})
+// Constructed per call so the locale follows the active UI language.
+function quotaNumberFormatter(value: number): string {
+  return new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 2 }).format(value)
+}
 
 const pauseAccountButtonClassName =
   'border-[var(--line-3)] bg-[var(--panel)] text-[var(--text-muted)] [box-shadow:var(--shadow-btn)] hover:border-[var(--err)] hover:bg-[var(--err-soft)] hover:text-[var(--err)] focus-visible:border-[var(--err)] focus-visible:text-[var(--err)]'
@@ -58,6 +65,8 @@ const activateAccountButtonClassName =
   'border-[var(--line-3)] bg-[var(--panel)] text-[var(--text-muted)] [box-shadow:var(--shadow-btn)] hover:border-[var(--ok)] hover:bg-[var(--ok-soft)] hover:text-[var(--ok)] focus-visible:border-[var(--ok)] focus-visible:text-[var(--ok)]'
 
 export function AdminAccountsList() {
+  // Subscribes this subtree to languageChanged so module-t() helpers re-render.
+  useTranslation('accounts')
   const queryClient = useQueryClient()
   const [actionError, setActionError] = useState<unknown>(null)
   const query = useQuery({
@@ -73,11 +82,11 @@ export function AdminAccountsList() {
     },
     onSuccess: async (_data, accountID) => {
       await invalidateAdminAccountQueries(queryClient, accountID)
-      toast.success(strings.toasts.activateSuccess)
+      toast.success(t('list.toasts.activateSuccess'))
     },
     onError: (error) => {
       setActionError(error)
-      toast.error(strings.toasts.activateFailed)
+      toast.error(t('list.toasts.activateFailed'))
     },
   })
   const disableMutation = useMutation({
@@ -88,11 +97,11 @@ export function AdminAccountsList() {
     },
     onSuccess: async (_data, accountID) => {
       await invalidateAdminAccountQueries(queryClient, accountID)
-      toast.success(strings.toasts.disableSuccess)
+      toast.success(t('list.toasts.disableSuccess'))
     },
     onError: (error) => {
       setActionError(error)
-      toast.error(strings.toasts.disableFailed)
+      toast.error(t('list.toasts.disableFailed'))
     },
   })
 
@@ -100,15 +109,15 @@ export function AdminAccountsList() {
 
   return (
     <Canvas variant="wide">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('list.eyebrow')}>{t('list.stripe')}</Stripe>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h1 className="mb-3 max-w-[18ch] text-balance">{strings.title}</h1>
-          <PageIntro>{strings.intro}</PageIntro>
+          <h1 className="mb-3 max-w-[18ch] text-balance">{t('list.title')}</h1>
+          <PageIntro>{t('list.intro')}</PageIntro>
         </div>
         <Button asChild>
           <Link to="/admin/accounts/new">
-            {strings.actions.newAccount}
+            {t('list.actions.newAccount')}
             <ArrowRight />
           </Link>
         </Button>
@@ -117,16 +126,16 @@ export function AdminAccountsList() {
       {query.isError ? <ErrorBanner error={query.error} className="mb-4" /> : null}
       {actionError ? <ErrorBanner error={actionError} className="mb-4" /> : null}
 
-      <PanelCard title={strings.summaryTitle}>
+      <PanelCard title={t('list.summaryTitle')}>
         {query.isLoading ? (
           <div data-testid="accounts-list-loading" className="text-[13px] text-[var(--text-dim)]">
-            {strings.loading}
+            {t('list.loading')}
           </div>
         ) : null}
 
         {!query.isLoading && accounts.length === 0 ? (
           <div data-testid="accounts-list-empty" className="text-[13px] text-[var(--text-dim)]">
-            {strings.empty}
+            {t('empty')}
           </div>
         ) : null}
 
@@ -136,7 +145,7 @@ export function AdminAccountsList() {
               const showOAuthMetadata = account.auth_method !== 'api_key'
               const planLabel =
                 account.plan_type_label ??
-                (account.plan_type ? planTypeLabel(account.plan_type) : strings.emptyField)
+                (account.plan_type ? planTypeLabel(account.plan_type) : t('emptyField'))
               const quotaSnapshot = getQuotaSnapshot(account)
               const isActive = isActiveStatus(account.status)
               const isActivating =
@@ -156,7 +165,9 @@ export function AdminAccountsList() {
                       <div className="flex flex-wrap items-center gap-2">
                         {!showOAuthMetadata ? (
                           <Badge variant="outline" className="font-mono text-[11px] uppercase">
-                            {strings.authMethod[account.auth_method] ?? account.auth_method}
+                            {t(`authMethod.${account.auth_method}` as 'authMethod.api_key', {
+                              defaultValue: account.auth_method,
+                            })}
                           </Badge>
                         ) : null}
                         <AccountStatusBadge status={account.status} />
@@ -181,9 +192,11 @@ export function AdminAccountsList() {
                           disabled={isDisabling}
                           data-testid={`disable-account-${account.id}`}
                           aria-label={
-                            isDisabling ? strings.actions.disabling : strings.actions.disable
+                            isDisabling ? t('list.actions.disabling') : t('list.actions.disable')
                           }
-                          title={isDisabling ? strings.actions.disabling : strings.actions.disable}
+                          title={
+                            isDisabling ? t('list.actions.disabling') : t('list.actions.disable')
+                          }
                           className={pauseAccountButtonClassName}
                         >
                           <Pause />
@@ -197,10 +210,10 @@ export function AdminAccountsList() {
                           disabled={isActivating}
                           data-testid={`activate-account-${account.id}`}
                           aria-label={
-                            isActivating ? strings.actions.activating : strings.actions.activate
+                            isActivating ? t('list.actions.activating') : t('list.actions.activate')
                           }
                           title={
-                            isActivating ? strings.actions.activating : strings.actions.activate
+                            isActivating ? t('list.actions.activating') : t('list.actions.activate')
                           }
                           className={activateAccountButtonClassName}
                         >
@@ -212,8 +225,8 @@ export function AdminAccountsList() {
                           to="/admin/accounts/$accountId"
                           params={{ accountId: String(account.id) }}
                           data-testid={`account-detail-link-${account.id}`}
-                          aria-label={strings.actions.openDetail}
-                          title={strings.actions.openDetail}
+                          aria-label={t('list.actions.openDetail')}
+                          title={t('list.actions.openDetail')}
                         >
                           <Settings />
                         </Link>
@@ -233,7 +246,7 @@ export function AdminAccountsList() {
                         secondaryWindowSeconds={account.secondary_window_seconds}
                       />
                     ) : (
-                      <AccountFact label={strings.labels.baseURL} value={account.base_url} mono />
+                      <AccountFact label={t('list.labels.baseURL')} value={account.base_url} mono />
                     )}
                   </div>
                 </article>
@@ -265,16 +278,16 @@ function OAuthAccountFacts({
 }) {
   return (
     <>
-      <AccountFact label={strings.labels.plan} value={plan} />
+      <AccountFact label={t('list.labels.plan')} value={plan} />
       <div className="grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-3">
         <QuotaCell
-          label={strings.labels.primaryUsage}
+          label={t('list.labels.primaryUsage')}
           value={primaryPercent}
           resetAt={primaryResetAt}
           windowSeconds={primaryWindowSeconds}
         />
         <QuotaCell
-          label={strings.labels.secondaryUsage}
+          label={t('list.labels.secondaryUsage')}
           value={secondaryPercent}
           resetAt={secondaryResetAt}
           windowSeconds={secondaryWindowSeconds}
@@ -304,7 +317,7 @@ function AccountFact({
           mono ? 'font-mono' : '',
         ].join(' ')}
       >
-        {value || strings.emptyField}
+        {value || t('emptyField')}
       </div>
     </div>
   )
@@ -348,7 +361,7 @@ function AccountStatusBadge({ status }: { status: string }) {
       className="font-mono text-[11px] uppercase"
       data-testid={`account-status-${isActive ? 'active' : 'inactive'}`}
     >
-      {isActive ? strings.accountStatus.active : strings.accountStatus.inactive}
+      {isActive ? t('accountStatus.active') : t('accountStatus.inactive')}
     </Badge>
   )
 }
@@ -479,11 +492,11 @@ function findInRecord(source: Record<string, unknown>, keys: readonly string[]):
 
 function formatQuotaValue(value: unknown): string {
   if (value === null || value === undefined || value === '') {
-    return strings.emptyField
+    return t('emptyField')
   }
 
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? `${quotaNumberFormatter.format(value)}%` : strings.emptyField
+    return Number.isFinite(value) ? `${quotaNumberFormatter(value)}%` : t('emptyField')
   }
 
   if (typeof value === 'string') {
@@ -492,12 +505,12 @@ function formatQuotaValue(value: unknown): string {
 
   const source = asRecord(value)
   if (!source) {
-    return strings.emptyField
+    return t('emptyField')
   }
 
   const remaining = findInRecord(source, remainingKeys)
   if (remaining === value) {
-    return strings.emptyField
+    return t('emptyField')
   }
   return formatQuotaValue(remaining)
 }

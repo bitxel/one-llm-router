@@ -1,0 +1,60 @@
+{
+  "eyebrow": "可观测性",
+  "title": "仪表盘",
+  "intro": "通过路由器请求日志监控实时的账号容量、请求量、令牌构成、错误率与首字延迟。",
+  "errorTitle": "仪表盘不可用",
+  "loading": "加载中",
+  "emptyValue": "-",
+  "rangeTotal": "最近窗口",
+  "accountAll": "全部账号",
+  "noActiveAccounts": {
+    "title": "暂无活跃的上游账号",
+    "prefix": "在至少一个账号激活之前，路由处于阻塞状态。打开",
+    "link": "账号 -> 新建",
+    "suffix": " 来添加浏览器 OAuth、设备 OAuth、导入 auth.json 或创建 API 密钥账号。"
+  },
+  "labels": {
+    "range": "时间范围",
+    "account": "账号"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "editDashboard": "编辑仪表盘",
+    "hide": "隐藏 {{card}}",
+    "moveDown": "下移 {{card}}",
+    "moveUp": "上移 {{card}}",
+    "show": "显示 {{card}}"
+  },
+  "hidden": {
+    "title": "已隐藏卡片",
+    "itemMeta": "已隐藏",
+    "meta_other": "隐藏 {{count}} 张",
+    "meta_one": "隐藏 {{count}} 张"
+  },
+  "cards": {
+    "activeAccounts": {
+      "title": "活跃账号",
+      "shortTitle": "活跃账号",
+      "meta": "当前"
+    },
+    "requests": {
+      "title": "请求",
+      "shortTitle": "请求"
+    },
+    "tokens": {
+      "title": "令牌",
+      "shortTitle": "令牌",
+      "meta": "缓存 {{cached}} / 输入 {{nonCached}} / 输出 {{output}}"
+    },
+    "errorRate": {
+      "title": "错误率",
+      "shortTitle": "错误率",
+      "meta": "{{errors}} / {{total}} 次错误"
+    },
+    "ttft": {
+      "title": "TTFT",
+      "shortTitle": "TTFT",
+      "meta": "{{samples}} 个样本"
+    }
+  }
+}

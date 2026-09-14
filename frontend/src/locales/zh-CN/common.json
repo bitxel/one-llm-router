@@ -1,0 +1,104 @@
+{
+  "nav": {
+    "dashboard": "仪表盘",
+    "accounts": "账号",
+    "playground": "演练场",
+    "requests": "请求",
+    "clientKeys": "客户端密钥",
+    "observability": "可观测性",
+    "settings": "设置",
+    "planned": "规划中"
+  },
+  "sidebar": {
+    "adminPortal": "管理门户",
+    "docs": "文档",
+    "github": "github",
+    "expand": "展开侧边栏",
+    "collapse": "收起侧边栏",
+    "label": "管理导航"
+  },
+  "theme": {
+    "label": "主题",
+    "dark": "深色",
+    "light": "浅色"
+  },
+  "language": {
+    "label": "Language / 语言"
+  },
+  "shell": {
+    "healthy": "健康",
+    "degraded": "降级",
+    "unhealthy": "异常",
+    "ellipsis": "…",
+    "activeAccounts_one": "{{count}} 个活跃账号",
+    "activeAccounts_other": "{{count}} 个活跃账号"
+  },
+  "buildTag": {
+    "label": "build {{version}}"
+  },
+  "breadcrumb": {
+    "dashboard": "仪表盘",
+    "accounts": "账号",
+    "playground": "演练场",
+    "requests": "请求",
+    "settings": "设置"
+  },
+  "errorBanner": {
+    "requestFailed": "请求失败",
+    "correlationId": "关联 ID"
+  },
+  "routeError": {
+    "title": "出了点问题",
+    "body": "管理门户在渲染此页面时遇到意外错误。导航仍然可用——请从左侧选择其他分区，或重新加载此页面。"
+  },
+  "authMethods": {
+    "api_key": {
+      "title": "API 密钥",
+      "badge": "粘贴 OpenAI API 密钥"
+    },
+    "oauth_browser": {
+      "title": "OAuth 浏览器",
+      "badge": "在浏览器中使用 ChatGPT 登录"
+    },
+    "oauth_device": {
+      "title": "OAuth 设备码",
+      "badge": "无头环境？使用设备码"
+    },
+    "oauth_import": {
+      "title": "导入 auth.json",
+      "badge": "上传本地 ~/.codex/auth.json"
+    }
+  },
+  "probe": {
+    "msRtt": "毫秒往返",
+    "healthy": "健康",
+    "unreachable": "不可达"
+  },
+  "shortcuts": {
+    "title": "快捷键"
+  },
+  "stepper": {
+    "setupProgress": "安装进度"
+  },
+  "actions": {
+    "loading": "加载中",
+    "refresh": "刷新",
+    "copy": "复制",
+    "copied": "已复制",
+    "copyFailed": "复制失败",
+    "close": "关闭",
+    "retry": "重试",
+    "save": "保存更改",
+    "cancel": "取消",
+    "confirm": "确认",
+    "open": "打开",
+    "delete": "删除"
+  },
+  "emptyField": "—",
+  "jsonPreview": {
+    "modeLabel": "JSON 预览模式",
+    "beautify": "美化",
+    "raw": "原始",
+    "copy": "复制 JSON"
+  }
+}

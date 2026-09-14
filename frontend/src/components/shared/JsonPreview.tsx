@@ -1,5 +1,6 @@
 import { Clipboard } from 'lucide-react'
 import { Fragment, type ReactNode, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 
@@ -48,7 +49,7 @@ export function JsonPreview({
   preview,
   className,
   bodyClassName,
-  copyLabel = 'Copy JSON',
+  copyLabel,
   onCopy,
 }: {
   preview: JsonPreviewModel
@@ -57,6 +58,8 @@ export function JsonPreview({
   copyLabel?: string
   onCopy?: (value: string) => void
 }) {
+  const { t } = useTranslation('common')
+  const resolvedCopyLabel = copyLabel ?? t('jsonPreview.copy')
   const [mode, setMode] = useState<'beautify' | 'raw'>('beautify')
   const baseClass =
     'max-w-full overflow-auto p-3 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-[var(--text)] [overflow-wrap:anywhere]'
@@ -65,16 +68,20 @@ export function JsonPreview({
     <div className={className}>
       <div className="flex min-h-9 items-center justify-between gap-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--bg-2)_84%,var(--panel))] px-2 py-1">
         <div
-          aria-label="JSON preview mode"
+          aria-label={t('jsonPreview.modeLabel')}
           className="inline-flex items-center gap-1"
           role="tablist"
         >
           <JsonPreviewTab
             active={mode === 'beautify'}
-            label="Beautify"
+            label={t('jsonPreview.beautify')}
             onClick={() => setMode('beautify')}
           />
-          <JsonPreviewTab active={mode === 'raw'} label="Raw" onClick={() => setMode('raw')} />
+          <JsonPreviewTab
+            active={mode === 'raw'}
+            label={t('jsonPreview.raw')}
+            onClick={() => setMode('raw')}
+          />
         </div>
         {onCopy ? (
           <Button
@@ -82,8 +89,8 @@ export function JsonPreview({
             size="icon"
             variant="ghost"
             onClick={() => onCopy(content)}
-            aria-label={copyLabel}
-            title={copyLabel}
+            aria-label={resolvedCopyLabel}
+            title={resolvedCopyLabel}
             className="h-8 min-h-8 w-8 border-0 shadow-none sm:h-7 sm:min-h-7 sm:w-7"
           >
             <Clipboard />
@@ -109,7 +116,7 @@ function JsonPreviewTab({
   onClick,
 }: {
   active: boolean
-  label: 'Beautify' | 'Raw'
+  label: string
   onClick: () => void
 }) {
   return (

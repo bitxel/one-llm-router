@@ -7,11 +7,14 @@ import {
   type LucideIcon,
   MonitorSmartphone,
 } from 'lucide-react'
-
+import { useTranslation } from 'react-i18next'
 import { Canvas, Stripe } from '@/components/neo'
+import { i18n } from '@/i18n'
 import { ACCOUNT_AUTH_METHODS, type AccountAuthMethod } from '@/lib/account-auth-methods'
 
-import { strings } from './new-account-picker.strings'
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'accounts')
 
 interface AccountMethodCard {
   authMethod: AccountAuthMethod
@@ -40,17 +43,17 @@ const iconByMethod = {
 } as const satisfies Record<AccountAuthMethod, LucideIcon>
 
 const detailByMethod = {
-  api_key: strings.cards.apiKey.detail,
-  oauth_browser: strings.cards.oauthBrowser.detail,
-  oauth_device: strings.cards.oauthDevice.detail,
-  oauth_import: strings.cards.oauthImport.detail,
+  api_key: t('picker.cards.apiKey.detail'),
+  oauth_browser: t('picker.cards.oauthBrowser.detail'),
+  oauth_device: t('picker.cards.oauthDevice.detail'),
+  oauth_import: t('picker.cards.oauthImport.detail'),
 } as const satisfies Record<AccountAuthMethod, string>
 
 const titleByMethod = {
-  api_key: strings.cards.apiKey.title,
-  oauth_browser: strings.cards.oauthBrowser.title,
-  oauth_device: strings.cards.oauthDevice.title,
-  oauth_import: strings.cards.oauthImport.title,
+  api_key: t('picker.cards.apiKey.title'),
+  oauth_browser: t('picker.cards.oauthBrowser.title'),
+  oauth_device: t('picker.cards.oauthDevice.title'),
+  oauth_import: t('picker.cards.oauthImport.title'),
 } as const satisfies Record<AccountAuthMethod, string>
 
 const accountMethodCards: readonly AccountMethodCard[] = ACCOUNT_AUTH_METHODS.map((method) => ({
@@ -62,6 +65,8 @@ const accountMethodCards: readonly AccountMethodCard[] = ACCOUNT_AUTH_METHODS.ma
 }))
 
 export function AdminAccountsNewAccountPicker() {
+  // Subscribes this subtree to languageChanged so module-t() helpers re-render.
+  useTranslation('accounts')
   const navigate = useNavigate()
 
   function openRoute(card: AccountMethodCard) {
@@ -70,13 +75,13 @@ export function AdminAccountsNewAccountPicker() {
 
   return (
     <Canvas variant="wide">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('picker.eyebrow')}>{t('picker.stripe')}</Stripe>
       <div className="mb-8 max-w-[70ch]">
         <h1 className="mb-3 max-w-[18ch] text-balance">
-          {strings.titleLead} <strong>{strings.titleStrong}</strong>
+          {t('picker.titleLead')} <strong>{t('picker.titleStrong')}</strong>
         </h1>
         <p className="max-w-none whitespace-nowrap text-[14px] leading-[1.7] text-[var(--text-dim)]">
-          {strings.intro}
+          {t('picker.intro')}
         </p>
       </div>
 
@@ -117,7 +122,7 @@ export function AdminAccountsNewAccountPicker() {
                   {card.detail}
                 </span>
                 <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--accent)]">
-                  {strings.action.available}
+                  {t('picker.action.available')}
                 </span>
               </span>
             </button>

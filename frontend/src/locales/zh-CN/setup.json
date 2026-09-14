@@ -1,0 +1,193 @@
+{
+  "tag": {
+    "configuring": "配置中"
+  },
+  "steps": {
+    "welcome": "欢迎",
+    "database": "数据库",
+    "upstreamAccount": "上游账号",
+    "pluginIntents": "插件意向",
+    "commit": "提交"
+  },
+  "progress": "第 {{idx}} 步 / 共 05 步",
+  "actions": {
+    "back": "上一步",
+    "backTo": "返回{{step}}",
+    "skipForNow": "暂时跳过",
+    "toContinue": "继续",
+    "continue": "继续",
+    "testing": "测试中…",
+    "commitAndFinish": "提交并完成",
+    "committing": "提交中…"
+  },
+  "welcome": {
+    "srTitle": "欢迎使用 one-llm-router。",
+    "titleLead": "一个端点，",
+    "titleStrong": "通吃所有 Codex 客户端。",
+    "intro": "把你的 Codex 客户端集群指向这台路由器一次即可：它会汇聚上游账号、保持会话连续性，并记录每一次调用。安装不到两分钟，只有一个 <0>config.json</0>，不把密钥写进环境文件。",
+    "provideTitle": "你需要提供什么",
+    "provideMeta": "约 90 秒",
+    "storageLabel": "存储",
+    "storageText": "一个数据库——默认使用 SQLite，只需要一个可写目录。",
+    "upstreamLabel": "上游",
+    "upstreamText": "可选的首个上游接入。API 密钥可内联预置；浏览器 OAuth、设备 OAuth 与导入的 auth.json 会在安装完成后立即衔接。",
+    "pluginsLabel": "插件",
+    "pluginsText": "认证插件的初始意向——在本构建中全部保持关闭也完全是合理的默认值。"
+  },
+  "database": {
+    "titleLead": "给路由器一个",
+    "titleStrong": "存放台账的地方。",
+    "intro": "每一条被路由的请求、每一次运维变更、每一个上游账号都存放在同一个 OLTP 引擎中。选定一次即可；schema 可以迁移，但引擎选择并非不可逆转。",
+    "engineGroupLabel": "数据库引擎",
+    "connectionTitle": "连接",
+    "driverMeta": "driver = {{driver}}",
+    "dsnLabel": "DSN",
+    "dsnHintSqlite": "文件路径、<0>file:</0> URI 或完整的驱动 DSN。",
+    "dsnHintPostgres": "Postgres DSN，例如 <0>postgres://user:pw@host:5432/db</0>。",
+    "dsnHintMysql": "MySQL DSN，例如 <0>user:pw@tcp(host:3306)/db</0>。",
+    "test": "测试",
+    "testing": "测试中…",
+    "probeErrorLabel": "error",
+    "probeVersionLabel": "version",
+    "probeDriverLabel": "driver",
+    "probeSchemaLabel": "schema",
+    "probeSchemaClean": "clean",
+    "probeMigrationsPending": "迁移将在提交时执行",
+    "probeFailedHint": "探测失败",
+    "testFailedTitle": "数据库测试失败",
+    "schemaMigrationTitle": "Schema 迁移",
+    "schemaMigrationHint": "启动时自动应用。你随时可以从 CLI 重新执行。",
+    "autoApply": "启动时自动应用 ·",
+    "envOverrideTitle": "环境变量覆盖",
+    "envOverrideMeta": "未生效——未设置任何变量",
+    "envUnset": "（未设置）"
+  },
+  "engines": {
+    "sqlite3": {
+      "num": "01 — 默认",
+      "title": "SQLite",
+      "pitch": "单文件落盘，无守护进程、无凭据。开箱即启用 WAL 与外键约束。最佳的起步选择。"
+    },
+    "postgres": {
+      "num": "02 — 规模",
+      "title": "PostgreSQL",
+      "pitch": "复用团队的 Postgres：备份、复制、可观测性。所有迁移都是幂等且可评审的。"
+    },
+    "mysql": {
+      "num": "03 — 对等",
+      "title": "MySQL",
+      "pitch": "DATETIME(6) 提供微秒级时间戳。迁移、连接池与索引和 Postgres 功能对等。"
+    }
+  },
+  "account": {
+    "skipped": {
+      "titleLead": "上游账号预置",
+      "titleStrong": "已延后。",
+      "intro": "你选择跳过上游账号注册。提交时路由器仍会迁移数据库并写入 <0>config.json</0>；只是你需要在 <2>/v1/*</2> 流量接入前，到 <1>管理 → 账号</1> 添加至少一个账号。该页面支持浏览器 OAuth、设备 OAuth 与 <3>auth.json</3> 导入接入。",
+      "body": "在存在活跃账号之前，每次 <0>/v1/*</0> 调用都会返回 <1>503 no_available_account</1>，且管理仪表盘会把路由器标记为 <2>degraded</2>。你随时可以从管理门户继续该流程。",
+      "panelTitle": "已跳过",
+      "panelMeta": "磁盘上没有密钥",
+      "chooseInstead": "改为选择一种认证方式"
+    },
+    "titleLead": "选择你的第一条",
+    "titleStrong": "上游路径。",
+    "intro": "安装向导与 <0>管理 → 账号</0> 现在提供相同的四种认证方式。API 密钥可在提交时内联预置；浏览器 OAuth、设备 OAuth 与 <1>auth.json</1> 导入会在安装落地后立即继续。",
+    "fieldsetLabel": "上游认证方式",
+    "selected": "已选择",
+    "choose": "选择",
+    "methodDetails": {
+      "api_key": "在安装时内联预置首个上游。已有密钥时，这是让路由器最快就绪的路径。",
+      "oauth_browser": "先提交安装，然后立即进入「管理 → 账号」下的 003 浏览器登录流程。",
+      "oauth_device": "最适合 SSH 或远程主机。先提交安装，然后打开设备码接入页面。",
+      "oauth_import": "完成安装后直接进入导入页面，移植现有的 Codex CLI 会话。"
+    },
+    "form": {
+      "nickname": "昵称",
+      "nicknameHint": "1–64 个字符。",
+      "provider": "提供商",
+      "providerHint": "安装预置保持仅支持 OpenAI。浏览器、设备码与导入在提交后仍复用同一提供商。",
+      "apiKey": "API 密钥",
+      "apiKeyHint": "本构建中以明文原样存入 upstream_accounts；静态加密将在后续规范中随 key-vault 插件提供。",
+      "baseURL": "Base URL",
+      "baseURLOptional": "可选",
+      "baseURLHint": "用于 Azure OpenAI 或兼容代理的覆盖地址。留空使用默认值。"
+    },
+    "handoff": {
+      "panelTitle": "提交后的衔接",
+      "panelMeta": "同一路由器，无需第二个向导",
+      "oauth_browser": "安装将先完成，然后打开「管理 → 账号」下的浏览器 OAuth 页面，在那里启动 PKCE 登录流程。",
+      "oauth_device": "安装将先完成，然后打开「管理 → 账号」下的设备码页面，你可以在第二台浏览器上批准。",
+      "oauth_import": "安装将先完成，然后打开「管理 → 账号」下的导入页面，上传你本地的 auth.json。",
+      "payloadTitle": "提交载荷",
+      "payloadBody": "此模式会省略 <0>first_account</0>。安装仍会先写入 <1>config.json</1> 并执行迁移；提交完成后立即在对应的 003 路由上继续创建账号。"
+    }
+  },
+  "validation": {
+    "dsnRequired": "DSN 不能为空",
+    "nameRequired": "昵称不能为空",
+    "nameMax": "昵称不能超过 64 个字符",
+    "apiKeyRequired": "API 密钥不能为空"
+  },
+  "pluginsStep": {
+    "panelTitle": "插件意向",
+    "titleLead": "设置插件",
+    "titleStrong": "意向。",
+    "intro": "现在打开这些开关只会在 <0>config.json</0> 中记录运维偏好。如果本构建未安装对应插件，拨动开关仅表示意向，不会引起行为变化。",
+    "badge": "仅意向",
+    "admin_auth": {
+      "label": "管理员认证",
+      "description": "记录该插件可用后是否强制管理员登录。当前管理 API 仍使用可信网络边界。"
+    },
+    "client_keys": {
+      "label": "客户端 API 密钥",
+      "description": "记录该插件可用后是否强制校验按调用方划分的 /v1/* 密钥。"
+    }
+  },
+  "review": {
+    "titleLead": "落盘之后，",
+    "titleStrong": "即刻服务流量。",
+    "introPrefix": "点击提交将执行 schema 迁移，",
+    "introSuffix": "原子化写入 config.json，并解除 setup 门闩。只需几秒钟。",
+    "branchSkip": "跳过上游账号预置（在「管理 → 账号」中添加一个即可放行 /v1/* 流量），",
+    "branchApiKey": "插入你的 API 密钥预置账号，",
+    "branchOAuthPrefix": "先完成安装，然后直接进入",
+    "branchOAuthSuffix": "页面，",
+    "methodBrowser": "浏览器 OAuth",
+    "methodDevice": "设备 OAuth",
+    "methodImport": "auth.json 导入",
+    "browserSignIn": "浏览器登录",
+    "deviceCode": "设备码",
+    "importAuth": "auth.json 导入",
+    "panelTitle": "确认",
+    "panelMeta": "可以提交",
+    "driver": "驱动",
+    "dsn": "DSN",
+    "account": "账号",
+    "authMethod": "认证方式",
+    "adminAuth": "管理员认证",
+    "clientKeys": "客户端密钥",
+    "deferredShort": "—— 已延后 · 请在 /v1/* 流量之前到「管理 → 账号」中添加",
+    "providerOpenai": "· 提供商 openai",
+    "deferredContinue": "—— 已延后 · 提交后立即以 {{method}} 继续",
+    "onIntentOnly": "开（仅意向——插件未安装）",
+    "off": "关",
+    "authSkip": "暂时跳过",
+    "commitFailedTitle": "提交失败"
+  },
+  "rail": {
+    "installerSection": "安装器",
+    "notesSection": "运维提示",
+    "noteImage": {
+      "title": "同一镜像要部署两次？",
+      "body": "启动前设置 <0>ROUTER_DB_URL</0>，路由器将完全跳过此向导——同一二进制，不同环境。"
+    },
+    "noteKeys": {
+      "title": "密钥在向导期间绝不落盘",
+      "body": "刷新即清空；DSN 与 API 密钥只会在你点击<0>提交并完成</0>后写入磁盘。"
+    },
+    "shortcutNext": "下一步",
+    "shortcutBack": "上一步",
+    "shortcutTestDB": "测试数据库",
+    "shortcutTheme": "切换主题"
+  }
+}

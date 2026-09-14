@@ -1,4 +1,15 @@
-export function formatDeadline(value: string | null | undefined, now = new Date()): string {
+import { intlLocale } from '@/lib/intl'
+
+// Compact quota date rendering. The locale follows the active UI
+// language by default; tests pass an explicit locale for determinism.
+// Window durations ("2h 30m") stay in compact metric units — a
+// monitoring-UI convention, not translatable copy.
+
+export function formatDeadline(
+  value: string | null | undefined,
+  now = new Date(),
+  locale: string = intlLocale(),
+): string {
   if (!value) {
     return ''
   }
@@ -6,7 +17,7 @@ export function formatDeadline(value: string | null | undefined, now = new Date(
   if (Number.isNaN(date.getTime())) {
     return value
   }
-  const time = new Intl.DateTimeFormat('en-US', {
+  const time = new Intl.DateTimeFormat(locale, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -16,7 +27,7 @@ export function formatDeadline(value: string | null | undefined, now = new Date(
   if (withinDay) {
     return time
   }
-  const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+  const day = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(date)
   return `${day} ${time}`
 }
 
@@ -47,8 +58,9 @@ export function formatQuotaDetail(
   resetAt: string | null | undefined,
   windowSeconds: number | null | undefined,
   now = new Date(),
+  locale: string = intlLocale(),
 ): string {
-  const time = resetAt ? formatDeadline(resetAt, now) : ''
+  const time = resetAt ? formatDeadline(resetAt, now, locale) : ''
   const window = windowSeconds ? formatWindowSeconds(windowSeconds) : ''
   if (time && window) {
     return `${time} / ${window}`

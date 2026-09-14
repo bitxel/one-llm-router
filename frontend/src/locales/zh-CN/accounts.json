@@ -1,0 +1,424 @@
+{
+  "accountStatus": {
+    "active": "活跃",
+    "inactive": "未激活"
+  },
+  "authMethod": {
+    "api_key": "API 密钥",
+    "oauth_browser": "OAuth 浏览器",
+    "oauth_device": "OAuth 设备码",
+    "oauth_import": "OAuth 导入"
+  },
+  "list": {
+    "eyebrow": "账号总览",
+    "title": "全部账号",
+    "intro": "OAuth 卡片展示邮箱、套餐标签，以及观测到的主/次用量与窗口重置时间。",
+    "loading": "正在加载账号",
+    "empty": "尚未注册任何账号。",
+    "summaryTitle": "已注册账号",
+    "actions": {
+      "newAccount": "添加账号",
+      "openDetail": "打开详情",
+      "activate": "激活",
+      "activating": "激活中…",
+      "disable": "停用",
+      "disabling": "停用中…"
+    },
+    "labels": {
+      "authMethod": "认证方式",
+      "status": "状态",
+      "email": "邮箱",
+      "plan": "套餐",
+      "chatgptAccountID": "ChatGPT 账号",
+      "lastRefresh": "上次刷新",
+      "accessExpiresAt": "访问凭据过期时间",
+      "baseURL": "Base URL",
+      "primaryUsage": "主用量",
+      "secondaryUsage": "次用量"
+    },
+    "stripe": "账号",
+    "toasts": {
+      "activateSuccess": "账号已激活",
+      "activateFailed": "激活该账号失败",
+      "disableSuccess": "账号已停用",
+      "disableFailed": "停用该账号失败"
+    }
+  },
+  "detail": {
+    "eyebrow": "账号详情",
+    "parentTitle": "账号",
+    "title": "账号详情",
+    "subtitle": "查看账号元数据、确认凭据模式，并为 OAuth 账号导出 Codex 兼容的 auth.json——全程不在界面中展示令牌内容。",
+    "loading": "正在加载账号",
+    "invalidIdTitle": "账号 ID 无效",
+    "invalidIdDetail": "路由参数不是正整数，因此未发送详情查询。",
+    "summaryTitle": "账号概要",
+    "metadataTitle": "OAuth 元数据",
+    "exportTitle": "导出凭据",
+    "activateTitle": "激活账号",
+    "disableTitle": "停用账号",
+    "deleteTitle": "删除账号",
+    "deleteHint": "将该账号从管理列表中删除，并将其移出路由与演练场的可用范围。",
+    "actions": {
+      "exporting": "正在准备 auth.json…",
+      "export": "导出 auth.json",
+      "activate": "激活账号",
+      "activating": "正在激活账号…",
+      "disable": "停用账号",
+      "disabling": "正在停用账号…",
+      "delete": "删除账号",
+      "confirmDelete": "确认删除",
+      "deleting": "正在删除账号…"
+    },
+    "labels": {
+      "id": "账号 ID",
+      "name": "名称",
+      "provider": "提供商",
+      "authMethod": "认证方式",
+      "status": "状态",
+      "baseURL": "Base URL",
+      "email": "邮箱",
+      "plan": "套餐",
+      "primaryUsage": "主用量",
+      "secondaryUsage": "次用量",
+      "chatgptAccountID": "ChatGPT 账号",
+      "lastRefresh": "上次刷新",
+      "accessExpiresAt": "访问凭据过期时间",
+      "quotaUpdatedAt": "用量刷新时间"
+    },
+    "modelsTitle": "模型",
+    "modelsLoading": "正在加载模型…",
+    "modelsEmpty": "尚未配置模型。可以手动添加，也可以从上游刷新。",
+    "modelIDLabel": "模型 ID",
+    "modelSourceLabel": "来源",
+    "addModelPlaceholder": "例如 gpt-4o",
+    "addModelButton": "添加",
+    "addingModel": "添加中…",
+    "refreshModelsButton": "从上游刷新",
+    "refreshingModels": "刷新中…",
+    "removeModelTitle": "移除",
+    "proxyTitle": "出站代理",
+    "proxyHint": "启用后，该账号将通过设置中配置的全局代理拨号上游。若该代理之后被移除，此账号的请求会快速失败，而不是静默改为直连。停用时始终直连。",
+    "proxyEnableLabel": "使用全局代理",
+    "proxySetFailed": "更新出站代理开关失败",
+    "toasts": {
+      "exportSuccess": "auth.json 下载已开始",
+      "exportFailed": "导出 auth.json 失败",
+      "activateSuccess": "账号已激活",
+      "activateFailed": "激活该账号失败",
+      "disableSuccess": "账号已停用",
+      "disableFailed": "停用该账号失败",
+      "deleteSuccess": "账号已删除",
+      "deleteFailed": "删除该账号失败",
+      "modelAddSuccess": "模型已添加",
+      "modelAddFailed": "添加模型失败",
+      "modelRemoveSuccess": "模型已移除",
+      "modelRemoveFailed": "移除模型失败",
+      "modelRefreshSuccess": "已从上游刷新模型",
+      "modelRefreshFailed": "刷新模型失败"
+    }
+  },
+  "detailEdit": {
+    "panelTitle": "编辑 API 密钥账号",
+    "panelHint": "更新昵称、轮换 API 密钥、修改端点覆盖或调整能力。OAuth 账号不在此处编辑。",
+    "labels": {
+      "name": "昵称",
+      "apiKey": "API 密钥",
+      "baseURL": "Base URL",
+      "capabilities": "能力"
+    },
+    "hints": {
+      "name": "1-64 个字符。",
+      "apiKey": "留空表示保留当前密钥。若填写则为 1-256 个字符。",
+      "baseURL": "可选的 OpenAI 兼容端点覆盖。留空即清除。",
+      "capabilities": "该账号可处理的 API 操作。留空表示无。"
+    },
+    "placeholders": {
+      "baseURL": "https://api.openai.com"
+    },
+    "actions": {
+      "save": "保存更改",
+      "saving": "保存中…"
+    },
+    "validation": {
+      "nameRequired": "昵称不能为空",
+      "nameMax": "昵称不能超过 64 个字符",
+      "apiKeyMax": "API 密钥须为 1-256 个字符",
+      "baseURLMax": "base_url 不能超过 256 个字符",
+      "baseURLShape": "base_url 必须是不含查询串与片段的绝对 http(s) URL"
+    },
+    "toasts": {
+      "updateSuccess": "账号已更新",
+      "updateFailed": "更新账号失败"
+    }
+  },
+  "picker": {
+    "eyebrow": "新建账号",
+    "stripe": "账号",
+    "titleLead": "添加一个",
+    "titleStrong": "账号",
+    "intro": "选择路由器连接 LLM 的方式。本地使用浏览器登录；路由器部署在服务器上时使用设备码。",
+    "action": {
+      "available": "选择"
+    },
+    "cards": {
+      "apiKey": {
+        "title": "API 密钥",
+        "detail": "添加 OpenAI"
+      },
+      "oauthBrowser": {
+        "title": "Codex 浏览器登录",
+        "detail": "在此浏览器中使用你的 ChatGPT 订阅登录。"
+      },
+      "oauthDevice": {
+        "title": "Codex 设备码",
+        "detail": "当本服务器无法完成浏览器登录时，用另一台设备登录。"
+      },
+      "oauthImport": {
+        "title": "导入 Codex auth.json",
+        "detail": "从本地客户端导入现有的 Codex auth.json 文件。"
+      }
+    }
+  },
+  "newApiKey": {
+    "eyebrow": "API 密钥",
+    "stripe": "账号",
+    "titleLead": "注册一个",
+    "titleStrong": "API 密钥账号。",
+    "intro": "粘贴 OpenAI API 密钥以创建新的上游账号。密钥会被保存，并用于将请求路由到 OpenAI 兼容 API。",
+    "panelTitle": "API 密钥账号",
+    "loading": "正在创建账号...",
+    "labels": {
+      "name": "昵称",
+      "provider": "提供商",
+      "apiKey": "API 密钥",
+      "baseURL": "Base URL"
+    },
+    "hints": {
+      "name": "1-64 个字符。",
+      "provider": "003 保持 API 密钥直接创建仅支持 OpenAI。",
+      "apiKey": "1-256 个字符。以明文原样存入 upstream_accounts；静态加密推迟到 key-vault 插件。",
+      "baseURL": "可选的 OpenAI 兼容端点覆盖。留空使用默认值。"
+    },
+    "placeholders": {
+      "baseURL": "https://api.openai.com"
+    },
+    "actions": {
+      "create": "创建 API 密钥账号"
+    },
+    "validation": {
+      "nameRequired": "昵称不能为空",
+      "nameMax": "昵称不能超过 64 个字符",
+      "apiKeyRequired": "API 密钥不能为空",
+      "apiKeyMax": "API 密钥须为 1-256 个字符",
+      "baseURLMax": "base_url 不能超过 256 个字符",
+      "baseURLShape": "base_url 必须是不含查询串与片段的绝对 http(s) URL",
+      "missingAccountID": "创建账号响应缺少账号 ID"
+    },
+    "toasts": {
+      "createSuccess": "API 密钥账号已创建",
+      "createFailed": "创建 API 密钥账号失败"
+    },
+    "errorTitle": "创建 API 密钥账号失败"
+  },
+  "newImport": {
+    "eyebrow": "导入 auth.json",
+    "stripe": "账号",
+    "titleLead": "导入 Codex",
+    "titleStrong": "auth.json。",
+    "intro": "路由器接受 Codex 兼容的 auth.json 文件或粘贴的 JSON 文本，从内嵌 ID 令牌推导账号元数据，并创建 oauth_import 账号——全程不在界面中渲染令牌字节。",
+    "panelTitle": "导入来源",
+    "panelMeta": "文件或粘贴 JSON",
+    "loading": "正在导入 auth.json…",
+    "labels": {
+      "file": "auth.json 文件",
+      "paste": "粘贴 auth.json JSON",
+      "source": "来源"
+    },
+    "actions": {
+      "fileMode": "文件",
+      "pasteMode": "粘贴",
+      "upload": "导入 auth.json"
+    },
+    "hints": {
+      "file": "从本机选择 Codex 兼容的 auth.json 文件。浏览器在本地读取该文件并提交原始 JSON 文本。",
+      "paste": "粘贴完整的 Codex 兼容 auth.json 内容。浏览器将其作为 JSON 文本发送；提交后绝不渲染令牌字节。"
+    },
+    "validation": {
+      "fileRequired": "请先选择 auth.json 文件再导入。",
+      "pasteRequired": "请先粘贴 auth.json 内容再导入。"
+    },
+    "toasts": {
+      "importSuccess": "auth.json 已导入",
+      "importFailed": "导入 auth.json 失败"
+    }
+  },
+  "newOauth": {
+    "eyebrow": "浏览器 OAuth",
+    "stripe": "账号",
+    "titleLead": "添加 ChatGPT OAuth",
+    "titleStrong": "账号",
+    "intro": "打开一个 ChatGPT 登录标签页。如果浏览器无法返回本路由器，请在下方粘贴 localhost 回调 URL。",
+    "panel": {
+      "idle": "浏览器 OAuth",
+      "pending": "流程进行中",
+      "conflict": "已有流程在进行",
+      "failed": "流程失败",
+      "ready": "就绪"
+    },
+    "badges": {
+      "pasteOnly": "仅粘贴模式——监听器不可用",
+      "failed": "error"
+    },
+    "fields": {
+      "browserActions": {
+        "label": "浏览器标签页",
+        "hint": "现在打开 ChatGPT 登录标签页。如果浏览器拦截了弹窗，可在此重新打开。"
+      },
+      "callback": {
+        "label": "粘贴回调 URL",
+        "hint": "从浏览器地址栏粘贴完整的 localhost 回调 URL。原始 URL 默认保持隐藏。",
+        "placeholder": "http://localhost:1455/auth/callback?code=...&state=..."
+      },
+      "flow": {
+        "label": "进行中的流程",
+        "hint": "每个路由器实例同时只能有一个 OAuth 流程。"
+      },
+      "flowStatus": {
+        "label": "流程状态",
+        "hint": "此浏览器流程同时接受自动回调与手动粘贴。"
+      }
+    },
+    "actions": {
+      "start": "开始浏览器登录",
+      "openAgain": "打开登录标签页",
+      "openPending": "在浏览器中打开",
+      "submitCallback": "提交回调 URL",
+      "cancelPending": "取消流程",
+      "startAgain": "重新开始"
+    },
+    "status": {
+      "browserMethod": "浏览器 OAuth",
+      "browserMethodDetail": "路由器打开一个登录流程，并接受先完成的任一回调通道。",
+      "expiresAt": "过期时间"
+    },
+    "callbackSummary": {
+      "title": "回调摘要",
+      "invalid": "无法解析的 URL",
+      "codePresent": "code 存在",
+      "errorPresent": "error 存在",
+      "codeMissing": "code 缺失",
+      "statePresent": "state 存在",
+      "stateMissing": "state 缺失"
+    },
+    "validation": {
+      "callbackRequired": "请粘贴回调 URL 以继续。"
+    },
+    "err": {
+      "oauth_flow_in_progress": "已有流程在进行——请先完成或取消。",
+      "oauth_state_mismatch": "状态不匹配——请粘贴当前登录页最新的回调 URL。",
+      "invalid_callback_url": "粘贴的回调 URL 对当前流程无效。",
+      "no_flow_in_progress": "当前没有进行中的 OAuth 流程——请先发起新的浏览器登录。",
+      "oauth_invalid_grant": "OpenAI 拒绝了该流程的授权码。",
+      "oauth_upstream_error": "OpenAI 拒绝了该回调。",
+      "oauth_internal_error": "路由器发生 OAuth 内部错误。",
+      "oauth_store_failed": "路由器无法保存该 OAuth 账号。",
+      "transport_error": "请求未能正常到达路由器。",
+      "default": "路由器拒绝了该请求。"
+    },
+    "callbackReason": {
+      "url_prefix_mismatch": "回调 URL 必须以 http://localhost:1455-1458/auth/callback 开头。",
+      "missing_code_and_error": "回调 URL 同时缺少 code 与 error 查询参数。"
+    },
+    "conflict": {
+      "detail": "每个路由器实例同时只能有一个 OAuth 流程。请先取消进行中的流程，再开始新的浏览器登录。"
+    },
+    "terminal": {
+      "defaultTitle": "流程以错误结束。",
+      "defaultDetail": "查看提供商错误后，重新发起一次全新的浏览器登录。终态错误后回调输入框保持隐藏。",
+      "restartHint": "从全新流程重新开始。路由器绝不复用已消费的回调 URL。"
+    },
+    "toasts": {
+      "popupBlocked": "登录标签页被浏览器拦截。请使用\"打开登录标签页\"重试。",
+      "flowExpired": "流程已过期——请重新开始。",
+      "flowCancelled": "流程已取消——准备好后随时重新开始。"
+    }
+  },
+  "newOauthDevice": {
+    "eyebrow": "设备 OAuth",
+    "stripe": "账号",
+    "titleLead": "使用 Codex",
+    "titleStrong": "设备码登录",
+    "intro": "当 localhost 回调不可用时使用此方式。打开验证页面并输入设备码，批准后本页面将自动继续。",
+    "panel": {
+      "code": "设备码",
+      "pending": "设备批准",
+      "blocked": "流程被阻塞",
+      "unavailable": "设备流程不可用",
+      "failed": "流程已结束"
+    },
+    "fields": {
+      "userCode": {
+        "label": "设备码",
+        "hint": "在验证页面上输入此码。"
+      },
+      "verificationURL": {
+        "label": "打开验证页面",
+        "hint": "在提供商页面上批准此路由器会话。"
+      },
+      "countdown": {
+        "label": "剩余有效期",
+        "hint": ""
+      },
+      "flow": {
+        "label": "进行中的流程",
+        "hint": "每个路由器实例同时只能有一个 OAuth 流程。取消会清空当前的内存槽位。"
+      }
+    },
+    "actions": {
+      "openVerification": "打开验证页面",
+      "copyCode": "复制设备码",
+      "copyURL": "复制 URL",
+      "copied": "已复制",
+      "cancelPending": "取消进行中的流程",
+      "restart": "重启设备流程",
+      "tryBrowser": "改用浏览器登录"
+    },
+    "status": {
+      "starting": "正在启动设备流程…",
+      "pending": "等待中",
+      "success": "已登录——正在跳转…",
+      "expired": "流程已过期——请重启",
+      "cancelled": "已取消",
+      "denied": "批准被拒绝",
+      "failed": "流程失败"
+    },
+    "err": {
+      "oauth_flow_in_progress": "已有流程在进行——请先完成或取消。",
+      "device_auth_unavailable": "该账号无法使用设备码流程——请改用浏览器登录。",
+      "invalid_oauth_provider": "该路由不支持所请求的 OAuth 提供商。",
+      "oauth_upstream_error": "OpenAI 拒绝了该设备码请求。",
+      "oauth_internal_error": "路由器发生 OAuth 内部错误。",
+      "oauth_store_failed": "路由器无法保存该 OAuth 账号。",
+      "transport_error": "请求未能正常到达路由器。",
+      "default": "路由器拒绝了该请求。"
+    },
+    "toasts": {
+      "flowExpired": "流程已过期——准备好后重新开始。",
+      "flowCancelled": "流程已取消。",
+      "copyFailed": "写入剪贴板失败。"
+    },
+    "labels": {
+      "userCode": "设备码",
+      "copyCode": "复制设备码",
+      "copyURL": "复制 URL",
+      "conflictMethod": "方式",
+      "conflictFlow": "流程",
+      "conflictExpires": "过期"
+    },
+    "countdownExpired": "已过期",
+    "countdownAwaitingServer": "等待服务器…"
+  },
+  "emptyField": "—",
+  "empty": "—"
+}

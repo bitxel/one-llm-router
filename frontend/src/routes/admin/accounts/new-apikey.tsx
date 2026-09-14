@@ -3,35 +3,44 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { type SubmitHandler, useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
-
 import { Canvas, Field, PanelCard, Stripe } from '@/components/neo'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { i18n } from '@/i18n'
 import { BASE_URL_MAX_LEN, CAPABILITY_OPTIONS, isValidBaseURL } from '@/lib/account-form'
 import { api } from '@/lib/api-client'
-import { strings } from './new-apikey.strings'
+import { tDynamic } from '@/lib/error-message'
+
+// Namespace-fixed translator; the language resolves at call time so
+// module-scope helpers stay reactive to language switches.
+const t = i18n.getFixedT(null, 'accounts')
+
 import { invalidateAdminAccountQueries } from './query-keys'
 
 const APIKeyAccountSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, strings.validation.nameRequired)
-    .max(64, strings.validation.nameMax),
+    .min(1, 'accounts:newApiKey.validation.nameRequired')
+    .max(64, 'accounts:newApiKey.validation.nameMax'),
   api_key: z
     .string()
     .trim()
-    .min(1, strings.validation.apiKeyRequired)
-    .max(256, strings.validation.apiKeyMax),
+    .min(1, 'accounts:newApiKey.validation.apiKeyRequired')
+    .max(256, 'accounts:newApiKey.validation.apiKeyMax'),
   base_url: z
     .string()
     .trim()
-    .max(BASE_URL_MAX_LEN, strings.validation.baseURLMax)
-    .refine((value) => value === '' || isValidBaseURL(value), strings.validation.baseURLShape),
+    .max(BASE_URL_MAX_LEN, 'accounts:newApiKey.validation.baseURLMax')
+    .refine(
+      (value) => value === '' || isValidBaseURL(value),
+      'accounts:newApiKey.validation.baseURLShape',
+    ),
   capabilities: z.array(z.string()).default([]),
 })
 
@@ -48,6 +57,8 @@ interface CreatedAccount {
 }
 
 export function AdminAccountsNewAPIKey() {
+  // Subscribes this subtree to languageChanged so module-t() helpers re-render.
+  useTranslation('accounts')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [screenError, setScreenError] = useState<unknown>(null)
@@ -74,39 +85,43 @@ export function AdminAccountsNewAPIKey() {
         capabilities: values.capabilities.length > 0 ? values.capabilities : undefined,
       })
       if (!Number.isInteger(account.id) || account.id <= 0) {
-        throw new Error(strings.validation.missingAccountID)
+        throw new Error(t('newApiKey.validation.missingAccountID'))
       }
       await invalidateAdminAccountQueries(queryClient, account.id)
-      toast.success(strings.toasts.createSuccess)
+      toast.success(t('newApiKey.toasts.createSuccess'))
       await navigate({
         to: '/admin/accounts/$accountId',
         params: { accountId: String(account.id) },
       })
     } catch (error) {
       setScreenError(error)
-      toast.error(strings.toasts.createFailed)
+      toast.error(t('newApiKey.toasts.createFailed'))
     }
   }
 
   return (
     <Canvas variant="narrow">
-      <Stripe eyebrow={strings.eyebrow}>{strings.stripe}</Stripe>
+      <Stripe eyebrow={t('newApiKey.eyebrow')}>{t('newApiKey.stripe')}</Stripe>
       <div className="mb-8 max-w-[70ch]">
         <h1 className="mb-3 max-w-[18ch] text-balance">
-          {strings.titleLead} <strong>{strings.titleStrong}</strong>
+          {t('newApiKey.titleLead')} <strong>{t('newApiKey.titleStrong')}</strong>
         </h1>
         <p className="max-w-[64ch] text-[14px] leading-[1.7] text-[var(--text-dim)]">
-          {strings.intro}
+          {t('newApiKey.intro')}
         </p>
       </div>
 
       {screenError ? (
-        <ErrorBanner error={screenError} title="API-key account creation failed" className="mb-4" />
+        <ErrorBanner error={screenError} title={t('newApiKey.errorTitle')} className="mb-4" />
       ) : null}
 
       <form onSubmit={form.handleSubmit(submit)} data-testid="apikey-create-form">
-        <PanelCard title={strings.panelTitle}>
-          <Field htmlFor="apikey-name" label={strings.labels.name} hint={strings.hints.name}>
+        <PanelCard title={t('newApiKey.panelTitle')}>
+          <Field
+            htmlFor="apikey-name"
+            label={t('newApiKey.labels.name')}
+            hint={t('newApiKey.hints.name')}
+          >
             <Input
               id="apikey-name"
               data-testid="apikey-name-input"
@@ -117,15 +132,15 @@ export function AdminAccountsNewAPIKey() {
             />
             {form.formState.errors.name ? (
               <p className="mt-2 text-[11.5px] text-[var(--err)]">
-                {form.formState.errors.name.message}
+                {tDynamic(form.formState.errors.name.message)}
               </p>
             ) : null}
           </Field>
 
           <Field
             htmlFor="apikey-provider"
-            label={strings.labels.provider}
-            hint={strings.hints.provider}
+            label={t('newApiKey.labels.provider')}
+            hint={t('newApiKey.hints.provider')}
           >
             <Input
               id="apikey-provider"
@@ -137,7 +152,11 @@ export function AdminAccountsNewAPIKey() {
             />
           </Field>
 
-          <Field htmlFor="apikey-api-key" label={strings.labels.apiKey} hint={strings.hints.apiKey}>
+          <Field
+            htmlFor="apikey-api-key"
+            label={t('newApiKey.labels.apiKey')}
+            hint={t('newApiKey.hints.apiKey')}
+          >
             <Input
               id="apikey-api-key"
               data-testid="apikey-api-key-input"
@@ -148,7 +167,7 @@ export function AdminAccountsNewAPIKey() {
             />
             {form.formState.errors.api_key ? (
               <p className="mt-2 text-[11.5px] text-[var(--err)]">
-                {form.formState.errors.api_key.message}
+                {tDynamic(form.formState.errors.api_key.message)}
               </p>
             ) : null}
           </Field>
@@ -157,22 +176,22 @@ export function AdminAccountsNewAPIKey() {
             htmlFor="apikey-base-url"
             label={
               <>
-                {strings.labels.baseURL}{' '}
+                {t('newApiKey.labels.baseURL')}{' '}
                 <span className="font-normal text-[var(--text-muted)]">(optional)</span>
               </>
             }
-            hint={strings.hints.baseURL}
+            hint={t('newApiKey.hints.baseURL')}
           >
             <Input
               id="apikey-base-url"
-              placeholder={strings.placeholders.baseURL}
+              placeholder={t('newApiKey.placeholders.baseURL')}
               data-testid="apikey-base-url-input"
               aria-invalid={Boolean(form.formState.errors.base_url)}
               {...form.register('base_url')}
             />
             {form.formState.errors.base_url ? (
               <p className="mt-2 text-[11.5px] text-[var(--err)]">
-                {form.formState.errors.base_url.message}
+                {tDynamic(form.formState.errors.base_url.message)}
               </p>
             ) : null}
           </Field>
@@ -214,7 +233,7 @@ export function AdminAccountsNewAPIKey() {
               disabled={form.formState.isSubmitting}
               data-testid="apikey-submit"
             >
-              {form.formState.isSubmitting ? strings.loading : strings.actions.create}
+              {form.formState.isSubmitting ? t('newApiKey.loading') : t('newApiKey.actions.create')}
             </Button>
           </div>
         </PanelCard>

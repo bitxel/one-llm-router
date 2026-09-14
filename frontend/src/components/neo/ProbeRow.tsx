@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { useTranslation } from 'react-i18next'
+
 import { cn } from '@/lib/utils'
 
 type Status = 'ok' | 'err'
@@ -19,6 +21,7 @@ interface ProbeRowProps {
  * rendered under the DSN input after a successful probe. v9 §.probe.
  */
 export function ProbeRow({ status, latencyMs, log, statusLabel }: ProbeRowProps) {
+  const { t } = useTranslation('common')
   const tone = status === 'ok' ? 'ok' : 'err'
   const palette =
     tone === 'ok'
@@ -52,7 +55,7 @@ export function ProbeRow({ status, latencyMs, log, statusLabel }: ProbeRowProps)
         >
           {typeof latencyMs === 'number' ? latencyMs : '—'}
           <small className="mt-1 block font-sans text-[9.5px] font-normal uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            ms rtt
+            {t('probe.msRtt')}
           </small>
         </div>
       </div>
@@ -76,7 +79,7 @@ export function ProbeRow({ status, latencyMs, log, statusLabel }: ProbeRowProps)
             style={{ background: palette.color, boxShadow: `0 0 6px ${palette.color}` }}
           />
         ) : null}
-        {statusLabel ?? (tone === 'ok' ? 'healthy' : 'unreachable')}
+        {statusLabel ?? (tone === 'ok' ? t('probe.healthy') : t('probe.unreachable'))}
       </span>
     </div>
   )

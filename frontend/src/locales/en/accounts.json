@@ -1,0 +1,424 @@
+{
+  "accountStatus": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "authMethod": {
+    "api_key": "API key",
+    "oauth_browser": "OAuth browser",
+    "oauth_device": "OAuth device",
+    "oauth_import": "OAuth import"
+  },
+  "list": {
+    "eyebrow": "Accounts overview",
+    "title": "All Accounts",
+    "intro": "OAuth cards surface email, plan label, and observed primary or secondary usage and window reset times.",
+    "loading": "Loading accounts",
+    "empty": "No accounts registered yet.",
+    "summaryTitle": "Registered accounts",
+    "actions": {
+      "newAccount": "Add account",
+      "openDetail": "Open detail",
+      "activate": "Active",
+      "activating": "Activating…",
+      "disable": "Disable",
+      "disabling": "Disabling…"
+    },
+    "labels": {
+      "authMethod": "Auth method",
+      "status": "Status",
+      "email": "Email",
+      "plan": "Plan",
+      "chatgptAccountID": "ChatGPT account",
+      "lastRefresh": "Last refresh",
+      "accessExpiresAt": "Access expires at",
+      "baseURL": "Base URL",
+      "primaryUsage": "Primary used",
+      "secondaryUsage": "Secondary used"
+    },
+    "stripe": "Accounts",
+    "toasts": {
+      "activateSuccess": "Account activated",
+      "activateFailed": "Failed to activate this account",
+      "disableSuccess": "Account disabled",
+      "disableFailed": "Failed to disable this account"
+    }
+  },
+  "detail": {
+    "eyebrow": "Account detail",
+    "parentTitle": "Accounts",
+    "title": "Account detail",
+    "subtitle": "Inspect account metadata, confirm the credential mode, and export a Codex-compatible auth.json for OAuth rows without opening the token payload in the UI.",
+    "loading": "Loading account",
+    "invalidIdTitle": "Invalid account id",
+    "invalidIdDetail": "The route parameter is not a positive integer, so the detail query was not sent.",
+    "summaryTitle": "Account summary",
+    "metadataTitle": "OAuth metadata",
+    "exportTitle": "Export credentials",
+    "activateTitle": "Activate account",
+    "disableTitle": "Disable account",
+    "deleteTitle": "Delete account",
+    "deleteHint": "Deletes this account from admin lists and removes it from routing or Playground eligibility.",
+    "actions": {
+      "exporting": "Preparing auth.json…",
+      "export": "Export auth.json",
+      "activate": "Active account",
+      "activating": "Activating account…",
+      "disable": "Disable account",
+      "disabling": "Disabling account…",
+      "delete": "Delete account",
+      "confirmDelete": "Confirm delete",
+      "deleting": "Deleting account…"
+    },
+    "labels": {
+      "id": "Account id",
+      "name": "Name",
+      "provider": "Provider",
+      "authMethod": "Auth method",
+      "status": "Status",
+      "baseURL": "Base URL",
+      "email": "Email",
+      "plan": "Plan",
+      "primaryUsage": "Primary used",
+      "secondaryUsage": "Secondary used",
+      "chatgptAccountID": "ChatGPT account",
+      "lastRefresh": "Last refresh",
+      "accessExpiresAt": "Access expires at",
+      "quotaUpdatedAt": "Usage refreshed at"
+    },
+    "modelsTitle": "Models",
+    "modelsLoading": "Loading models…",
+    "modelsEmpty": "No models configured. Models can be added manually or refreshed from upstream.",
+    "modelIDLabel": "Model ID",
+    "modelSourceLabel": "Source",
+    "addModelPlaceholder": "e.g. gpt-4o",
+    "addModelButton": "Add",
+    "addingModel": "Adding…",
+    "refreshModelsButton": "Refresh from upstream",
+    "refreshingModels": "Refreshing…",
+    "removeModelTitle": "Remove",
+    "proxyTitle": "Outbound proxy",
+    "proxyHint": "When enabled, this account dials upstreams through the global proxy configured in Settings. If that proxy is later removed, requests for this account fail fast instead of silently going direct. When disabled, egress is always direct.",
+    "proxyEnableLabel": "Use global proxy",
+    "proxySetFailed": "Failed to update the outbound proxy switch",
+    "toasts": {
+      "exportSuccess": "auth.json download started",
+      "exportFailed": "Failed to export auth.json",
+      "activateSuccess": "Account activated",
+      "activateFailed": "Failed to activate this account",
+      "disableSuccess": "Account disabled",
+      "disableFailed": "Failed to disable this account",
+      "deleteSuccess": "Account deleted",
+      "deleteFailed": "Failed to delete this account",
+      "modelAddSuccess": "Model added",
+      "modelAddFailed": "Failed to add model",
+      "modelRemoveSuccess": "Model removed",
+      "modelRemoveFailed": "Failed to remove model",
+      "modelRefreshSuccess": "Models refreshed from upstream",
+      "modelRefreshFailed": "Failed to refresh models"
+    }
+  },
+  "detailEdit": {
+    "panelTitle": "Edit API-key account",
+    "panelHint": "Update the nickname, rotate the API key, change the endpoint override, or adjust capabilities. OAuth accounts cannot be edited here.",
+    "labels": {
+      "name": "Nickname",
+      "apiKey": "API key",
+      "baseURL": "Base URL",
+      "capabilities": "Capabilities"
+    },
+    "hints": {
+      "name": "1-64 characters.",
+      "apiKey": "Leave blank to keep the current key. 1-256 characters if set.",
+      "baseURL": "Optional OpenAI-compatible endpoint override. Leave empty to clear.",
+      "capabilities": "API operations this account can handle. Leave empty for none."
+    },
+    "placeholders": {
+      "baseURL": "https://api.openai.com"
+    },
+    "actions": {
+      "save": "Save changes",
+      "saving": "Saving…"
+    },
+    "validation": {
+      "nameRequired": "name is required",
+      "nameMax": "name must be at most 64 characters",
+      "apiKeyMax": "API key must be 1-256 characters",
+      "baseURLMax": "base_url must be <=256 characters",
+      "baseURLShape": "base_url must be an absolute http(s) URL without query or fragment"
+    },
+    "toasts": {
+      "updateSuccess": "Account updated",
+      "updateFailed": "Failed to update account"
+    }
+  },
+  "picker": {
+    "eyebrow": "New account",
+    "stripe": "Accounts",
+    "titleLead": "Add an",
+    "titleStrong": "account",
+    "intro": "Choose how to connect this router to LLM. Use browser sign-in locally, or device code when the router runs on a server.",
+    "action": {
+      "available": "Select"
+    },
+    "cards": {
+      "apiKey": {
+        "title": "API key",
+        "detail": "Add an OpenAI"
+      },
+      "oauthBrowser": {
+        "title": "Codex browser sign-in",
+        "detail": "Sign in with your ChatGPT subscription in this browser."
+      },
+      "oauthDevice": {
+        "title": "Codex Device Code",
+        "detail": "Sign in from another device when this server cannot complete browser sign-in."
+      },
+      "oauthImport": {
+        "title": "Import Codex auth.json",
+        "detail": "Import an existing Codex auth.json file from a local client."
+      }
+    }
+  },
+  "newApiKey": {
+    "eyebrow": "API key",
+    "stripe": "Accounts",
+    "titleLead": "Register a",
+    "titleStrong": "API Key.",
+    "intro": "Paste an OpenAI API key to create a new upstream account. The key is stored and used for routing requests to the OpenAI-compatible API.",
+    "panelTitle": "API-key account",
+    "loading": "Creating account...",
+    "labels": {
+      "name": "Nickname",
+      "provider": "Provider",
+      "apiKey": "API key",
+      "baseURL": "Base URL"
+    },
+    "hints": {
+      "name": "1-64 characters.",
+      "provider": "003 keeps direct API-key creation OpenAI-only.",
+      "apiKey": "1-256 characters. Stored verbatim in upstream_accounts; encryption-at-rest is deferred to the key-vault plugin.",
+      "baseURL": "Optional OpenAI-compatible endpoint override. Leave empty for the default."
+    },
+    "placeholders": {
+      "baseURL": "https://api.openai.com"
+    },
+    "actions": {
+      "create": "Create API-key account"
+    },
+    "validation": {
+      "nameRequired": "name is required",
+      "nameMax": "name must be at most 64 characters",
+      "apiKeyRequired": "API key is required",
+      "apiKeyMax": "API key must be 1-256 characters",
+      "baseURLMax": "base_url must be <=256 characters",
+      "baseURLShape": "base_url must be an absolute http(s) URL without query or fragment",
+      "missingAccountID": "create account response missing account id"
+    },
+    "toasts": {
+      "createSuccess": "API-key account created",
+      "createFailed": "Failed to create API-key account"
+    },
+    "errorTitle": "API-key account creation failed"
+  },
+  "newImport": {
+    "eyebrow": "Import auth.json",
+    "stripe": "Accounts",
+    "titleLead": "Import a Codex",
+    "titleStrong": "auth.json.",
+    "intro": "The router accepts a Codex-compatible auth.json file or pasted JSON text, derives the account metadata from the embedded ID token, and creates an oauth_import row without rendering token bytes in the UI.",
+    "panelTitle": "Import source",
+    "panelMeta": "file or pasted JSON",
+    "loading": "Importing auth.json…",
+    "labels": {
+      "file": "auth.json file",
+      "paste": "Paste auth.json JSON",
+      "source": "Source"
+    },
+    "actions": {
+      "fileMode": "File",
+      "pasteMode": "Paste",
+      "upload": "Import auth.json"
+    },
+    "hints": {
+      "file": "Select a Codex-compatible auth.json file from your local machine. The browser reads the file locally and submits the raw JSON text.",
+      "paste": "Paste the complete Codex-compatible auth.json content. The browser sends it as JSON text; token bytes are never rendered after submission."
+    },
+    "validation": {
+      "fileRequired": "Choose an auth.json file before importing.",
+      "pasteRequired": "Paste auth.json content before importing."
+    },
+    "toasts": {
+      "importSuccess": "auth.json imported",
+      "importFailed": "Failed to import auth.json"
+    }
+  },
+  "newOauth": {
+    "eyebrow": "Browser OAuth",
+    "stripe": "Accounts",
+    "titleLead": "Add ChatGPT OAuth",
+    "titleStrong": "account",
+    "intro": "Open a ChatGPT sign-in tab. If the browser cannot return to this router, paste the localhost callback URL below.",
+    "panel": {
+      "idle": "Browser OAuth",
+      "pending": "Flow in progress",
+      "conflict": "A flow is already pending",
+      "failed": "Flow failed",
+      "ready": "ready"
+    },
+    "badges": {
+      "pasteOnly": "Paste-only mode — listener unavailable",
+      "failed": "error"
+    },
+    "fields": {
+      "browserActions": {
+        "label": "Browser tab",
+        "hint": "Open the ChatGPT sign-in tab now. If your browser blocked the popup, reopen it from here."
+      },
+      "callback": {
+        "label": "Paste callback URL",
+        "hint": "Paste the full localhost callback URL from your browser address bar. The raw URL stays hidden by default.",
+        "placeholder": "http://localhost:1455/auth/callback?code=...&state=..."
+      },
+      "flow": {
+        "label": "Pending flow",
+        "hint": "One OAuth flow may be active per router instance."
+      },
+      "flowStatus": {
+        "label": "Flow status",
+        "hint": "Automatic callback and manual paste are both accepted for this browser flow."
+      }
+    },
+    "actions": {
+      "start": "Start browser sign-in",
+      "openAgain": "Open sign-in tab",
+      "openPending": "Open in browser",
+      "submitCallback": "Submit callback URL",
+      "cancelPending": "Cancel flow",
+      "startAgain": "Start again"
+    },
+    "status": {
+      "browserMethod": "Browser OAuth",
+      "browserMethodDetail": "The router opens one sign-in flow and accepts whichever callback rail finishes first.",
+      "expiresAt": "Expires at"
+    },
+    "callbackSummary": {
+      "title": "Callback summary",
+      "invalid": "Unparseable URL",
+      "codePresent": "code present",
+      "errorPresent": "error present",
+      "codeMissing": "code missing",
+      "statePresent": "state present",
+      "stateMissing": "state missing"
+    },
+    "validation": {
+      "callbackRequired": "Paste the callback URL to continue."
+    },
+    "err": {
+      "oauth_flow_in_progress": "A flow is already pending — finish or cancel it first.",
+      "oauth_state_mismatch": "State mismatch — paste the latest callback URL from the active sign-in tab.",
+      "invalid_callback_url": "The pasted callback URL is not valid for this flow.",
+      "no_flow_in_progress": "No OAuth flow is pending — start a new browser sign-in first.",
+      "oauth_invalid_grant": "OpenAI rejected the authorization code for this flow.",
+      "oauth_upstream_error": "OpenAI rejected the callback.",
+      "oauth_internal_error": "The router hit an internal OAuth error.",
+      "oauth_store_failed": "The router could not persist the OAuth account.",
+      "transport_error": "The request did not reach the router cleanly.",
+      "default": "The router rejected this request."
+    },
+    "callbackReason": {
+      "url_prefix_mismatch": "The callback URL must start with http://localhost:1455-1458/auth/callback.",
+      "missing_code_and_error": "The callback URL is missing both code and error query parameters."
+    },
+    "conflict": {
+      "detail": "Only one OAuth flow may be active per router instance. Cancel the pending flow before starting a new browser sign-in."
+    },
+    "terminal": {
+      "defaultTitle": "The flow ended with an error.",
+      "defaultDetail": "Review the provider error, then start a fresh browser sign-in. The callback input stays hidden after a terminal error.",
+      "restartHint": "Restart from a clean flow. The router never reuses an already-consumed callback URL."
+    },
+    "toasts": {
+      "popupBlocked": "The sign-in tab was blocked by the browser. Use \"Open sign-in tab again\" to retry.",
+      "flowExpired": "Flow expired — please start again.",
+      "flowCancelled": "Flow cancelled — start again when you are ready."
+    }
+  },
+  "newOauthDevice": {
+    "eyebrow": "Device OAuth",
+    "stripe": "Accounts",
+    "titleLead": "Sign in with Codex",
+    "titleStrong": "Device Code",
+    "intro": "Use this when localhost callback is unavailable. Open the verification page, enter the device code, and this page will continue automatically after approval.",
+    "panel": {
+      "code": "Device code",
+      "pending": "Device approval",
+      "blocked": "Flow blocked",
+      "unavailable": "Device flow unavailable",
+      "failed": "Flow ended"
+    },
+    "fields": {
+      "userCode": {
+        "label": "Device code",
+        "hint": "Enter this code on the verification page."
+      },
+      "verificationURL": {
+        "label": "Open verification page",
+        "hint": "Use the provider page to approve this router session."
+      },
+      "countdown": {
+        "label": "Expiry in",
+        "hint": ""
+      },
+      "flow": {
+        "label": "Pending flow",
+        "hint": "Only one OAuth flow may be active per router instance. Cancelling clears the current in-memory slot."
+      }
+    },
+    "actions": {
+      "openVerification": "Open verification page",
+      "copyCode": "Copy code",
+      "copyURL": "Copy URL",
+      "copied": "Copied",
+      "cancelPending": "Cancel pending flow",
+      "restart": "Restart device flow",
+      "tryBrowser": "Try browser sign-in instead"
+    },
+    "status": {
+      "starting": "Starting device flow…",
+      "pending": "Waiting",
+      "success": "Signed in — redirecting…",
+      "expired": "Flow expired — please restart",
+      "cancelled": "Cancelled",
+      "denied": "Approval denied",
+      "failed": "Flow failed"
+    },
+    "err": {
+      "oauth_flow_in_progress": "A flow is already pending — finish or cancel it first.",
+      "device_auth_unavailable": "This account cannot use the device flow — try browser sign-in instead.",
+      "invalid_oauth_provider": "The requested OAuth provider is not available for this route.",
+      "oauth_upstream_error": "OpenAI rejected the device-code request.",
+      "oauth_internal_error": "The router hit an internal OAuth error.",
+      "oauth_store_failed": "The router could not persist the OAuth account.",
+      "transport_error": "The request did not reach the router cleanly.",
+      "default": "The router rejected this request."
+    },
+    "toasts": {
+      "flowExpired": "Flow expired — start again when you are ready.",
+      "flowCancelled": "Flow cancelled.",
+      "copyFailed": "Clipboard write failed."
+    },
+    "labels": {
+      "userCode": "Device code",
+      "copyCode": "Copy code",
+      "copyURL": "Copy URL",
+      "conflictMethod": "method",
+      "conflictFlow": "flow",
+      "conflictExpires": "expires"
+    },
+    "countdownExpired": "Expired",
+    "countdownAwaitingServer": "Awaiting server…"
+  },
+  "emptyField": "—",
+  "empty": "—"
+}
