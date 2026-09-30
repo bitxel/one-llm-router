@@ -117,7 +117,7 @@ test.describe('playground', () => {
 
     await page.goto('/admin/playground')
     await expect(page).toHaveURL(/\/admin\/playground$/)
-    await expect(page.getByTestId('playground-model-input')).toHaveValue('gpt-5.4-mini')
+    await expect(page.getByTestId('playground-model-input')).toHaveValue('gpt-5.6-luna')
 
     const responsePromise = page.waitForResponse('**/api/admin/playground/run')
     await page.getByTestId('playground-textarea').fill('hello')
@@ -128,7 +128,8 @@ test.describe('playground', () => {
     expect(requests).toEqual([
       {
         selection_mode: 'auto',
-        model: 'gpt-5.4-mini',
+        endpoint: 'chat_completions',
+        model: 'gpt-5.6-luna',
         text: 'hello',
         max_output_tokens: 1024,
         include_raw_response: false,
@@ -189,7 +190,7 @@ test.describe('playground', () => {
     expect(requests[0]).toMatchObject({
       selection_mode: 'account',
       account_id: 42,
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.6-luna',
       text: 'probe this account',
     })
     await expect(page.getByTestId('playground-result')).toContainText('Account-specific reply.')
@@ -211,9 +212,7 @@ test.describe('playground', () => {
     })
 
     await page.goto('/admin/playground')
-    await expect(page.getByTestId('playground-no-active')).toContainText(
-      'No active accounts available.',
-    )
+    await expect(page.getByTestId('playground-no-active')).toContainText('No active accounts.')
     await expect(page.getByTestId('playground-new-account-link')).toHaveAttribute(
       'href',
       '/admin/accounts/new',
@@ -362,9 +361,7 @@ test.describe('playground', () => {
     expect(requests[0]).toMatchObject({
       include_raw_response: true,
     })
-    await expect(page.getByTestId('playground-result')).toContainText(
-      'No extractable text returned.',
-    )
+    await expect(page.getByTestId('playground-result')).toContainText('No text returned.')
     await page.getByText('Raw response').click()
     await expect(page.getByText(/resp_no_text/)).toBeVisible()
   })

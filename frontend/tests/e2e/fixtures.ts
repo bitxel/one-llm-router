@@ -50,9 +50,29 @@ function copyRedactedRouterDB(source: string, target: string): void {
       ],
       { stdio: 'ignore' },
     )
-  } catch (error) {
-    rmSync(target, { force: true })
-    throw error
+  } catch {
+    // sqlite3 CLI may be absent; fall back to the Python stdlib binding.
+    try {
+      execFileSync(
+        'python3',
+        [
+          '-c',
+          [
+            'import sqlite3,sys',
+            'con=sqlite3.connect(sys.argv[1])',
+            'con.execute("UPDATE upstream_accounts SET api_key=\'[redacted]\' WHERE api_key IS NOT NULL")',
+            'con.execute("UPDATE upstream_accounts SET access_token=NULL, refresh_token=NULL, id_token=NULL")',
+            'con.commit()',
+            'con.close()',
+          ].join(';'),
+          target,
+        ],
+        { stdio: 'ignore' },
+      )
+    } catch (error) {
+      rmSync(target, { force: true })
+      throw error
+    }
   }
 }
 

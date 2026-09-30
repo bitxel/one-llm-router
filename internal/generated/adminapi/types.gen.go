@@ -2888,6 +2888,10 @@ type AccountModel struct {
 	CreatedAt time.Time `json:"created_at"`
 	Id        int64     `json:"id"`
 
+	// Metadata JSON snapshot of the upstream model object (id/object/owned_by/...).
+	// `null` for manual entries without upstream metadata.
+	Metadata *string `json:"metadata,omitempty"`
+
 	// ModelId Upstream model identifier (e.g. `gpt-4o`).
 	ModelId string `json:"model_id"`
 

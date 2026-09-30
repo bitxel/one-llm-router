@@ -15,6 +15,35 @@ import (
 
 // TestModelRefresher_TriggerAsync covers the shared fire-and-forget
 // hook every account-creation path delegates to.
+func TestParseModels(t *testing.T) {
+	t.Run("codex format keeps object metadata and slug id", func(t *testing.T) {
+		body := []byte(`{"models":[{"slug":"gpt-5.4-codex","display_name":"Codex","owned_by":"codex","context_window":200000}]}`)
+		models, err := ParseModels(body)
+		require.NoError(t, err)
+		require.Len(t, models, 1)
+		assert.Equal(t, "gpt-5.4-codex", models[0].ID)
+		require.NotEmpty(t, models[0].Metadata)
+		assert.Contains(t, string(models[0].Metadata), `"display_name":"Codex"`)
+		assert.Contains(t, string(models[0].Metadata), `"id":"gpt-5.4-codex"`)
+		assert.Contains(t, string(models[0].Metadata), `"object":"model"`)
+	})
+
+	t.Run("openai format keeps object metadata", func(t *testing.T) {
+		body := []byte(`{"object":"list","data":[{"id":"gpt-4o","owned_by":"openai","created":1710000000}]}`)
+		models, err := ParseModels(body)
+		require.NoError(t, err)
+		require.Len(t, models, 1)
+		assert.Equal(t, "gpt-4o", models[0].ID)
+		assert.Contains(t, string(models[0].Metadata), `"owned_by":"openai"`)
+	})
+
+	t.Run("neither shape matches fails", func(t *testing.T) {
+		_, err := ParseModels([]byte(`{"object":"error","error":"boom"}`))
+		// OpenAI path: object != list fails
+		require.Error(t, err)
+	})
+}
+
 func TestModelRefresher_TriggerAsync(t *testing.T) {
 	t.Run("nil receiver, repo, or account are no-ops", func(t *testing.T) {
 		var upstreamHits atomic.Int64

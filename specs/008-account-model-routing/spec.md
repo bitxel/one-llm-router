@@ -56,16 +56,19 @@ As an internal client developer, I want the router to only send requests to acco
 
 ### US-4: View Models in GET /v1/models (P1)
 
-As an internal client developer, when I call `GET /v1/models`, I want the response to only include models that at least one active account supports, so that I don't enumerate models that will immediately return 400.
+As an internal client developer, when I call `GET /v1/models`, I want the response to list models from the local `account_models` cache for active accounts (including upstream metadata snapshots), so that I don't hit live multi-account upstream list endpoints that can fail the whole request.
 
 **Acceptance Scenarios**:
-1. Given account A supports `gpt-4o` and account B supports `deepseek-v4-flash-free`, when I call `GET /v1/models`, then the response includes both models.
-2. Given account A supports `gpt-4o` but has no `dall-e-3` in its `account_models`, when I call `GET /v1/models`, then `dall-e-3` is excluded even if the upstream returned it.
-3. Given no accounts have any models configured, when I call `GET /v1/models`, then the response returns an empty list.
+1. Given account A has cached `gpt-4o` and account B has cached `deepseek-v4-flash-free`, when I call `GET /v1/models`, then the response includes both models.
+2. Given account A has no cached models (or only rows for other models), when I call `GET /v1/models`, then only A's cached model IDs appear — there is no live upstream union to filter.
+3. Given active accounts but an empty cache, when I call `GET /v1/models`, then the response returns an empty list (`200`, `"data": []`).
+4. Given zero active eligible accounts, when I call `GET /v1/models`, then the response is native data-plane `503 no_available_account`.
+5. Given a cached row with upstream object `metadata`, when I call `GET /v1/models`, then the OpenAI model object preserves those fields; a manual row without metadata degrades to `{"id","object":"model"}`.
 
 **Edge Cases**:
-- Models present in `account_models` but not returned by any upstream are excluded from the response.
-- The intersection is computed from active, eligible accounts only.
+- The list is computed from active, eligible accounts only.
+- Local DB failure on the cache read surfaces as native data-plane `500` (fail-fast), not a fabricated empty list.
+- Live upstream model inventory is refreshed via the admin models refresh endpoint (and async on account create), not on each `GET /v1/models`.
 
 ### US-5: Audit Model Mutations (P1)
 
@@ -93,7 +96,7 @@ As a platform operator, I want every model add/remove/refresh operation to gener
 - `account_models` table + migration (3 dialects)
 - Admin API: 4 new endpoints for model CRUD
 - Routing: model filter in eligibility closure
-- `GET /v1/models`: intersection with `account_models`
+- `GET /v1/models`: cache-backed list from `account_models` (with upstream `metadata` snapshots)
 - Frontend: model management in account detail page
 - OpenAPI spec updates
 

@@ -31,7 +31,7 @@ type ModelRepo interface {
 	Insert(ctx context.Context, accountID int64, modelID string, source string) error
 	Delete(ctx context.Context, accountID int64, modelID string) error
 	HasModel(ctx context.Context, accountID int64, modelID string) (bool, error)
-	ReplaceUpstreamModels(ctx context.Context, accountID int64, modelIDs []string) (added int, keptManual int, err error)
+	ReplaceUpstreamModels(ctx context.Context, accountID int64, models []domain.AccountModelDraft) (added int, keptManual int, err error)
 }
 
 func NewAccountModelHandler(accountRepo AccountReader, modelRepo ModelRepo, modelRefresher *core.ModelRefresher, logger *slog.Logger) *AccountModelHandler {

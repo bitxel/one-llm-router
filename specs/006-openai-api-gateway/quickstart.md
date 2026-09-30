@@ -19,7 +19,7 @@ Initial red test targets:
 - `/v1/audio/transcriptions`, embeddings, moderations, files, realtime, and admin paths reject before upstream;
 - setup-pending returns native `setup_required` for `/v1/*`, `/backend-api`, and `/backend-api/*`;
 - API-key accounts no longer wildcard-forward unsupported `/v1/*`;
-- OAuth accounts are eligible only for explicit Codex mappings, including the `GET /v1/models` facade;
+- OAuth accounts are eligible only for explicit Codex mappings; `GET /v1/models` is shared as a local `account_models` cache read (not a live Codex facade dial);
 - `GET /api/codex/usage` and `GET /api/codex/usage/` are not supported data-plane routes;
 - `GET /api/admin/usage` returns enveloped router-local usage observability without upstream calls;
 - WebSocket relay tests exist and fail before adding `github.com/coder/websocket@v1.8.14` and implementing relay code.
@@ -132,7 +132,7 @@ The matrix must cover:
 - API-key Responses JSON and SSE;
 - API-key Chat Completions JSON/SSE;
 - API-key Models list/retrieve;
-- OAuth `GET /v1/models` facade over the Codex model list;
+- Cache-backed `GET /v1/models` (no live Platform/Codex list dial) plus live Codex native models path;
 - Codex WebSocket handshake/close behavior;
 - `/backend-api/transcribe` multipart forwarding with body capture disabled;
 - provider error propagation;

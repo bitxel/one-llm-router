@@ -22,7 +22,7 @@
 
 ### Task 1.5: Create `AccountModelRepository` interface
 - Add `AccountModelRepository` interface to `internal/core/interfaces.go`
-- Methods: `HasModel`, `ListByAccount`, `Insert`, `Delete`, `ReplaceUpstreamModels`, `AccountsWithModel`, `DistinctModelsForAccounts`
+- Methods: `HasModel`, `ListByAccount`, `ListByAccounts`, `Insert`, `Delete`, `ReplaceUpstreamModels` (drafts with metadata), `AccountsWithModel`
 
 ### Task 1.6: Implement `AccountModelRepo` store
 - Create `internal/store/account_models.go`
@@ -33,7 +33,7 @@
 - Test all CRUD operations
 - Test `ReplaceUpstreamModels` preserves manual rows
 - Test `AccountsWithModel` returns correct account IDs
-- Test `DistinctModelsForAccounts` returns correct model IDs
+- Test `ListByAccounts` returns ordered cache rows with metadata
 - Use SQLite in-memory for fast tests
 
 ## Phase 2: Core — Eligibility
@@ -46,9 +46,9 @@
 ### Task 2.2: Update `websocket_proxy.go` for model filtering
 - Apply same pattern: model is `""` for WebSocket, skip filtering (pass `nil` for `eligibleAccountIDs`)
 
-### Task 2.3: Update `proxy_models.go` for GET /v1/models intersection
-- After building model union from upstream, call `DistinctModelsForAccounts` to get declared models
-- Filter union to only include models in the declared set
+### Task 2.3: Update `proxy_models.go` for GET /v1/models cache read
+- List active eligible accounts, load `ListByAccounts` cache rows, merge by `model_id`
+- Preserve upstream object `metadata`; degrade missing/corrupt metadata without failing the list
 
 ### Task 2.4: Write routing eligibility tests
 - Test that accounts without the requested model are filtered out

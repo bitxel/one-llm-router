@@ -88,9 +88,14 @@ func (r *AccountModelRepo) Delete(_ context.Context, accountID int64, modelID st
 	return nil
 }
 
-// ReplaceUpstreamModels atomically replaces all upstream-sourced models for an account.
-// It preserves manual rows and returns the counts of added upstream models and kept manual models.
-func (r *AccountModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID int64, modelIDs []string) (added int, keptManual int, err error) {
+// ReplaceUpstreamModels atomically replaces all upstream-sourced models for an
+// account with the given drafts (model ID + optional metadata JSON).
+// Manual rows are preserved (source stays 'manual'); their metadata is
+// overwritten from the upstream draft on every refresh. Deduplication keeps
+// the first occurrence. Returns the number of newly inserted upstream rows
+// and the number of preserved manual rows (including manual rows hit by
+// upstream drafts).
+func (r *AccountModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID int64, models []domain.AccountModelDraft) (added int, keptManual int, err error) {
 	sess := r.engine.NewSession()
 	defer func() { _ = sess.Close() }()
 
@@ -98,16 +103,22 @@ func (r *AccountModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID 
 		return 0, 0, fmt.Errorf("replace upstream models tx begin: %w", err)
 	}
 
-	// Count manual rows that will be kept.
-	manualCount, err := sess.Table("account_models").
+	// Load existing manual model IDs for this account.
+	var manualRows []domain.AccountModel
+	if err := sess.
 		Where("account_id = ? AND source = 'manual'", accountID).
-		Count()
-	if err != nil {
+		Cols("model_id").
+		Find(&manualRows); err != nil {
 		_ = sess.Rollback()
-		return 0, 0, fmt.Errorf("count manual models: %w", err)
+		return 0, 0, fmt.Errorf("load manual models: %w", err)
 	}
+	manualIDs := make(map[string]struct{}, len(manualRows))
+	for _, row := range manualRows {
+		manualIDs[row.ModelID] = struct{}{}
+	}
+	keptManual = len(manualRows)
 
-	// Delete all upstream rows.
+	// Delete all upstream rows (manual rows survive).
 	_, err = sess.
 		Where("account_id = ? AND source = 'upstream'", accountID).
 		Delete(&domain.AccountModel{})
@@ -116,24 +127,50 @@ func (r *AccountModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID 
 		return 0, 0, fmt.Errorf("delete upstream models: %w", err)
 	}
 
-	// Deduplicate input to avoid UNIQUE constraint violations.
-	seen := make(map[string]struct{}, len(modelIDs))
-	deduped := make([]domain.AccountModel, 0, len(modelIDs))
-	for _, modelID := range modelIDs {
-		if _, ok := seen[modelID]; ok {
+	// Deduplicate drafts, preserving first-occurrence order.
+	seen := make(map[string]struct{}, len(models))
+	deduped := make([]domain.AccountModelDraft, 0, len(models))
+	for _, m := range models {
+		if m.ID == "" {
 			continue
 		}
-		seen[modelID] = struct{}{}
-		deduped = append(deduped, domain.AccountModel{
+		if _, ok := seen[m.ID]; ok {
+			continue
+		}
+		seen[m.ID] = struct{}{}
+		deduped = append(deduped, m)
+	}
+
+	// Split into insert (new upstream rows) vs update (manual rows that
+	// already exist — portable across dialects, no ON CONFLICT).
+	toInsert := make([]domain.AccountModel, 0, len(deduped))
+	for _, draft := range deduped {
+		meta := draftMetadataString(draft.Metadata)
+		if _, isManual := manualIDs[draft.ID]; isManual {
+			// Choice A: keep source='manual', overwrite metadata every refresh.
+			if meta == nil {
+				// No metadata from upstream — leave existing NULL as-is.
+				continue
+			}
+			if _, err := sess.
+				Where("account_id = ? AND model_id = ? AND source = 'manual'", accountID, draft.ID).
+				Cols("metadata").
+				Update(&domain.AccountModel{Metadata: meta}); err != nil {
+				_ = sess.Rollback()
+				return 0, 0, fmt.Errorf("update manual model metadata: %w", err)
+			}
+			continue
+		}
+		toInsert = append(toInsert, domain.AccountModel{
 			AccountID: accountID,
-			ModelID:   modelID,
+			ModelID:   draft.ID,
 			Source:    domain.AccountModelSourceUpstream,
+			Metadata:  meta,
 		})
 	}
 
-	// Batch insert deduplicated upstream rows.
-	if len(deduped) > 0 {
-		if _, err := sess.Insert(&deduped); err != nil {
+	if len(toInsert) > 0 {
+		if _, err := sess.Insert(&toInsert); err != nil {
 			_ = sess.Rollback()
 			return 0, 0, fmt.Errorf("batch insert upstream models: %w", err)
 		}
@@ -143,7 +180,36 @@ func (r *AccountModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID 
 		return 0, 0, fmt.Errorf("replace upstream models tx commit: %w", err)
 	}
 
-	return len(deduped), int(manualCount), nil
+	return len(toInsert), keptManual, nil
+}
+
+func draftMetadataString(raw []byte) *string {
+	if len(raw) == 0 {
+		return nil
+	}
+	s := string(raw)
+	return &s
+}
+
+// ListByAccounts returns all model rows for the given account IDs,
+// ordered by model_id then account_id for stable metadata merge.
+func (r *AccountModelRepo) ListByAccounts(_ context.Context, accountIDs []int64) ([]domain.AccountModel, error) {
+	if len(accountIDs) == 0 {
+		return nil, nil
+	}
+	ids := make([]interface{}, len(accountIDs))
+	for i, id := range accountIDs {
+		ids[i] = id
+	}
+	var models []domain.AccountModel
+	err := r.engine.
+		In("account_id", ids...).
+		OrderBy("model_id ASC, account_id ASC").
+		Find(&models)
+	if err != nil {
+		return nil, fmt.Errorf("list models for accounts: %w", err)
+	}
+	return models, nil
 }
 
 // AccountsWithModel returns the account IDs that have a specific model.
@@ -190,25 +256,4 @@ func (r *AccountModelRepo) AccountsWithoutModels(ctx context.Context) ([]int64, 
 		}
 	}
 	return out, nil
-}
-
-// DistinctModelsForAccounts returns the distinct model IDs declared by the given accounts.
-func (r *AccountModelRepo) DistinctModelsForAccounts(_ context.Context, accountIDs []int64) ([]string, error) {
-	if len(accountIDs) == 0 {
-		return nil, nil
-	}
-	var modelIDs []string
-	ids := make([]interface{}, len(accountIDs))
-	for i, id := range accountIDs {
-		ids[i] = id
-	}
-	err := r.engine.Table("account_models").
-		In("account_id", ids...).
-		Distinct("model_id").
-		Cols("model_id").
-		Find(&modelIDs)
-	if err != nil {
-		return nil, fmt.Errorf("distinct models for accounts: %w", err)
-	}
-	return modelIDs, nil
 }

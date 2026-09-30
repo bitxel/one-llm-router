@@ -34,7 +34,7 @@ type fakeModelRepo struct {
 	insertErr error
 	deleteErr error
 	hasErr    error
-	replaceFn func(ctx context.Context, accountID int64, modelIDs []string) (int, int, error)
+	replaceFn func(ctx context.Context, accountID int64, models []domain.AccountModelDraft) (int, int, error)
 }
 
 func (f *fakeModelRepo) ListByAccount(_ context.Context, accountID int64) ([]domain.AccountModel, error) {
@@ -80,9 +80,9 @@ func (f *fakeModelRepo) HasModel(_ context.Context, accountID int64, modelID str
 	return false, nil
 }
 
-func (f *fakeModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID int64, modelIDs []string) (int, int, error) {
+func (f *fakeModelRepo) ReplaceUpstreamModels(ctx context.Context, accountID int64, models []domain.AccountModelDraft) (int, int, error) {
 	if f.replaceFn != nil {
-		return f.replaceFn(ctx, accountID, modelIDs)
+		return f.replaceFn(ctx, accountID, models)
 	}
 	return 0, 0, nil
 }
@@ -268,7 +268,7 @@ func TestRefreshModels_ReplaceError(t *testing.T) {
 			Header:     http.Header{},
 		}, nil
 	})})
-	h.modelRepo.(*fakeModelRepo).replaceFn = func(_ context.Context, _ int64, _ []string) (int, int, error) {
+	h.modelRepo.(*fakeModelRepo).replaceFn = func(_ context.Context, _ int64, _ []domain.AccountModelDraft) (int, int, error) {
 		return 0, 0, errors.New("replace failed")
 	}
 	rec := httptest.NewRecorder()

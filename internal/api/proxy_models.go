@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,9 +9,7 @@ import (
 	"time"
 
 	"github.com/user/one-llm-router/internal/clientip"
-	"github.com/user/one-llm-router/internal/core"
 	"github.com/user/one-llm-router/internal/domain"
-	"github.com/user/one-llm-router/internal/provider"
 	"github.com/user/one-llm-router/internal/provider/openai"
 )
 
@@ -32,20 +29,25 @@ func isModelsUnionRoute(route gatewayRoute, r *http.Request) bool {
 		route.ResponseMode == domain.ResponseModeJSON
 }
 
+// serveModelsUnion serves GET /v1/models from the local account_models
+// cache. It never dials upstream; model discovery is explicit via the
+// account models refresh endpoint (and account-creation async refresh).
 func (h *ProxyHandler) serveModelsUnion(w http.ResponseWriter, requestID string, start time.Time, r *http.Request, route gatewayRoute) {
-	prepared, err := h.selector.ListEligiblePrepared(r.Context(), proxyAccountEligible(route, nil))
+	if h.accountModelRepo == nil {
+		h.writeError(w, requestID, start, r, nil,
+			http.StatusInternalServerError, ErrCodeInternalError, "model cache unavailable",
+			domain.OutcomeRouterError, proxyErrorBodyCapture{})
+		return
+	}
+
+	accounts, err := h.selector.ListEligibleAccounts(r.Context(), proxyAccountEligible(route, nil))
 	if err != nil {
+		// ErrNoCapacity and other selection failures share the same shape.
 		if errors.Is(err, domain.ErrNoCapacity) {
 			h.writeError(w, requestID, start, r, nil,
 				http.StatusServiceUnavailable, ErrCodeNoAvailableAccount,
 				"No active upstream accounts available",
 				domain.OutcomeNoAvailableAccount, proxyErrorBodyCapture{})
-			return
-		}
-		if errors.Is(err, core.ErrPreForward) {
-			h.writeError(w, requestID, start, r, nil,
-				http.StatusBadGateway, ErrCodeInternalError, "upstream credentials unavailable",
-				domain.OutcomeRouterError, proxyErrorBodyCapture{})
 			return
 		}
 		h.writeError(w, requestID, start, r, nil,
@@ -54,163 +56,26 @@ func (h *ProxyHandler) serveModelsUnion(w http.ResponseWriter, requestID string,
 		return
 	}
 
-	merged := make([]map[string]any, 0)
-	seen := map[string]struct{}{}
-	metadata := modelsUnionMetadata(prepared)
-	var upstreamReqBodies [][]byte
-	var upstreamRespBodies [][]byte
-
-	for _, item := range prepared {
-		account := item.Account
-		credentialClass := credentialClassForAccount(account)
-
-		bridge, ok := h.selectGatewayBridge(route, credentialClass)
-		if !ok {
-			h.writeError(w, requestID, start, r, &account,
-				http.StatusServiceUnavailable, ErrCodeNoAvailableAccount,
-				"No active upstream accounts available",
-				domain.OutcomeNoAvailableAccount, proxyErrorBodyCapture{routerMetadata: metadata})
-			return
-		}
-
-		headers := r.Header.Clone()
-		headers.Set("X-Request-Id", requestID)
-		headers.Set("Accept-Encoding", "identity")
-		clientReq, err := bridge.DecodeClientRequest(r.Context(), provider.DecodeInput{
-			OpID:          route.OpID,
-			Method:        r.Method,
-			Path:          r.URL.Path,
-			Pattern:       route.Pattern,
-			RawQuery:      r.URL.RawQuery,
-			Headers:       headers,
-			ContentLength: r.ContentLength,
-			ResponseMode:  route.ResponseMode,
-			BodyPolicy:    string(openAIBodyPolicy(route.BodyPolicy)),
-			RequestID:     requestID,
-		})
-		if err != nil {
-			h.writeError(w, requestID, start, r, &account,
-				http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
-				domain.OutcomeRouterError, proxyErrorBodyCapture{routerMetadata: metadata})
-			return
-		}
-
-		upstreamBaseURL := account.EffectiveBaseURL()
-		if account.IsOAuth() {
-			upstreamBaseURL = h.client.CodexBackendBaseURL()
-		}
-		upstreamReq, responseAdapter, err := bridge.BuildUpstreamRequest(r.Context(), provider.BuildInput{
-			ClientRequest:   clientReq,
-			Credential:      credentialClass,
-			CredentialValue: string(item.Token),
-			AccountMetadata: accountBridgeMetadata(account),
-			UpstreamBaseURL: upstreamBaseURL,
-			UseProxy:        account.UseProxy,
-			AccountID:       account.ID,
-		})
-		if err != nil {
-			h.writeError(w, requestID, start, r, &account,
-				http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
-				domain.OutcomeRouterError, proxyErrorBodyCapture{routerMetadata: metadata})
-			return
-		}
-
-		upstreamResp, capture, err := h.client.ForwardBridgeRequestWithCapture(r.Context(), upstreamReq, responseAdapter)
-		if len(capture.UpstreamRequestBody) > 0 {
-			upstreamReqBodies = append(upstreamReqBodies, capture.UpstreamRequestBody)
-		}
-		if err != nil {
-			errorCapture := proxyErrorBodyCapture{
-				upstreamRequestBody:  joinBodies(upstreamReqBodies),
-				upstreamResponseBody: capture.UpstreamResponseBody,
-				routerMetadata:       metadata,
-			}
-			if errors.Is(err, openai.ErrUpstreamTimeout) {
-				h.writeError(w, requestID, start, r, &account,
-					http.StatusGatewayTimeout, ErrCodeUpstreamTimeout, "upstream response timeout",
-					domain.OutcomeRouterError, errorCapture)
-				return
-			}
-			if errors.Is(err, openai.ErrUpstreamResponseInvalid) {
-				h.writeError(w, requestID, start, r, &account,
-					http.StatusBadGateway, ErrCodeUpstreamRespInvalid, "invalid upstream response",
-					domain.OutcomeRouterError, errorCapture)
-				return
-			}
-			h.writeError(w, requestID, start, r, &account,
-				http.StatusBadGateway, ErrCodeUpstreamConnFailed, "cannot connect to upstream",
-				domain.OutcomeRouterError, errorCapture)
-			return
-		}
-
-		body, readErr := readBounded(upstreamResp.Body, defaultMaxUpstreamResponseBody, "upstream response too large")
-		_ = upstreamResp.Body.Close()
-		if readErr != nil {
-			h.writeError(w, requestID, start, r, &account,
-				http.StatusBadGateway, ErrCodeUpstreamRespInvalid, "failed to read upstream response",
-				domain.OutcomeRouterError, proxyErrorBodyCapture{
-					upstreamRequestBody: joinBodies(upstreamReqBodies),
-					routerMetadata:      metadata,
-				})
-			return
-		}
-		upstreamRespBodies = append(upstreamRespBodies, body)
-
-		if upstreamResp.StatusCode >= http.StatusBadRequest {
-			copyProxyResponseHeaders(w.Header(), upstreamResp.Header)
-			w.WriteHeader(upstreamResp.StatusCode)
-			_, _ = w.Write(body)
-			errCode := openai.ExtractErrorCode(body)
-			h.recordModelsUnion(r, requestID, start, &account, upstreamResp.StatusCode, domain.OutcomeUpstreamError, errCode,
-				metadata, joinBodies(upstreamReqBodies), joinBodies(upstreamRespBodies))
-			return
-		}
-
-		models, err := decodeOpenAIModelsList(body)
-		if err != nil {
-			h.writeError(w, requestID, start, r, &account,
-				http.StatusBadGateway, ErrCodeUpstreamRespInvalid, "invalid upstream response",
-				domain.OutcomeRouterError, proxyErrorBodyCapture{
-					upstreamRequestBody:  joinBodies(upstreamReqBodies),
-					upstreamResponseBody: joinBodies(upstreamRespBodies),
-					routerMetadata:       metadata,
-				})
-			return
-		}
-		for _, model := range models {
-			id, _ := model["id"].(string)
-			if _, exists := seen[id]; exists {
-				continue
-			}
-			seen[id] = struct{}{}
-			merged = append(merged, model)
-		}
+	accountIDs := make([]int64, 0, len(accounts))
+	for _, acct := range accounts {
+		accountIDs = append(accountIDs, acct.ID)
 	}
 
-	if h.accountModelRepo != nil && len(merged) > 0 {
-		accountIDs := make([]int64, 0, len(prepared))
-		for _, item := range prepared {
-			accountIDs = append(accountIDs, item.Account.ID)
-		}
-		allowedModels, err := h.accountModelRepo.DistinctModelsForAccounts(r.Context(), accountIDs)
-		if err != nil {
-			h.writeError(w, requestID, start, r, nil,
-				http.StatusInternalServerError, ErrCodeInternalError, "failed to load account models",
-				domain.OutcomeRouterError, proxyErrorBodyCapture{routerMetadata: metadata})
-			return
-		}
-		allowed := make(map[string]struct{}, len(allowedModels))
-		for _, m := range allowedModels {
-			allowed[m] = struct{}{}
-		}
-		filtered := make([]map[string]any, 0, len(allowed))
-		for _, model := range merged {
-			id, _ := model["id"].(string)
-			if _, ok := allowed[id]; ok {
-				filtered = append(filtered, model)
-			}
-		}
-		merged = filtered
+	rows, err := h.accountModelRepo.ListByAccounts(r.Context(), accountIDs)
+	if err != nil {
+		h.writeError(w, requestID, start, r, nil,
+			http.StatusInternalServerError, ErrCodeInternalError, "failed to load account models",
+			domain.OutcomeRouterError, proxyErrorBodyCapture{})
+		return
+	}
+
+	merged, degraded := mergeAccountModelRows(rows)
+	metadata := modelsUnionCacheMetadata(accounts, len(merged), degraded)
+	if degraded > 0 {
+		h.logger.Warn("models_union_degraded_metadata",
+			"request_id", requestID,
+			"degraded_metadata_count", degraded,
+		)
 	}
 
 	response, err := json.Marshal(openAIModelsListResponse{
@@ -229,75 +94,86 @@ func (h *ProxyHandler) serveModelsUnion(w http.ResponseWriter, requestID string,
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(response)
 	h.recordModelsUnion(r, requestID, start, nil, http.StatusOK, domain.OutcomeSuccess, nil,
-		metadata, joinBodies(upstreamReqBodies), joinBodies(upstreamRespBodies))
+		metadata, nil, nil)
 }
 
-func decodeOpenAIModelsList(body []byte) ([]map[string]any, error) {
-	var payload openAIModelsListResponse
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("decode models list: %w", err)
-	}
-	if payload.Object != "list" {
-		return nil, fmt.Errorf("models list object must be list, got %q", payload.Object)
-	}
-	if payload.Data == nil {
-		return nil, errors.New("models list data missing")
+// mergeAccountModelRows builds a deduplicated OpenAI-style model list from
+// account_models rows. First non-null metadata (stable order: model_id,
+// account_id) wins for a given model_id. Corrupt metadata degrades to a
+// minimal {"id","object"} object and increments degraded.
+func mergeAccountModelRows(rows []domain.AccountModel) ([]map[string]any, int) {
+	byID := make(map[string]map[string]any, len(rows))
+	validMetadata := make(map[string]bool, len(rows))
+	corruptMetadata := make(map[string]bool)
+	order := make([]string, 0, len(rows))
+
+	for _, row := range rows {
+		if row.ModelID == "" {
+			continue
+		}
+		if _, exists := byID[row.ModelID]; !exists {
+			byID[row.ModelID] = map[string]any{"id": row.ModelID, "object": "model"}
+			order = append(order, row.ModelID)
+		}
+		if row.Metadata == nil || validMetadata[row.ModelID] {
+			continue
+		}
+		model, ok := decodeModelMetadata(row.Metadata, row.ModelID)
+		if !ok {
+			corruptMetadata[row.ModelID] = true
+			continue
+		}
+		byID[row.ModelID] = model
+		validMetadata[row.ModelID] = true
 	}
 
-	out := make([]map[string]any, 0, len(payload.Data))
-	for _, raw := range payload.Data {
-		id, ok := raw["id"].(string)
-		if !ok || strings.TrimSpace(id) == "" {
-			return nil, errors.New("models list contains model without id")
-		}
-		model := map[string]any{
-			"id":     id,
-			"object": "model",
-		}
-		if created, ok := numericModelValue(raw["created"]); ok {
-			model["created"] = created
-		}
-		if ownedBy, ok := raw["owned_by"].(string); ok && strings.TrimSpace(ownedBy) != "" {
-			model["owned_by"] = ownedBy
-		}
-		for key, value := range raw {
-			if key == "id" || key == "object" || key == "created" || key == "owned_by" {
-				continue
-			}
-			model[key] = value
-		}
-		out = append(out, model)
+	out := make([]map[string]any, 0, len(order))
+	for _, id := range order {
+		out = append(out, byID[id])
 	}
-	return out, nil
+	degraded := 0
+	for id := range corruptMetadata {
+		if !validMetadata[id] {
+			degraded++
+		}
+	}
+	return out, degraded
 }
 
-func numericModelValue(value any) (any, bool) {
-	switch v := value.(type) {
-	case float64:
-		return v, true
-	case int:
-		return v, true
-	case int64:
-		return v, true
-	case json.Number:
-		return v, true
-	default:
+func decodeModelMetadata(raw *string, fallbackID string) (map[string]any, bool) {
+	if raw == nil || *raw == "" {
 		return nil, false
 	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(*raw), &obj); err != nil || obj == nil {
+		return nil, false
+	}
+	id, _ := obj["id"].(string)
+	if strings.TrimSpace(id) == "" {
+		if fallbackID == "" {
+			return nil, false
+		}
+		obj["id"] = fallbackID
+	}
+	if o, _ := obj["object"].(string); strings.TrimSpace(o) == "" {
+		obj["object"] = "model"
+	}
+	return obj, true
 }
 
-func modelsUnionMetadata(prepared []core.PreparedAccount) domain.JSONMap {
-	classes := make([]string, 0, len(prepared))
-	for _, item := range prepared {
-		classes = append(classes, string(credentialClassForAccount(item.Account)))
+func modelsUnionCacheMetadata(accounts []domain.UpstreamAccount, modelCount, degraded int) domain.JSONMap {
+	classes := make([]string, 0, len(accounts))
+	for _, acct := range accounts {
+		classes = append(classes, string(credentialClassForAccount(acct)))
 	}
 	return domain.JSONMap{
 		routerMetadataModelsUnionKey: domain.JSONMap{
-			"account_count":       len(prepared),
-			"credential_classes":  classes,
-			"source":              "active_eligible_accounts",
-			"partial_success":     false,
-			"model_routing_bound": true,
+			"source":                  "account_models_cache",
+			"account_count":           len(accounts),
+			"credential_classes":      classes,
+			"model_count":             modelCount,
+			"model_routing_bound":     true,
+			"degraded_metadata_count": degraded,
 		},
 	}
 }
@@ -350,37 +226,4 @@ func (h *ProxyHandler) recordModelsUnion(
 		UpstreamResponseBody: upstreamRespBodyPtr,
 	}
 	h.recorder.Record(r.Context(), rec)
-}
-
-func copyProxyResponseHeaders(dst, src http.Header) {
-	dynamicResponseDrops := dynamicHopByHopHeaders(src)
-	for key, values := range src {
-		lower := strings.ToLower(key)
-		if isHopByHopHeader(key) {
-			continue
-		}
-		if _, drop := dynamicResponseDrops[lower]; drop {
-			continue
-		}
-		if lower == "set-cookie" {
-			continue
-		}
-		if http.CanonicalHeaderKey(key) == "X-Request-Id" ||
-			http.CanonicalHeaderKey(key) == "Request-Id" {
-			continue
-		}
-		for _, v := range values {
-			dst.Add(key, v)
-		}
-	}
-}
-
-func joinBodies(bodies [][]byte) []byte {
-	switch len(bodies) {
-	case 0:
-		return nil
-	case 1:
-		return append([]byte(nil), bodies[0]...)
-	}
-	return bytes.Join(bodies, []byte("\n"))
 }

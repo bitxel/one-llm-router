@@ -6,7 +6,7 @@
 
 2. **OAuth accounts always pass `HasCapabilityFor`** — confirmed by domain.go:176 `HasCapabilityFor` always returns `true` for OAuth accounts.
 
-3. **`GET /v1/models` returns the union** — confirmed by proxy_models.go. It calls all eligible accounts' upstream `/v1/models` and merges without filtering.
+3. **`GET /v1/models` previously returned a live upstream union** — as of the cache redesign it is served from the local `account_models` cache (`ListByAccounts`); see `proxy_models.go`.
 
 4. **`DisableCompression: true`** in client.go:53 — cannot change to false; would break SSE streaming.
 

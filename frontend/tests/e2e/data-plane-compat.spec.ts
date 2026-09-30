@@ -336,9 +336,19 @@ async function importOAuthAccount(request: APIRequestContext): Promise<void> {
       },
     },
   })
-  const body = (await response.json()) as { code?: number; msg?: string }
+  const body = (await response.json()) as { code?: number }
   expect(response.status(), `import auth.json failed: ${JSON.stringify(body)}`).toBe(200)
   expect(body.code, `import auth.json failed: ${JSON.stringify(body)}`).toBe(0)
+}
+
+async function refreshAccountModels(request: APIRequestContext, accountID: number): Promise<void> {
+  const response = await request.post(`/api/admin/accounts/${accountID}/models/refresh`)
+  const body = (await response.json()) as { code?: number; msg?: string }
+  expect(
+    response.status(),
+    `models refresh failed for account ${accountID}: ${JSON.stringify(body)}`,
+  ).toBe(200)
+  expect(body.code, `models refresh failed: ${JSON.stringify(body)}`).toBe(0)
 }
 
 async function expectOKBody(
@@ -466,9 +476,9 @@ function expectModelsUnionMetadata(
   expect(rawModelsUnion, `${record.request_id} router_metadata.models_union`).toMatchObject({
     account_count: expectedCredentialClasses.length,
     credential_classes: expectedCredentialClasses,
-    source: 'active_eligible_accounts',
-    partial_success: false,
-    model_routing_bound: false,
+    source: 'account_models_cache',
+    model_routing_bound: true,
+    degraded_metadata_count: expect.any(Number),
   })
 }
 
@@ -600,7 +610,7 @@ test.describe('data-plane compatibility', () => {
       await commitAPIKeySetup(page.request, {
         accountName: 'compat-local',
         apiKey: 'sk-local-compat',
-        baseURL: upstream.url,
+        baseURL: `${upstream.url}/v1`,
       })
 
       for (const compatCase of compatCases) {
@@ -645,7 +655,8 @@ test.describe('data-plane compatibility', () => {
         })
       }
 
-      expect(upstream.captured).toHaveLength(compatCases.length)
+      const responseCaptures = upstream.captured.filter((c) => c.path === '/v1/responses')
+      expect(responseCaptures).toHaveLength(compatCases.length)
     } finally {
       await upstream.close()
     }
@@ -657,7 +668,7 @@ test.describe('data-plane compatibility', () => {
       await commitAPIKeySetup(page.request, {
         accountName: 'compat-streaming-reader',
         apiKey: 'sk-local-streaming-reader',
-        baseURL: upstream.url,
+        baseURL: `${upstream.url}/v1`,
       })
       await page.goto('/admin/')
 
@@ -703,7 +714,7 @@ test.describe('data-plane compatibility', () => {
       await commitAPIKeySetup(page.request, {
         accountName: 'compat-errors',
         apiKey: 'sk-local-compat-errors',
-        baseURL: upstream.url,
+        baseURL: `${upstream.url}/v1`,
       })
 
       const cases = [
@@ -789,8 +800,11 @@ test.describe('data-plane compatibility', () => {
       await commitAPIKeySetup(page.request, {
         accountName: 'compat-openai-platform',
         apiKey: 'sk-local-platform',
-        baseURL: upstream.url,
+        baseURL: `${upstream.url}/v1`,
       })
+      // Populate account_models cache before asserting the list is cache-backed.
+      await refreshAccountModels(page.request, 1)
+      const modelsDialsBeforeList = upstream.captured.filter((c) => c.path === '/v1/models').length
 
       const chatJSON = await page.request.post('/v1/chat/completions', {
         data: {
@@ -835,7 +849,10 @@ test.describe('data-plane compatibility', () => {
         'M.models_list',
       )
       expect(JSON.parse(modelsBodyText).data[0].id).toBe('gpt-5.4-mini')
-      expect(upstream.captured.at(-1)?.path).toBe('/v1/models')
+      // Cache-backed: the client-facing list must not dial upstream models.
+      expect(upstream.captured.filter((c) => c.path === '/v1/models').length).toBe(
+        modelsDialsBeforeList,
+      )
       const modelsRecord = await waitForRecordedRequest(page.request, modelsRequestID)
       expectModelsUnionMetadata(modelsRecord, ['api_key'])
 
@@ -918,25 +935,39 @@ test.describe('data-plane compatibility', () => {
       await commitAPIKeySetup(request, {
         accountName: 'compat-oauth-seed',
         apiKey: 'sk-local-seed',
-        baseURL: upstream.url,
+        baseURL: `${upstream.url}/v1`,
       })
       await importOAuthAccount(request)
       const disabled = await request.post('/api/admin/accounts/1/disable')
       const disabledBody = (await disabled.json()) as { code?: number }
       expect(disabledBody.code).toBe(0)
 
+      // OAuth account is id=2 after setup seed + import. Refresh its cache from Codex.
+      await refreshAccountModels(request, 2)
+      const codexModelsDialsBeforeList = codexBackendMock.requests.filter(
+        (r) => r.path === '/codex/models',
+      ).length
+
       const models = await request.get('/v1/models')
       const { requestID: oauthModelsRequestID, text: modelsBodyText } = await expectOKBody(
         models,
-        'O.models_facade',
+        'O.models_cache',
       )
       expect(JSON.parse(modelsBodyText)).toMatchObject({
         object: 'list',
         data: [expect.objectContaining({ id: 'gpt-5.4-mini', object: 'model' })],
       })
-      expect(codexBackendMock.requests.at(-1)?.path).toBe('/codex/models')
+      // Cache-backed /v1/models must not hit the Codex backend again.
+      expect(codexBackendMock.requests.filter((r) => r.path === '/codex/models').length).toBe(
+        codexModelsDialsBeforeList,
+      )
       const oauthModelsRecord = await waitForRecordedRequest(request, oauthModelsRequestID)
       expectModelsUnionMetadata(oauthModelsRecord, ['oauth'])
+
+      // Codex-native models path still dials upstream live.
+      const codexModels = await request.get('/backend-api/codex/models')
+      expect(codexModels.status()).toBe(200)
+      expect(codexBackendMock.requests.at(-1)?.path).toBe('/codex/models')
 
       const oauthResponseJSON = await request.post('/v1/responses', {
         data: {

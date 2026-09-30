@@ -129,14 +129,15 @@ export class CodexBackendMockServer {
 
   private async handleHTTP(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const rawBody = await readRawBody(req)
+    const requestPath = (req.url ?? '').split('?')[0] ?? ''
     this.requests.push({
       method: req.method ?? '',
-      path: req.url ?? '',
+      path: requestPath,
       headers: req.headers,
       rawBody,
     })
 
-    if (req.method === 'GET' && req.url === '/codex/models') {
+    if (req.method === 'GET' && requestPath === '/codex/models') {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(
         JSON.stringify({
@@ -156,7 +157,7 @@ export class CodexBackendMockServer {
       return
     }
 
-    if (req.method === 'POST' && req.url === '/transcribe') {
+    if (req.method === 'POST' && requestPath === '/transcribe') {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ text: 'transcribed locally' }))
       return
@@ -164,7 +165,7 @@ export class CodexBackendMockServer {
 
     if (
       req.method === 'POST' &&
-      (req.url === '/codex/responses' || req.url === '/codex/responses/compact')
+      (requestPath === '/codex/responses' || requestPath === '/codex/responses/compact')
     ) {
       res.writeHead(200, { 'content-type': 'text/event-stream' })
       res.end(
@@ -185,7 +186,8 @@ export class CodexBackendMockServer {
       // Router-side CloseNow can reset the TCP socket after a valid close path.
     })
 
-    if (req.url !== '/codex/responses') {
+    const upgradePath = (req.url ?? '').split('?')[0]
+    if (upgradePath !== '/codex/responses') {
       socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
       socket.destroy()
       return
@@ -207,7 +209,7 @@ export class CodexBackendMockServer {
     )
 
     const capture: CapturedCodexWebSocket = {
-      path: req.url,
+      path: upgradePath,
       headers: req.headers,
       frames: [],
     }

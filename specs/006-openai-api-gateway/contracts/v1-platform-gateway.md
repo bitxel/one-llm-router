@@ -51,7 +51,7 @@ This contract covers client-facing `/v1/*` routes. These routes are data-plane r
 | `POST /v1/chat/completions/{completion_id}` | Direct forward |
 | `DELETE /v1/chat/completions/{completion_id}` | Direct forward |
 | `GET /v1/chat/completions/{completion_id}/messages` | Direct forward |
-| `GET /v1/models` | Contribute real model-list data to the strict union response |
+| `GET /v1/models` | Served from the local `account_models` cache (OpenAI-compatible list); no live Platform upstream call |
 | `GET /v1/models/{model}` | Direct forward |
 
 ## Supported OAuth Operations
@@ -62,26 +62,24 @@ This contract covers client-facing `/v1/*` routes. These routes are data-plane r
 | `WS /v1/responses` | Map to ChatGPT Codex Responses WebSocket; WebSocket relay with `x-codex-turn-state` compatibility |
 | `POST /v1/responses/compact` | Map to ChatGPT Codex `/backend-api/codex/responses/compact` |
 | `POST /v1/chat/completions` | Convert Chat Completions request to Codex Responses request and reconstruct Chat Completions-compatible JSON/SSE |
-| `GET /v1/models` | Contribute a codex-lb-compatible OpenAI model list facade backed by the Codex model list to the strict union response; no OpenAI Platform upstream call |
+| `GET /v1/models` | Served from the local `account_models` cache (OpenAI-compatible list over cached rows, including API-key and OAuth account model rows); no live Platform or Codex model-list call for this path. Live Codex inventory remains on `GET /backend-api/codex/models`. |
 
 All other `/v1/*` operations are unsupported for OAuth accounts in 006, including `GET /v1/models/{model}`.
 
-## `GET /v1/models` Union And OAuth Facade
+## `GET /v1/models` Cache Read
 
-`GET /v1/models` is a router-level discovery operation over every active route-eligible upstream account. It returns one OpenAI-compatible list response whose `data` is deduplicated by model `id`.
+`GET /v1/models` is a router-local discovery operation over the `account_models` cache for every active route-eligible upstream account. It returns one OpenAI-compatible list response whose `data` is deduplicated by model `id`. Each row carries an optional `metadata` JSON snapshot of the upstream model object (manual rows without metadata degrade to `{"id","object":"model"}`).
 
-API-key accounts contribute their real OpenAI Platform-compatible `GET /v1/models` response. OAuth accounts use the facade rules below and contribute the adapted Codex model list. The operation is strict fail-fast: if any eligible account cannot prepare credentials, connect, or return a valid successful model list, the whole request fails with native data-plane error semantics rather than silently returning a partial list.
+The path does **not** call live upstream model-list endpoints and is not a strict multi-account union: a single account's upstream failure cannot fail this request. Model inventory is refreshed explicitly via `POST /api/admin/accounts/{id}/models/refresh` (and asynchronously on account creation). Zero active eligible accounts still return `503 no_available_account`; active accounts with an empty cache return `200` with `"data": []`. Local DB failures return native data-plane `500`/`internal_error`.
 
-OAuth facade rules:
+OAuth accounts' live Codex model inventory remains available on `GET /backend-api/codex/models` (Codex-native path), independent of this cache read.
 
 Rules:
 
 - The response uses OpenAI-compatible model list shape.
-- The model source is the same Codex model inventory used by `GET /backend-api/codex/models`.
-- The route does not contact OpenAI Platform `/v1/models` with a ChatGPT OAuth token.
-- `GET /v1/models/{model}` remains unsupported for OAuth accounts in 006.
-- Unknown model metadata is omitted or set only from real local/Codex model metadata; implementation must not fabricate provider ownership, capabilities, or timestamps.
+- Upstream object metadata is preserved when present; unknown metadata is omitted or set only from real local/upstream model metadata; implementation must not fabricate provider ownership, capabilities, or timestamps.
 - Duplicate model ids are represented once; the first account in stable active-account order wins unless a future spec defines conflict merging.
+- `GET /v1/models/{model}` remains unsupported for OAuth accounts in 006.
 
 ## OAuth Chat Completions Adapter
 

@@ -110,8 +110,9 @@ func (h *ProxyHandler) SetModelRenameFunc(fn func() []config.ModelRenameRule) {
 }
 
 // SetAccountModelRepo installs the account model repository for model-based
-// eligibility filtering. When not set, all accounts are eligible regardless
-// of model (existing behavior).
+// eligibility filtering and the cache-backed GET /v1/models path. When not
+// set, model-aware routing treats accounts as model-agnostic, and
+// GET /v1/models fails fast (nil = incomplete wiring).
 func (h *ProxyHandler) SetAccountModelRepo(repo core.AccountModelRepository) {
 	if h == nil {
 		return

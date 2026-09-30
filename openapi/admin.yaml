@@ -943,6 +943,12 @@ components:
           description: |
             `manual` — operator-added via the `/add` endpoint.
             `upstream` — discovered via the `/refresh` endpoint.
+        metadata:
+          type: string
+          nullable: true
+          description: |
+            JSON snapshot of the upstream model object (id/object/owned_by/...).
+            `null` for manual entries without upstream metadata.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

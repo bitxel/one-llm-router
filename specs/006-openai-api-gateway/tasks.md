@@ -195,7 +195,7 @@
 - [ ] **T-080** [US-6] [L1] Extend local Playwright data-plane compatibility matrix -- `frontend/tests/e2e/data-plane-compat.spec.ts`, `frontend/tests/e2e/helpers.ts`
   - depends_on: T-031, T-041, T-052, T-061, T-072
   - context_files: `specs/006-openai-api-gateway/quickstart.md`, `frontend/tests/e2e/helpers.ts`, `frontend/tests/e2e/fixtures.ts`
-  - what: Cover API-key Responses JSON/SSE, Chat Completions JSON/SSE, Models list/retrieve, OAuth models facade, Codex WebSocket, transcribe, provider errors, unsupported audio transcription, Admin usage endpoint, and token-safe records.
+  - what: Cover API-key Responses JSON/SSE, Chat Completions JSON/SSE, Models list/retrieve (cache-backed list), OAuth cache-backed `/v1/models` + live Codex native models path, Codex WebSocket, transcribe, provider errors, unsupported audio transcription, Admin usage endpoint, and token-safe records.
   - must_not: Do not require live provider access.
   - verify: `cd frontend && pnpm playwright test tests/e2e/data-plane-compat.spec.ts`
 

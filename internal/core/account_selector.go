@@ -144,6 +144,28 @@ func (s *AccountSelector) ListEligiblePrepared(ctx context.Context, eligible fun
 	return prepared, nil
 }
 
+// ListEligibleAccounts returns active accounts that pass the eligibility
+// filter without calling prepareToken/PreForward — used by cache-backed
+// read paths such as GET /v1/models that do not need upstream credentials.
+// Returns domain.ErrNoCapacity when no account qualifies.
+func (s *AccountSelector) ListEligibleAccounts(ctx context.Context, eligible func(domain.UpstreamAccount) bool) ([]domain.UpstreamAccount, error) {
+	active, err := s.repo.ListActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active accounts: %w", err)
+	}
+	out := make([]domain.UpstreamAccount, 0, len(active))
+	for _, acct := range active {
+		if eligible != nil && !eligible(acct) {
+			continue
+		}
+		out = append(out, acct)
+	}
+	if len(out) == 0 {
+		return nil, domain.ErrNoCapacity
+	}
+	return out, nil
+}
+
 func (s *AccountSelector) SelectByID(ctx context.Context, id int64) (domain.UpstreamAccount, []byte, bool, error) {
 	if id <= 0 {
 		return domain.UpstreamAccount{}, nil, false, &AccountSelectionError{

@@ -100,6 +100,18 @@ func TestProxyAPIKeyDirectSupportedAllowlist(t *testing.T) {
 			handler.ServeHTTP(rec, req)
 
 			assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			if tc.name == "models list" {
+				// Cache-backed: must not dial upstream.
+				assert.Equal(t, int32(0), upstreamCalls.Load())
+				var body struct {
+					Object string           `json:"object"`
+					Data   []map[string]any `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+				assert.Equal(t, "list", body.Object)
+				// Empty cache is a valid 200; non-empty when seeded.
+				return
+			}
 			assert.Equal(t, int32(1), upstreamCalls.Load())
 		})
 	}

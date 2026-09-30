@@ -13,7 +13,7 @@ import (
 
 type noopModelRepo struct{}
 
-func (noopModelRepo) ReplaceUpstreamModels(context.Context, int64, []string) (int, int, error) {
+func (noopModelRepo) ReplaceUpstreamModels(context.Context, int64, []domain.AccountModelDraft) (int, int, error) {
 	return 0, 0, nil
 }
 

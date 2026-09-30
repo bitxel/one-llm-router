@@ -81,7 +81,7 @@ Deliver a complete, deployable Codex routing proxy with multi-account support.
 
 - Provider-compatible `/v1/*` facade for Codex clients
 - API-key transport: OpenAI Platform-compatible `/v1/*`
-- OAuth transport: ChatGPT Codex backend for `/v1/responses`, `WS /v1/responses`, `/v1/responses/compact`, `/v1/chat/completions`, OAuth `GET /v1/models` facade, selected `/backend-api/*` compatibility paths, and codex-lb-shaped usage surfaces. `/v1/audio/transcriptions` is deferred from 006.
+- OAuth transport: ChatGPT Codex backend for `/v1/responses`, `WS /v1/responses`, `/v1/responses/compact`, `/v1/chat/completions`, selected `/backend-api/*` compatibility paths, and codex-lb-shaped usage surfaces. `GET /v1/models` is served from the local `account_models` cache (shared by API-key and OAuth accounts); live Codex model inventory remains available on `GET /backend-api/codex/models`. `/v1/audio/transcriptions` is deferred from 006.
 - Multi-account pooling with round-robin selection
 - Session continuity via consistent hashing (stateless, deterministic)
 - Operator account management (add/enable/disable/delete via Admin API)

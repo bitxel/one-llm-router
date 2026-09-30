@@ -217,6 +217,7 @@ func adaptCodexModelsListResponse(resp *http.Response, capture ForwardCapture) (
 	if err != nil {
 		return nil, capture, fmt.Errorf("%w: read codex models response: %w", ErrUpstreamResponseInvalid, err)
 	}
+	capture.UpstreamResponseBody = append([]byte(nil), rawBody...)
 	transformed, err := codexModelsToOpenAIList(rawBody)
 	if err != nil {
 		return nil, capture, fmt.Errorf("%w: %w", ErrUpstreamResponseInvalid, err)

@@ -8,6 +8,7 @@
 | `account_id` | INTEGER | NOT NULL, FK → `upstream_accounts(id)` ON DELETE CASCADE | Owning account |
 | `model_id` | TEXT | NOT NULL | Exact model ID string (e.g. `gpt-4o`) |
 | `source` | TEXT | NOT NULL DEFAULT `'manual'`, CHECK(`source` IN (`'manual'`, `'upstream'`)) | Manual or auto-discovered |
+| `metadata` | TEXT NULL | — | JSON snapshot of the upstream model object (added by migration `000011_account_models_metadata`); `NULL` for manual rows without upstream metadata |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Row creation time |
 | `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Last modification time |
 
@@ -25,6 +26,7 @@ type AccountModel struct {
     AccountID int64     `xorm:"not null 'account_id'" json:"account_id"`
     ModelID   string    `xorm:"not null 'model_id'" json:"model_id"`
     Source    string    `xorm:"not null default('manual') 'source'" json:"source"`
+    Metadata  *string   `xorm:"'metadata'" json:"metadata,omitempty"`
     CreatedAt time.Time `xorm:"created not null 'created_at'" json:"created_at"`
     UpdatedAt time.Time `xorm:"updated not null 'updated_at'" json:"updated_at"`
 }
@@ -36,11 +38,11 @@ type AccountModel struct {
 type AccountModelRepository interface {
     HasModel(ctx context.Context, accountID int64, modelID string) (bool, error)
     ListByAccount(ctx context.Context, accountID int64) ([]domain.AccountModel, error)
+    ListByAccounts(ctx context.Context, accountIDs []int64) ([]domain.AccountModel, error)
     Insert(ctx context.Context, accountID int64, modelID string, source string) error
     Delete(ctx context.Context, accountID int64, modelID string) error
-    ReplaceUpstreamModels(ctx context.Context, accountID int64, modelIDs []string) (added int, keptManual int, err error)
+    ReplaceUpstreamModels(ctx context.Context, accountID int64, models []domain.AccountModelDraft) (added int, keptManual int, err error)
     AccountsWithModel(ctx context.Context, modelID string) ([]int64, error)
-    DistinctModelsForAccounts(ctx context.Context, accountIDs []int64) ([]string, error)
 }
 ```
 
@@ -57,19 +59,24 @@ Returns account IDs. Used by `AccountsWithModel()`. Indexed on `model_id`.
 ### GET /v1/models: "What models do active accounts declare?"
 
 ```sql
-SELECT DISTINCT model_id FROM account_models WHERE account_id IN (?, ?, ...)
+SELECT account_id, model_id, source, metadata
+FROM account_models
+WHERE account_id IN (?, ?, ...)
+ORDER BY model_id ASC, account_id ASC
 ```
 
-Returns model IDs. Used by `DistinctModelsForAccounts()`.
+Returns full cache rows (including upstream object `metadata` JSON snapshots). Used by `ListByAccounts()` for the cache-backed `GET /v1/models` list. Indexed on `account_id`.
 
 ### Refresh: Replace upstream models atomically
 
 ```sql
 BEGIN;
 DELETE FROM account_models WHERE account_id = ? AND source = 'upstream';
-INSERT INTO account_models (account_id, model_id, source) VALUES (?, ?, 'upstream'), ...;
+INSERT INTO account_models (account_id, model_id, source, metadata) VALUES (?, ?, 'upstream', ?), ...;
 COMMIT;
 ```
+
+Manual (`source='manual'`) rows are preserved and keep their existing `metadata` (typically NULL).
 
 ## Invariants
 

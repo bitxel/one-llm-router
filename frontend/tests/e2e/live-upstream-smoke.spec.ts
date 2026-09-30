@@ -231,6 +231,9 @@ test.describe('live upstream compat smoke', () => {
 
     let completedCaseCount = 0
     await test.step('M.models_list', async () => {
+      // Cache-backed list: does not require a live upstream /models call.
+      // Async account-create refresh may still populate the cache later;
+      // empty data is acceptable for this smoke case.
       const response = await page.request.get('/v1/models')
       const { text } = await expectLiveOK(response, 'M.models_list')
       const body = JSON.parse(text) as { object?: unknown; data?: unknown }

@@ -64,6 +64,12 @@ export type AccountModel = {
      *
      */
     source: 'manual' | 'upstream';
+    /**
+     * JSON snapshot of the upstream model object (id/object/owned_by/...).
+     * `null` for manual entries without upstream metadata.
+     *
+     */
+    metadata?: string | null;
     created_at: string;
     updated_at: string;
 };

@@ -124,9 +124,9 @@ func TestImportAuthJSON(t *testing.T) {
 		var modelCalls atomic.Int64
 		modelRepo := &fakeModelRepo{
 			models: map[int64][]domain.AccountModel{},
-			replaceFn: func(_ context.Context, _ int64, modelIDs []string) (int, int, error) {
+			replaceFn: func(_ context.Context, _ int64, models []domain.AccountModelDraft) (int, int, error) {
 				modelCalls.Add(1)
-				return len(modelIDs), 0, nil
+				return len(models), 0, nil
 			},
 		}
 		h.handler.SetModelRefresher(core.NewModelRefresher(&http.Client{Timeout: 2 * time.Second}, nil, codex.URL, "test", slog.Default()), modelRepo)

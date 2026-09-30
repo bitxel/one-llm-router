@@ -260,14 +260,12 @@ func TestProxyOAuthChatCompletionsBridgeIgnoresUnsupportedBeforeUpstream(t *test
 	}, time.Second, 10*time.Millisecond)
 }
 
-func TestProxyOAuthModelsFacadeUsesCodexModels(t *testing.T) {
+func TestProxyOAuthCodexNativeModelsUsesCodexModels(t *testing.T) {
 	t.Parallel()
 
 	var upstreamPath string
-	var upstreamAcceptEncoding string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamPath = r.URL.Path
-		upstreamAcceptEncoding = r.Header.Get("Accept-Encoding")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5.4-codex","display_name":"GPT 5.4 Codex","description":"Codex model","context_window":200000,"owned_by":"codex-real-owner","created":1710000000}]}`))
 	}))
@@ -275,25 +273,46 @@ func TestProxyOAuthModelsFacadeUsesCodexModels(t *testing.T) {
 
 	h := newOAuthProxyHarness(t, upstream.URL)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req := httptest.NewRequest(http.MethodGet, "/backend-api/codex/models", nil)
 
 	h.handler.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, "/codex/models", upstreamPath)
-	assert.Equal(t, "identity", upstreamAcceptEncoding)
 
+	// Codex-native path returns the Codex models shape (passthrough).
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, "list", body["object"])
-	data, ok := body["data"].([]any)
+	models, ok := body["models"].([]any)
+	require.True(t, ok, "codex native models response: %v", body)
+	require.Len(t, models, 1)
+	model, ok := models[0].(map[string]any)
 	require.True(t, ok)
-	require.Len(t, data, 1)
-	model, ok := data[0].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "gpt-5.4-codex", model["id"])
-	assert.Equal(t, "model", model["object"])
-	assert.Equal(t, "codex-real-owner", model["owned_by"])
+	assert.Equal(t, "gpt-5.4-codex", model["slug"])
+}
+
+func TestProxyOAuthCodexNativeModelsRecordsInvalidResponseSafely(t *testing.T) {
+	t.Parallel()
+
+	const upstreamBody = `{"error":{"message":"invalid models payload","access_token":"secret-access-token"}}`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/codex/models", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(upstreamBody))
+	}))
+	t.Cleanup(upstream.Close)
+
+	h := newOAuthProxyHarness(t, upstream.URL)
+	h.handler.SetBodyLogFunc(func() (bool, bool, bool) { return false, false, true })
+	var logBuffer bytes.Buffer
+	h.handler.logger = slog.New(slog.NewTextHandler(&logBuffer, nil))
+	rec := httptest.NewRecorder()
+	h.handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/backend-api/codex/models", nil))
+
+	// Codex-native adapter is a passthrough; body is returned as-is.
+	// Assert no token material leaked into logs.
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.NotContains(t, logBuffer.String(), "secret-access-token")
 }
 
 func TestProxyOAuthRecordsBridgeMetadata(t *testing.T) {

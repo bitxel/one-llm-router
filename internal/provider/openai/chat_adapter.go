@@ -497,7 +497,7 @@ func chatInputItemsFromMessage(role string, msg chatMessage) ([]any, error) {
 			if key == "content" {
 				content, err := normalizeChatUserContent(value)
 				if err != nil {
-					return nil, fmt.Errorf("%w: %v", errChatAdapterValidation, err)
+					return nil, fmt.Errorf("%w: %w", errChatAdapterValidation, err)
 				}
 				item[key] = content
 				continue

@@ -525,11 +525,15 @@ type recordingModelRepo struct {
 	err error
 }
 
-func (r *recordingModelRepo) ReplaceUpstreamModels(_ context.Context, accountID int64, modelIDs []string) (int, int, error) {
+func (r *recordingModelRepo) ReplaceUpstreamModels(_ context.Context, accountID int64, models []domain.AccountModelDraft) (int, int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.got[accountID] = append([]string(nil), modelIDs...)
-	return len(modelIDs), 0, r.err
+	ids := make([]string, 0, len(models))
+	for _, m := range models {
+		ids = append(ids, m.ID)
+	}
+	r.got[accountID] = ids
+	return len(models), 0, r.err
 }
 
 func discardLogger() *slog.Logger {

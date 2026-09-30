@@ -33,11 +33,15 @@ type codexModelRecorder struct {
 	got map[int64][]string
 }
 
-func (r *codexModelRecorder) ReplaceUpstreamModels(_ context.Context, accountID int64, modelIDs []string) (int, int, error) {
+func (r *codexModelRecorder) ReplaceUpstreamModels(_ context.Context, accountID int64, models []domain.AccountModelDraft) (int, int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.got[accountID] = append([]string(nil), modelIDs...)
-	return len(modelIDs), 0, nil
+	ids := make([]string, 0, len(models))
+	for _, m := range models {
+		ids = append(ids, m.ID)
+	}
+	r.got[accountID] = ids
+	return len(models), 0, nil
 }
 
 func TestConsumeCode(t *testing.T) {

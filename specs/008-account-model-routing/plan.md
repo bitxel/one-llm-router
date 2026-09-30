@@ -82,11 +82,11 @@ New repository interface in `internal/core/interfaces.go`:
 type AccountModelRepository interface {
     HasModel(ctx context.Context, accountID int64, modelID string) (bool, error)
     ListByAccount(ctx context.Context, accountID int64) ([]domain.AccountModel, error)
+    ListByAccounts(ctx context.Context, accountIDs []int64) ([]domain.AccountModel, error)
     Insert(ctx context.Context, accountID int64, modelID string, source string) error
     Delete(ctx context.Context, accountID int64, modelID string) error
-    ReplaceUpstreamModels(ctx context.Context, accountID int64, modelIDs []string) (added int, keptManual int, err error)
+    ReplaceUpstreamModels(ctx context.Context, accountID int64, models []domain.AccountModelDraft) (added int, keptManual int, err error)
     AccountsWithModel(ctx context.Context, modelID string) ([]int64, error)
-    DistinctModelsForAccounts(ctx context.Context, accountIDs []int64) ([]string, error)
 }
 ```
 
@@ -187,13 +187,14 @@ WebSocket requests have no body (model is `""`). The eligibility closure skips m
 
 ### GET /v1/models Interaction
 
-The `GET /v1/models` endpoint currently returns the union of all upstream model lists from ALL active eligible accounts. After this feature:
+`GET /v1/models` is served from the local `account_models` cache (`ListByAccounts`), not a live multi-account upstream union:
 
-The union should be **filtered to only include model IDs that exist in at least one active account's `account_models` table**. This prevents clients from enumerating models that will immediately return 400.
+1. List active eligible accounts (`ListEligibleAccounts`) — no token prepare / PreForward.
+2. Load cache rows for those accounts (`ListByAccounts`, ordered by `model_id`, `account_id`).
+3. Merge by `model_id`, preserving upstream object `metadata` when present; rows without metadata degrade to `{"id","object":"model"}`.
+4. Return OpenAI-compatible `{"object":"list","data":[...]}`. Empty cache with active accounts → `200 []`; zero active accounts → `503 no_available_account`; local DB failure → native data-plane `500`.
 
-Implementation approach in `proxy_models.go`:
-1. After building the union from upstream, call `DistinctModelsForAccounts(ctx, activeAccountIDs)` to get the set of declared model IDs
-2. Filter the union to only include models in that set
+Refresh still writes the cache via `ReplaceUpstreamModels` (account edit / async on create). Live Codex inventory remains on `GET /backend-api/codex/models`.
 
 ### OpenAPI Spec
 
@@ -302,7 +303,7 @@ Add a method to the OpenAI client that fetches and parses `/v1/models`:
 func (c *Client) FetchModels(ctx context.Context, account domain.UpstreamAccount, token []byte) ([]string, error)
 ```
 
-Reuses the existing models bridge path (can use `ForwardBridgeRequestWithCapture` with `BridgeOpenAIModelsDirect` or adapt the existing OAuth models facade logic).
+Reuses the existing models bridge path only for the **refresh** fetch (can use `ForwardBridgeRequestWithCapture` with `BridgeOpenAIModelsDirect` or the OAuth Codex models path). The client-facing `GET /v1/models` no longer dials that path; it reads `account_models`.
 
 ### Phase 4: Routing — Eligibility
 
@@ -310,7 +311,7 @@ Reuses the existing models bridge path (can use `ForwardBridgeRequestWithCapture
 - Implement `proxyAccountEligible` with batch model filtering
 - `proxy.go` extracts model via `openai.ExtractModel(effectiveReqBodyBytes)`, calls `AccountsWithModel`, passes result to eligibility closure
 - Same pattern for `websocket_proxy.go` (model is `""`, skip filtering)
-- Same pattern for `proxy_models.go` (GET /v1/models union filtering)
+- Same pattern for `proxy_models.go` (GET /v1/models cache read via `ListByAccounts`)
 
 ### Phase 5: Admin API
 

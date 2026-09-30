@@ -255,6 +255,72 @@ func TestPlaygroundRunContract(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "playgroundapi.Handler.UsageGet: not implemented")
 	})
+
+	t.Run("foreign admin operations are explicit not-implemented errors", func(t *testing.T) {
+		h := NewHandler(&stubRunner{}, nil)
+		ctx := context.Background()
+		cases := []struct {
+			name string
+			call func() error
+		}{
+			{"SettingsGet", func() error {
+				_, err := h.SettingsGet(ctx, generatedadminapi.SettingsGetRequestObject{})
+				return err
+			}},
+			{"DashboardGet", func() error {
+				_, err := h.DashboardGet(ctx, generatedadminapi.DashboardGetRequestObject{})
+				return err
+			}},
+			{"AccountsImportAuthJSON", func() error {
+				_, err := h.AccountsImportAuthJSON(ctx, generatedadminapi.AccountsImportAuthJSONRequestObject{})
+				return err
+			}},
+			{"OauthBrowserStart", func() error {
+				_, err := h.OauthBrowserStart(ctx, generatedadminapi.OauthBrowserStartRequestObject{})
+				return err
+			}},
+			{"RequestsList", func() error {
+				_, err := h.RequestsList(ctx, generatedadminapi.RequestsListRequestObject{})
+				return err
+			}},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				err := tc.call()
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "not implemented")
+			})
+		}
+	})
+
+	t.Run("account model admin operations return system envelope stubs", func(t *testing.T) {
+		h := NewHandler(&stubRunner{}, nil)
+		ctx := context.Background()
+
+		listResp, err := h.AccountModelsList(ctx, generatedadminapi.AccountModelsListRequestObject{})
+		require.NoError(t, err)
+		list, ok := listResp.(generatedadminapi.AccountModelsList500JSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, generatedadminapi.EnvelopeSystemErrorCodeN1901, list.Code)
+
+		addResp, err := h.AccountModelAdd(ctx, generatedadminapi.AccountModelAddRequestObject{})
+		require.NoError(t, err)
+		add, ok := addResp.(generatedadminapi.AccountModelAdd500JSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, generatedadminapi.EnvelopeSystemErrorCodeN1901, add.Code)
+
+		refreshResp, err := h.AccountModelRefresh(ctx, generatedadminapi.AccountModelRefreshRequestObject{})
+		require.NoError(t, err)
+		refresh, ok := refreshResp.(generatedadminapi.AccountModelRefresh500JSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, generatedadminapi.EnvelopeSystemErrorCodeN1901, refresh.Code)
+
+		removeResp, err := h.AccountModelRemove(ctx, generatedadminapi.AccountModelRemoveRequestObject{})
+		require.NoError(t, err)
+		remove, ok := removeResp.(generatedadminapi.AccountModelRemove500JSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, generatedadminapi.EnvelopeSystemErrorCodeN1901, remove.Code)
+	})
 }
 
 func newPlaygroundContractServer(t *testing.T, runner *stubRunner) http.Handler {

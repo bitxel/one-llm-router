@@ -58,6 +58,7 @@ interface AccountModel {
   account_id: number
   model_id: string
   source: 'manual' | 'upstream'
+  metadata?: string | null
   created_at: string
   updated_at: string
 }

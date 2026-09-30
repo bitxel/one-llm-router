@@ -168,7 +168,7 @@
     - assert:
       - OAuth `/v1/responses` upstream path is `/codex/responses`
       - compact upstream path is `/codex/responses/compact`
-      - OAuth `GET /v1/models` uses models facade adapter
+      - `GET /v1/models` is cache-backed (no live facade dial); native `/backend-api/codex/models` still dials Codex
       - native Codex requests preserve native response semantics
 
 - [x] T-010 [US-2] [L2] Move OAuth Chat Completions facade behind a bridge — `internal/provider/openai/bridge.go`, `internal/provider/openai/chat_adapter.go`, `internal/provider/openai/chat_adapter_test.go`

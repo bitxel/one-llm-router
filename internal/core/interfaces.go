@@ -20,12 +20,12 @@ type AccountRepository interface {
 type AccountModelRepository interface {
 	HasModel(ctx context.Context, accountID int64, modelID string) (bool, error)
 	ListByAccount(ctx context.Context, accountID int64) ([]domain.AccountModel, error)
+	ListByAccounts(ctx context.Context, accountIDs []int64) ([]domain.AccountModel, error)
 	Insert(ctx context.Context, accountID int64, modelID string, source string) error
 	Delete(ctx context.Context, accountID int64, modelID string) error
-	ReplaceUpstreamModels(ctx context.Context, accountID int64, modelIDs []string) (added int, keptManual int, err error)
+	ReplaceUpstreamModels(ctx context.Context, accountID int64, models []domain.AccountModelDraft) (added int, keptManual int, err error)
 	AccountsWithModel(ctx context.Context, modelID string) ([]int64, error)
 	AccountsWithoutModels(ctx context.Context) ([]int64, error)
-	DistinctModelsForAccounts(ctx context.Context, accountIDs []int64) ([]string, error)
 }
 
 type RequestRecordRepository interface {

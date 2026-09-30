@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -38,6 +37,7 @@ func setupProxyTest(t *testing.T, upstream *httptest.Server) (*ProxyHandler, *st
 	engine := s.Engine()
 	accountRepo := store.NewAccountRepo(engine)
 	recordRepo := store.NewRequestRecordRepo(engine)
+	modelRepo := store.NewAccountModelRepo(engine)
 
 	acct := &domain.UpstreamAccount{
 		Name:         "test-account",
@@ -48,6 +48,9 @@ func setupProxyTest(t *testing.T, upstream *httptest.Server) (*ProxyHandler, *st
 		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
 	}
 	require.NoError(t, accountRepo.Create(context.Background(), acct))
+	// Do NOT seed account_models here: empty rows keep the account
+	// model-agnostic for routing. Tests that need a non-empty
+	// GET /v1/models response seed the cache themselves.
 
 	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
 	recorder := core.NewRequestRecorder(recordRepo, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
@@ -57,6 +60,7 @@ func setupProxyTest(t *testing.T, upstream *httptest.Server) (*ProxyHandler, *st
 	client := openai.NewClient(5_000_000_000) // 5s
 
 	handler := NewProxyHandler(selector, recorder, client, false, 0, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	handler.SetAccountModelRepo(modelRepo)
 	return handler, s
 }
 
@@ -115,6 +119,7 @@ func newProxyHarness(t *testing.T, clientTimeout time.Duration) *proxyHarness {
 
 	client := openai.NewClient(clientTimeout)
 	handler := NewProxyHandler(selector, recorder, client, false, 0, slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})))
+	handler.SetAccountModelRepo(store.NewAccountModelRepo(engine))
 	return &proxyHarness{
 		handler:  handler,
 		store:    s,
@@ -861,32 +866,22 @@ func TestProxyHandler_UpstreamRequestIDStripped(t *testing.T) {
 	}
 }
 
-func TestProxyHandler_ModelsUnionMergesAPIKeyAndOAuthAccounts(t *testing.T) {
+func TestProxyHandler_ModelsServedFromCache_NoUpstreamCall(t *testing.T) {
 	now := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 	var apiHits atomic.Int32
+	var oauthHits atomic.Int32
 	apiUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiHits.Add(1)
 		assert.Equal(t, "/models", r.URL.Path)
-		assert.Equal(t, "Bearer sk-api", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"object":"list","data":[
-			{"id":"gpt-5.4","object":"model","created":1710000000,"owned_by":"openai"},
-			{"id":"shared-model","object":"model","created":1710000001,"owned_by":"api-owner"}
-		]}`))
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-5.4","object":"model"}]}`))
 	}))
 	t.Cleanup(apiUpstream.Close)
-
-	var oauthHits atomic.Int32
 	oauthUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		oauthHits.Add(1)
 		assert.Equal(t, "/codex/models", r.URL.Path)
-		assert.Equal(t, "Bearer oauth-access", r.Header.Get("Authorization"))
-		assert.Equal(t, "acct-oauth-access", r.Header.Get("chatgpt-account-id"))
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"models":[
-			{"slug":"shared-model","created":1720000000,"owned_by":"oauth-owner","display_name":"Shared OAuth"},
-			{"slug":"gpt-5.4-codex","created":1720000001,"owned_by":"codex-owner","display_name":"Codex"}
-		]}`))
+		_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5.4-codex","display_name":"Codex"}]}`))
 	}))
 	t.Cleanup(oauthUpstream.Close)
 
@@ -906,35 +901,61 @@ func TestProxyHandler_ModelsUnionMergesAPIKeyAndOAuthAccounts(t *testing.T) {
 	coord.SetAccountStore(h.repo)
 	h.selector.PreForward = coord.RefreshIfStale
 
+	modelRepo := store.NewAccountModelRepo(h.store.Engine())
+	// Find account IDs for seeding.
+	// API account created above is id autoincrement; oauth is the other one.
+	accounts, err := h.repo.List(context.Background(), nil)
+	require.NoError(t, err)
+	require.Len(t, accounts, 2)
+	var apiAcct, oauthAcct domain.UpstreamAccount
+	for _, a := range accounts {
+		if a.AuthMethod == domain.AuthMethodAPIKey || a.APIKey != "" {
+			apiAcct = a
+		} else {
+			oauthAcct = a
+		}
+	}
+	apiMeta := `{"id":"gpt-5.4","object":"model","owned_by":"openai","created":1710000000}`
+	_, _, err = modelRepo.ReplaceUpstreamModels(context.Background(), apiAcct.ID, []domain.AccountModelDraft{
+		{ID: "gpt-5.4", Metadata: []byte(apiMeta)},
+		{ID: "shared-model", Metadata: []byte(`{"id":"shared-model","object":"model","owned_by":"api-owner"}`)},
+	})
+	require.NoError(t, err)
+	oauthMeta := `{"id":"gpt-5.4-codex","object":"model","display_name":"Codex","owned_by":"codex-owner"}`
+	_, _, err = modelRepo.ReplaceUpstreamModels(context.Background(), oauthAcct.ID, []domain.AccountModelDraft{
+		{ID: "shared-model", Metadata: []byte(`{"id":"shared-model","object":"model","owned_by":"oauth-owner"}`)},
+		{ID: "gpt-5.4-codex", Metadata: []byte(oauthMeta)},
+	})
+	require.NoError(t, err)
+
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
 	h.handler.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, int32(1), apiHits.Load())
-	assert.Equal(t, int32(1), oauthHits.Load())
+	assert.Equal(t, int32(0), apiHits.Load(), "cache path must not dial API upstream")
+	assert.Equal(t, int32(0), oauthHits.Load(), "cache path must not dial OAuth upstream")
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 
 	var body struct {
 		Object string `json:"object"`
 		Data   []struct {
-			ID      string         `json:"id"`
-			Object  string         `json:"object"`
-			Created float64        `json:"created"`
-			OwnedBy string         `json:"owned_by"`
-			Meta    map[string]any `json:"metadata"`
+			ID          string `json:"id"`
+			Object      string `json:"object"`
+			OwnedBy     string `json:"owned_by"`
+			DisplayName string `json:"display_name"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, "list", body.Object)
 	require.Len(t, body.Data, 3)
+	// ListByAccounts orders by model_id ASC then account_id ASC.
 	assert.Equal(t, "gpt-5.4", body.Data[0].ID)
-	assert.Equal(t, "shared-model", body.Data[1].ID)
-	assert.Equal(t, "api-owner", body.Data[1].OwnedBy, "first account wins duplicate metadata")
-	assert.Equal(t, "gpt-5.4-codex", body.Data[2].ID)
-	assert.Equal(t, "codex-owner", body.Data[2].OwnedBy)
-	require.NotNil(t, body.Data[2].Meta)
-	assert.Equal(t, "Codex", body.Data[2].Meta["display_name"])
+	assert.Equal(t, "openai", body.Data[0].OwnedBy)
+	assert.Equal(t, "gpt-5.4-codex", body.Data[1].ID)
+	assert.Equal(t, "Codex", body.Data[1].DisplayName, "upstream object metadata is preserved")
+	assert.Equal(t, "shared-model", body.Data[2].ID)
+	assert.Equal(t, "api-owner", body.Data[2].OwnedBy, "lower account_id (api) wins duplicate metadata")
 
 	recordRepo := store.NewRequestRecordRepo(h.store.Engine())
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -952,88 +973,194 @@ func TestProxyHandler_ModelsUnionMergesAPIKeyAndOAuthAccounts(t *testing.T) {
 		if !assert.True(c, ok, "models_union metadata must be object") {
 			return
 		}
+		assert.Equal(c, "account_models_cache", meta["source"])
 		assert.Equal(c, float64(2), meta["account_count"])
+		assert.Equal(c, float64(3), meta["model_count"])
+		assert.Equal(c, true, meta["model_routing_bound"])
+		assert.Equal(c, float64(0), meta["degraded_metadata_count"])
 		assert.NotContains(c, records[0].RouterMetadata, openai.RouterMetadataBridgeKey)
 	}, time.Second, 10*time.Millisecond)
 }
 
-func TestProxyHandler_ModelsUnionFailsOnInvalidProviderList(t *testing.T) {
+func TestProxyHandler_ModelsCacheEmpty_ReturnsEmptyList200(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"object":"not-list","data":[]}`))
+		t.Error("upstream must not be called for cache-backed /v1/models")
 	}))
 	t.Cleanup(upstream.Close)
 
-	handler, _ := setupProxyTest(t, upstream)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	handler.ServeHTTP(rec, req)
+	// Fresh store without seeded model rows: eligible account exists, cache empty.
+	s, err := store.New("sqlite3", ":memory:", 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, s.Migrate("sqlite3"))
+	t.Cleanup(func() { _ = s.Close() })
+	engine := s.Engine()
+	accountRepo := store.NewAccountRepo(engine)
+	recordRepo := store.NewRequestRecordRepo(engine)
+	modelRepo := store.NewAccountModelRepo(engine)
+	acct := &domain.UpstreamAccount{
+		Name: "test-account", Provider: "openai", APIKey: "sk-test",
+		BaseURL: &upstream.URL, Status: domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses", "op.openai.chat_completions"},
+	}
+	require.NoError(t, accountRepo.Create(context.Background(), acct))
+	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
+	recorder := core.NewRequestRecorder(recordRepo, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	recorder.Start()
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
+	handler := NewProxyHandler(selector, recorder, openai.NewClient(time.Second), false, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler.SetAccountModelRepo(modelRepo)
 
-	require.Equal(t, http.StatusBadGateway, rec.Code, rec.Body.String())
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"object":"list","data":[]}`, rec.Body.String())
+}
+
+func TestProxyHandler_ModelsRepoNil_Returns500(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("upstream must not be called")
+	}))
+	t.Cleanup(upstream.Close)
+
+	s, err := store.New("sqlite3", ":memory:", 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, s.Migrate("sqlite3"))
+	t.Cleanup(func() { _ = s.Close() })
+	engine := s.Engine()
+	accountRepo := store.NewAccountRepo(engine)
+	recordRepo := store.NewRequestRecordRepo(engine)
+	acct := &domain.UpstreamAccount{
+		Name: "test-account", Provider: "openai", APIKey: "sk-test",
+		BaseURL: &upstream.URL, Status: domain.AccountStatusActive,
+		Capabilities: []string{"op.openai.responses"},
+	}
+	require.NoError(t, accountRepo.Create(context.Background(), acct))
+	selector := core.NewAccountSelector(accountRepo, core.NewConsistentHashRouter())
+	recorder := core.NewRequestRecorder(recordRepo, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	recorder.Start()
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
+	handler := NewProxyHandler(selector, recorder, openai.NewClient(time.Second), false, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	// deliberately not SetAccountModelRepo
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	require.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
 	var envelope RouterErrorEnvelope
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
-	assert.Equal(t, ErrCodeUpstreamRespInvalid, envelope.Error.Code)
+	assert.Equal(t, ErrCodeInternalError, envelope.Error.Code)
 }
 
-func TestProxyHandler_ModelsUnionForcesIdentityEncoding(t *testing.T) {
-	var upstreamAcceptEncoding atomic.Value
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		upstreamAcceptEncoding.Store(r.Header.Get("Accept-Encoding"))
-		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			w.Header().Set("Content-Encoding", "gzip")
-			gz := gzip.NewWriter(w)
-			_, _ = gz.Write([]byte(`{"object":"list","data":[{"id":"gpt-gzip","object":"model"}]}`))
-			_ = gz.Close()
-			return
-		}
-		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-identity","object":"model"}]}`))
-	}))
-	t.Cleanup(upstream.Close)
-
-	handler, _ := setupProxyTest(t, upstream)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
-	handler.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, "identity", upstreamAcceptEncoding.Load())
-	var body openAIModelsListResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.Len(t, body.Data, 1)
-	assert.Equal(t, "gpt-identity", body.Data[0]["id"])
-}
-
-func TestProxyHandler_ModelsUnionPreservesProviderErrorAndRecordsFailingAccount(t *testing.T) {
+func TestProxyHandler_ModelsManualWithoutMetadata_ReturnsMinimalObject(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"error":{"code":"billing_hard_limit_reached","message":"quota","type":"insufficient_quota"}}`))
+		t.Error("upstream must not be called")
 	}))
 	t.Cleanup(upstream.Close)
 
 	handler, s := setupProxyTest(t, upstream)
+	seedAccountModelsManual(t, s, map[int64][]string{1: {"gpt-4o-mini", "gpt-4.1"}})
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body openAIModelsListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Data, 2)
+	assert.Equal(t, "gpt-4.1", body.Data[0]["id"])
+	assert.Equal(t, "model", body.Data[0]["object"])
+	_, hasCreated := body.Data[0]["created"]
+	assert.False(t, hasCreated, "manual rows without metadata must not fabricate created/owned_by")
+}
 
-	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
-	assert.JSONEq(t, `{"error":{"code":"billing_hard_limit_reached","message":"quota","type":"insufficient_quota"}}`, rec.Body.String())
+func TestProxyHandler_ModelsCorruptMetadata_DegradesWithCount(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("upstream must not be called")
+	}))
+	t.Cleanup(upstream.Close)
+
+	handler, s := setupProxyTest(t, upstream)
+	seedAccountModelsManual(t, s, map[int64][]string{1: {"gpt-4o-mini", "gpt-4.1"}})
+	// Corrupt one metadata row directly.
+	mustExecRaw(t, s, `UPDATE account_models SET metadata = '{not-json' WHERE model_id = 'gpt-4o-mini'`)
+
+	var logBuffer bytes.Buffer
+	handler.logger = slog.New(slog.NewTextHandler(&logBuffer, nil))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, logBuffer.String(), "models_union_degraded_metadata")
+
+	var body openAIModelsListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Data, 2)
+	// Corrupt row degrades to minimal object.
+	for _, m := range body.Data {
+		if m["id"] == "gpt-4o-mini" {
+			assert.Equal(t, "model", m["object"])
+		}
+	}
 
 	recordRepo := store.NewRequestRecordRepo(s.Engine())
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		records, err := recordRepo.Query(context.Background(), core.QueryParams{Limit: 10})
 		require.NoError(c, err)
 		require.Len(c, records, 1)
-		require.NotNil(c, records[0].UpstreamAccountID)
-		assert.Equal(c, int64(1), *records[0].UpstreamAccountID)
-		assert.Equal(c, domain.OutcomeUpstreamError, records[0].Outcome)
-		assert.Equal(c, http.StatusForbidden, records[0].StatusCode)
-		require.NotNil(c, records[0].ErrorCode)
-		assert.Equal(c, "billing_hard_limit_reached", *records[0].ErrorCode)
-		assert.Contains(c, records[0].RouterMetadata, "models_union")
+		raw := records[0].RouterMetadata["models_union"]
+		meta, ok := raw.(map[string]any)
+		require.True(c, ok)
+		assert.Equal(c, float64(1), meta["degraded_metadata_count"])
+		assert.Equal(c, http.StatusOK, records[0].StatusCode)
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestProxyHandler_ModelsUpstreamDownStill200(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(upstream.Close)
+
+	handler, s := setupProxyTest(t, upstream)
+	seedAccountModelsManual(t, s, map[int64][]string{1: {"gpt-4o-mini", "gpt-4.1"}})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body openAIModelsListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Data, 2)
+}
+
+func TestProxyHandler_ModelsZeroActiveAccounts_Returns503(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("upstream must not be called")
+	}))
+	t.Cleanup(upstream.Close)
+
+	handler, s := setupProxyTest(t, upstream)
+	// Disable the only account.
+	engine := s.Engine()
+	_, err := engine.Exec("UPDATE upstream_accounts SET status = 'disabled'")
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, rec.Body.String())
+	var envelope RouterErrorEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	assert.Equal(t, ErrCodeNoAvailableAccount, envelope.Error.Code)
+}
+
+func mustExecRaw(t *testing.T, s *store.Store, query string) {
+	t.Helper()
+	_, err := s.Engine().Exec(query)
+	require.NoError(t, err)
+}
+
+func seedAccountModelsManual(t *testing.T, s *store.Store, byAccount map[int64][]string) {
+	t.Helper()
+	repo := store.NewAccountModelRepo(s.Engine())
+	for accountID, models := range byAccount {
+		for _, id := range models {
+			require.NoError(t, repo.Insert(context.Background(), accountID, id, domain.AccountModelSourceManual))
+		}
+	}
 }
 
 func TestRefreshIntegration_FreshOAuthUsesCurrentAccessToken(t *testing.T) {
@@ -2041,10 +2168,9 @@ func TestProxyAccountEligible_DoesNotOverrideRouteEligibility(t *testing.T) {
 	require.False(t, eligible(acct), "account passes model filter but fails route eligibility")
 }
 
-func TestProxyHandler_ModelsUnionIntersectsAccountModels(t *testing.T) {
+func TestProxyHandler_ModelsListServesCacheForIntersectedAccounts(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-4o","object":"model"},{"id":"gpt-4o-mini","object":"model"}]}`))
+		t.Error("upstream must not be called for cache-backed /v1/models")
 	}))
 	t.Cleanup(upstream.Close)
 
@@ -2099,6 +2225,6 @@ func TestProxyHandler_ModelsUnionIntersectsAccountModels(t *testing.T) {
 		Data   []map[string]any `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.Len(t, body.Data, 1, "only gpt-4o should appear since only acct1 has it in account_models")
+	require.Len(t, body.Data, 1, "only gpt-4o is declared in account_models")
 	require.Equal(t, "gpt-4o", body.Data[0]["id"])
 }

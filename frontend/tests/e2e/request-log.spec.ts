@@ -185,16 +185,14 @@ test.describe('request log', () => {
     await expect(page.getByTestId('request-detail-view')).toContainText('203.0.113.13')
     await expect(page.getByTestId('request-detail-view')).toContainText('input')
     await expect(page.getByTestId('request-detail-view')).toContainText('world from e2e')
-    await expect(page.getByTestId('request-detail-view')).toContainText('Router metadata')
-    await expect(page.getByTestId('request-detail-view')).toContainText(
-      'op.openai.responses.create',
-    )
+    await expect(page.getByTestId('request-detail-view')).toContainText('Endpoint')
+    await expect(page.getByTestId('request-detail-view')).toContainText('/codex/responses')
   })
 
   test('records a real proxy request and redacts captured bodies', async ({ page }) => {
     const upstream = await startRequestLogUpstream()
     try {
-      await completeSetupWizard(page, { baseURL: upstream.url })
+      await completeSetupWizard(page, { baseURL: `${upstream.url}/v1` })
 
       const settingsResponse = await page.request.post('/api/admin/settings/update', {
         data: {
@@ -246,7 +244,7 @@ test.describe('request log', () => {
       await expect(page.getByTestId('request-detail-layer')).toBeVisible()
       const detail = page.getByTestId('request-detail-view')
       await expect(detail).toContainText('[redacted]')
-      await expect(detail).toContainText('Router metadata')
+      await expect(detail).toContainText('Endpoint')
       await expect(detail).not.toContainText('sk-request-secret')
       await expect(detail).not.toContainText('secret-access-token')
     } finally {

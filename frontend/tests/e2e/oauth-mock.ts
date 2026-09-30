@@ -232,12 +232,13 @@ export class OAuthMockServer {
     this.deviceSessions.set(deviceAuthID, session)
     this.refreshTokens.set(session.record.refreshToken, issueTokenRecord('device_refresh', index))
 
+    const expiresAt = new Date(Date.now() + 900_000).toISOString()
     this.writeJSON(res, 200, {
       device_auth_id: deviceAuthID,
       user_code: userCode,
       verification_uri: verificationURL,
       interval: 2,
-      expires_in: 900,
+      expires_at: expiresAt,
     })
   }
 
