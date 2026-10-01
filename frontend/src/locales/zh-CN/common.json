@@ -99,6 +99,14 @@
     "modeLabel": "JSON 预览模式",
     "beautify": "美化",
     "raw": "原始",
-    "copy": "复制 JSON"
+    "copy": "复制 JSON",
+    "collapseAll": "全部折叠",
+    "expandAll": "全部展开",
+    "collapse": "折叠",
+    "expand": "展开",
+    "collapseNode": "折叠此 JSON 节点",
+    "expandViewer": "放大 JSON 查看器",
+    "expandedViewerLabel": "放大的 JSON 查看器",
+    "closeExpandedViewer": "关闭放大的 JSON 查看器"
   }
 }

@@ -99,6 +99,14 @@
     "modeLabel": "JSON preview mode",
     "beautify": "Beautify",
     "raw": "Raw",
-    "copy": "Copy JSON"
+    "copy": "Copy JSON",
+    "collapseAll": "Collapse all",
+    "expandAll": "Expand all",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "collapseNode": "Collapse JSON node",
+    "expandViewer": "Expand JSON viewer",
+    "expandedViewerLabel": "Expanded JSON viewer",
+    "closeExpandedViewer": "Close expanded JSON viewer"
   }
 }
