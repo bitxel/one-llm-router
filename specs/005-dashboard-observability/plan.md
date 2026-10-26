@@ -10,7 +10,7 @@
 
 ## Summary
 
-Add a live Admin Dashboard backed by retained request records. The backend records TTFT for streaming text responses, aggregates dashboard metrics through one Admin API endpoint, and returns envelope-compliant data. The frontend replaces the static dashboard with metric cards, filters, Recharts curves, and browser-local card settings for order and visibility.
+Add a live Admin Dashboard backed by retained request records. The backend records first output chunk latency for SSE responses, aggregates dashboard metrics through one Admin API endpoint, and returns envelope-compliant data. The frontend replaces the static dashboard with metric cards, filters, Recharts curves, and browser-local card settings for order and visibility.
 
 ## Technical Context
 
@@ -25,12 +25,13 @@ Add a live Admin Dashboard backed by retained request records. The backend recor
 
 ## Resolved Decisions
 
-1. **TTFT event**: TTFT starts at router request entry and stops at the first SSE event whose JSON payload has `type = "response.output_text.delta"` and a non-empty `delta`.
+1. **First output chunk event**: Start timing when SSE response forwarding begins and stop at the first non-empty SSE `data` payload; payload contents are opaque, while comments and empty `data` fields are ignored.
 2. **Range buckets**: `1h` uses 1-minute buckets; `1d` uses 1-hour buckets; `7d` uses 6-hour buckets; `30d` uses 1-day buckets.
 3. **Error-rate numerator**: Outcomes `success` and `no_extractable_text` are non-errors. All other outcomes count as errors.
 4. **Token normalization**: Use `input`/`input_tokens`, `cached_input`/`cached_tokens`, `output`/`output_tokens`; compute non-cached input as `max(input - cached, 0)`.
 5. **TTFT card value**: The card headline is P95 TTFT over the selected range. Each series bucket also uses P95 for that bucket.
 6. **Plugin model**: Dashboard observability is core code, not a plugin, because it is not a user-visible on/off capability implementation.
+7. **Generation speed**: Count output tokens only. Per-request speed is output tokens divided by valid generation duration; SSE estimates duration as `latency_ms - ttft_ms` when TTFT exists, and other requests use total latency. Per-model dashboard speed is weighted (`sum(output_tokens) / sum(duration_ms)`) over eligible records. No new persistence field is added.
 
 ## Constitution Check
 
@@ -77,6 +78,9 @@ Success envelope data includes:
 - `cards.tokens`
 - `cards.error_rate`
 - `cards.ttft`
+- `cards.model_speeds` with per-model output token count, eligible sample count, and weighted output tokens/second.
+
+Request detail uses existing `token_usage`, `latency_ms`, `ttft_ms`, and `response_mode`.
 
 Planned codes:
 

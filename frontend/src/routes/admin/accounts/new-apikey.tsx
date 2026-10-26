@@ -22,27 +22,32 @@ const t = i18n.getFixedT(null, 'accounts')
 
 import { invalidateAdminAccountQueries } from './query-keys'
 
-const APIKeyAccountSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, 'accounts:newApiKey.validation.nameRequired')
-    .max(64, 'accounts:newApiKey.validation.nameMax'),
-  api_key: z
-    .string()
-    .trim()
-    .min(1, 'accounts:newApiKey.validation.apiKeyRequired')
-    .max(256, 'accounts:newApiKey.validation.apiKeyMax'),
-  base_url: z
-    .string()
-    .trim()
-    .max(BASE_URL_MAX_LEN, 'accounts:newApiKey.validation.baseURLMax')
-    .refine(
-      (value) => value === '' || isValidBaseURL(value),
-      'accounts:newApiKey.validation.baseURLShape',
-    ),
-  capabilities: z.array(z.string()).default([]),
-})
+const APIKeyAccountSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, 'accounts:newApiKey.validation.nameRequired')
+      .max(64, 'accounts:newApiKey.validation.nameMax'),
+    api_key: z
+      .string()
+      .trim()
+      .min(1, 'accounts:newApiKey.validation.apiKeyRequired')
+      .max(256, 'accounts:newApiKey.validation.apiKeyMax'),
+    base_url: z
+      .string()
+      .trim()
+      .max(BASE_URL_MAX_LEN, 'accounts:newApiKey.validation.baseURLMax')
+      .refine(
+        (value) => value === '' || isValidBaseURL(value),
+        'accounts:newApiKey.validation.baseURLShape',
+      ),
+    capabilities: z.array(z.string()).default([]),
+  })
+  .refine((values) => !values.capabilities.includes('op.systemone') || values.base_url.length > 0, {
+    path: ['base_url'],
+    message: 'accounts:newApiKey.validation.systemOneBaseURL',
+  })
 
 type APIKeyAccountForm = z.infer<typeof APIKeyAccountSchema>
 
@@ -197,8 +202,8 @@ export function AdminAccountsNewAPIKey() {
           </Field>
 
           <Field
-            label="Capabilities"
-            hint="API operations this account can handle. Leave empty for none."
+            label={t('detailEdit.labels.capabilities')}
+            hint={t('detailEdit.hints.capabilities')}
           >
             <div className="flex flex-col gap-2">
               {CAPABILITY_OPTIONS.map((opt) => (

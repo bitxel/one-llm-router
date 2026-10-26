@@ -79,16 +79,13 @@ func TestForwardSSE_EmptyStream(t *testing.T) {
 	assert.Empty(t, result.UpstreamResponseBody)
 }
 
-func TestForwardSSE_CapturesTTFTOnFirstTextDelta(t *testing.T) {
+func TestForwardSSE_CapturesTTFTOnFirstNonEmptyDataChunkWithoutParsingPayload(t *testing.T) {
 	stream := strings.Join([]string{
-		"event: response.created",
-		`data: {"type":"response.created","response":{"id":"resp_123"}}`,
+		": heartbeat",
+		"event: provider-specific-event",
+		"data: {not-json-and-not-a-text-delta}",
 		"",
-		"event: response.output_text.delta",
-		`data: {"type":"response.output_text.delta","delta":"H"}`,
-		"",
-		"event: response.output_text.delta",
-		`data: {"type":"response.output_text.delta","delta":"i"}`,
+		"data: second chunk",
 		"",
 	}, "\n")
 
@@ -99,16 +96,10 @@ func TestForwardSSE_CapturesTTFTOnFirstTextDelta(t *testing.T) {
 	assert.GreaterOrEqual(t, *result.TTFTMs, 0)
 }
 
-func TestForwardSSE_TTFTIgnoresLifecycleAndEmptyDeltaEvents(t *testing.T) {
+func TestForwardSSE_TTFTIgnoresCommentsAndEmptyDataFields(t *testing.T) {
 	stream := strings.Join([]string{
-		"event: response.created",
-		`data: {"type":"response.created","response":{"id":"resp_123"}}`,
-		"",
-		"event: response.output_text.delta",
-		`data: {"type":"response.output_text.delta","delta":""}`,
-		"",
-		"event: response.completed",
-		`data: {"type":"response.completed","usage":{"input_tokens":2,"output_tokens":0}}`,
+		": heartbeat",
+		"data:",
 		"",
 	}, "\n")
 

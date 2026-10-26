@@ -52,9 +52,16 @@
       "meta": "{{errors}} / {{total}} errors"
     },
     "ttft": {
-      "title": "TTFT",
-      "shortTitle": "TTFT",
+      "title": "First output chunk",
+      "shortTitle": "First Output Chunk",
       "meta": "{{samples}} samples"
     }
+  },
+  "modelSpeeds": {
+    "title": "Output speed by model",
+    "unit": "output tokens/s",
+    "outputTokens": "output tokens",
+    "requests": "requests",
+    "empty": "No eligible output token usage in this range."
   }
 }

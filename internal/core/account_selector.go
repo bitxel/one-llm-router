@@ -94,7 +94,7 @@ func NewAccountSelector(repo AccountRepository, sessionRouter SessionRouter) *Ac
 }
 
 func (s *AccountSelector) SelectAccount(ctx context.Context, sessionKey string) (domain.UpstreamAccount, error) {
-	return s.pick(ctx, sessionKey, nil)
+	return s.pick(ctx, sessionKey, func(a domain.UpstreamAccount) bool { return !a.SystemOneOnly() })
 }
 
 func (s *AccountSelector) Select(ctx context.Context, sessionKey string) (domain.UpstreamAccount, []byte, bool, error) {
@@ -167,6 +167,10 @@ func (s *AccountSelector) ListEligibleAccounts(ctx context.Context, eligible fun
 }
 
 func (s *AccountSelector) SelectByID(ctx context.Context, id int64) (domain.UpstreamAccount, []byte, bool, error) {
+	return s.SelectByIDEligible(ctx, id, nil)
+}
+
+func (s *AccountSelector) SelectByIDEligible(ctx context.Context, id int64, eligible func(domain.UpstreamAccount) bool) (domain.UpstreamAccount, []byte, bool, error) {
 	if id <= 0 {
 		return domain.UpstreamAccount{}, nil, false, &AccountSelectionError{
 			AccountID: id,
@@ -202,6 +206,9 @@ func (s *AccountSelector) SelectByID(ctx context.Context, id int64) (domain.Upst
 		}
 	}
 
+	if eligible != nil && !eligible(*acct) {
+		return domain.UpstreamAccount{}, nil, false, &AccountSelectionError{AccountID: id, Reason: AccountUnavailableIneligible}
+	}
 	token, usedFallback, err := s.prepareToken(ctx, acct)
 	return *acct, token, usedFallback, err
 }

@@ -20,6 +20,8 @@ const (
 	CredentialClassOAuth  CredentialClass = "oauth"
 )
 
+const ResponseAdapterPassthrough = "passthrough"
+
 const RouterMetadataBridgeKey = "bridge"
 const RouterMetadataBridgeUpstreamEndpointKey = "upstream_endpoint"
 

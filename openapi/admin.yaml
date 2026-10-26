@@ -1533,8 +1533,13 @@ components:
             Capability OpID prefixes the account supports. An empty list
             (or absent key) means the account supports NO governed
             operations — it will be skipped for any capability-gated
-            route. OAuth accounts always skip capability checks.
-            Example: `["op.openai.chat_completions", "op.openai.responses"]`.
+            route. API-key capabilities are independent and may be combined:
+            `op.openai.chat_completions`, `op.openai.responses`, `op.systemone`.
+            System One requires an explicit base_url and API-key credentials;
+            OAuth accounts retain only their existing mapped operations.
+            System-One-only accounts use manual model configuration; refresh
+            returns account_model_refresh_failed. Mixed accounts retain model discovery.
+            Example: `["op.openai.chat_completions", "op.openai.responses", "op.systemone"]`.
         use_proxy:
           type: boolean
           description: |
@@ -1742,15 +1747,27 @@ components:
           type: array
           items: { $ref: '#/components/schemas/DashboardTTFTPoint' }
 
+    DashboardModelSpeed:
+      type: object
+      required: [model, output_tokens, sample_count, output_tokens_per_second]
+      properties:
+        model: { type: string, minLength: 1 }
+        output_tokens: { type: integer, minimum: 0 }
+        sample_count: { type: integer, minimum: 0 }
+        output_tokens_per_second: { type: number, format: double, minimum: 0 }
+
     DashboardCards:
       type: object
-      required: [active_accounts, requests, tokens, error_rate, ttft]
+      required: [active_accounts, requests, tokens, error_rate, ttft, model_speeds]
       properties:
         active_accounts: { $ref: '#/components/schemas/DashboardActiveAccountsCard' }
         requests: { $ref: '#/components/schemas/DashboardRequestsCard' }
         tokens: { $ref: '#/components/schemas/DashboardTokensCard' }
         error_rate: { $ref: '#/components/schemas/DashboardErrorRateCard' }
         ttft: { $ref: '#/components/schemas/DashboardTTFTCard' }
+        model_speeds:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardModelSpeed' }
 
     DashboardData:
       type: object
@@ -1899,7 +1916,7 @@ components:
           type: integer
           minimum: 0
           nullable: true
-          description: Time to first streamed text token in milliseconds, present only for SSE records where the first text delta was observed.
+          description: Elapsed time from starting SSE response forwarding until the first non-empty data payload is forwarded. Payload contents are not parsed; SSE comments and empty data fields are ignored.
         outcome: { $ref: '#/components/schemas/RequestOutcome' }
         error_code:
           type: string

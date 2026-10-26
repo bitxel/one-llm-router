@@ -2,7 +2,7 @@
 
 **ID**: 005-dashboard-observability
 **Created**: 2026-04-25
-**Updated**: 2026-04-25
+**Updated**: 2026-10-01
 **Status**: Ready
 
 ## Overview
@@ -49,17 +49,27 @@ As a platform operator, I want an error-rate card with a trend curve, so that I 
 2. Given zero records in range, then error rate is zero with an empty series rather than a division-by-zero failure.
 3. Given outcomes are `success` or `no_extractable_text`, then they are treated as non-error terminal outcomes; other outcomes are counted as errors.
 
-### US-5: Capture and Display TTFT (P0)
+### US-5: Capture and Display First Output Chunk Latency (P0)
 
-As a platform operator, I want TTFT recorded for streaming responses and displayed on the dashboard, so that I can detect poor first-token latency separately from total request latency.
+As a platform operator, I want first output chunk latency recorded for streaming responses and displayed on the dashboard, so that I can detect slow stream startup separately from total request latency.
 
 **Acceptance Scenarios**:
-1. Given an SSE response emits a first `response.output_text.delta` event with a non-empty `delta`, then the request record stores `ttft_ms` as the elapsed time from request start to receiving that event.
-2. Given an SSE stream emits only lifecycle or completion events, then `ttft_ms` remains absent.
+1. Given an SSE response emits a first non-empty `data` payload, then the request record stores `ttft_ms` as elapsed time from beginning response forwarding to forwarding that payload, without inspecting its contents.
+2. Given an SSE stream emits only comments, empty data fields, or no data payloads, then `ttft_ms` remains absent.
 3. Given non-streaming JSON responses, then `ttft_ms` remains absent.
-4. Given TTFT values exist in range, then the TTFT card shows P95 TTFT and a P95 bucketed series.
+4. Given first output chunk latency values exist in range, then the dashboard card shows their P95 and a P95 bucketed series.
 
-### US-6: Customize Dashboard Cards (P1)
+### US-6: Inspect Generation Speed (P1)
+
+As an operator, I want to see output generation speed on request details and by model on the dashboard, so that I can compare observed throughput.
+
+**Acceptance Scenarios**:
+1. Given a request has positive output tokens and valid duration, its detail shows output tokens per second.
+2. Given SSE has TTFT, estimated generation duration is total latency minus TTFT; otherwise total latency is used.
+3. Given model records have valid token counts and durations, the dashboard reports the model's output-token total divided by its eligible generation-duration total.
+4. Missing model/output usage, zero or invalid duration, and SSE with TTFT greater than or equal to total latency are excluded rather than fabricated.
+
+### US-7: Customize Dashboard Cards (P1)
 
 As a platform operator, I want to reorder cards and hide cards I do not need, so that the dashboard matches my monitoring workflow.
 
@@ -83,6 +93,8 @@ As a platform operator, I want to reorder cards and hide cards I do not need, so
 - **FR-010**: Dashboard aggregation MUST derive facts only from account rows and retained request records; it MUST NOT fabricate traffic, usage, health, or latency values.
 - **FR-011**: Card order and visibility settings MUST be adjustable by the user from a dashboard settings control.
 - **FR-012**: Dashboard settings MUST store only non-secret UI preferences.
+- **FR-013**: Request details MUST show output tokens/second when output tokens and the selected duration are valid; SSE duration is `latency_ms - ttft_ms` when TTFT is present, otherwise total latency is used.
+- **FR-014**: Dashboard MUST report per-model weighted output tokens/second as sum of output tokens divided by sum of eligible generation durations in the selected range and account filter.
 
 ## Non-Functional Requirements
 
@@ -100,7 +112,7 @@ As a platform operator, I want to reorder cards and hide cards I do not need, so
 - **Dashboard Snapshot**: The API response for one selected range and account filter. Contains active-account count, account options, and card metric payloads.
 - **Dashboard Range**: One of `1h`, `1d`, `7d`, or `30d`, mapped server-side to a fixed time window and bucket interval.
 - **Dashboard Series Point**: A bucketed aggregate with timestamp and metric-specific values.
-- **TTFT**: Time to first token, measured in milliseconds from router request start until the first non-empty streamed `response.output_text.delta`.
+- **TTFT**: Project-defined time to first output chunk, measured in milliseconds from beginning SSE response forwarding until the first non-empty SSE `data` payload is forwarded. The payload is opaque; comments and empty data fields do not count.
 - **Dashboard Card Setting**: Browser-local card visibility and ordering preference. It stores card ids only.
 
 ## Scope
@@ -117,7 +129,7 @@ As a platform operator, I want to reorder cards and hide cards I do not need, so
 ### Out of Scope
 
 - Cost or spend charts.
-- Per-model, per-client-key, per-session, or per-provider drilldowns.
+- Per-client-key, per-session, or per-provider drilldowns.
 - Alerting, SLO thresholds, anomaly detection, or notifications.
 - New retention policy controls.
 - Admin auth or RBAC changes.
@@ -128,5 +140,6 @@ As a platform operator, I want to reorder cards and hide cards I do not need, so
 
 - Retained request records are the authoritative usage source for this release.
 - The dashboard can aggregate over retained rows without adding a separate rollup table in 005.
-- TTFT applies only to streaming responses with observable text deltas.
+- TTFT applies to SSE responses with an observable non-empty data payload; it does not assert that the payload is user-visible text or a model token.
+- Generation speed counts output tokens only; requests without a usable output count or positive generation duration are omitted from its aggregate. SSE generation duration uses `latency_ms - ttft_ms` as an estimate because the schema does not persist a separate first-token-to-completion duration.
 - Browser-local dashboard layout preferences are acceptable because no admin identity model exists yet.

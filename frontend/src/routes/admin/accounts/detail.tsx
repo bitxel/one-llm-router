@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { accountsExportAuthJson } from '@/generated/openapi'
 import { i18n } from '@/i18n'
+import { isSystemOneOnly } from '@/lib/account-form'
 import { api } from '@/lib/api-client'
 import { intlLocale } from '@/lib/intl'
 import { planTypeLabel } from '@/lib/plan-label'
@@ -490,6 +491,11 @@ export function AdminAccountDetail() {
           </PanelCard>
 
           <PanelCard title={t('detail.modelsTitle')}>
+            {isSystemOneOnly(account.capabilities) && (
+              <p className="mb-3 text-sm text-[var(--text-dim)]">
+                {t('detail.systemOneManualModels')}
+              </p>
+            )}
             {modelsQuery.isLoading ? (
               <div className="text-[13px] text-[var(--text-dim)]">{t('detail.modelsLoading')}</div>
             ) : modelsQuery.isError ? (
@@ -554,7 +560,7 @@ export function AdminAccountDetail() {
                     variant="secondary"
                     size="sm"
                     onClick={() => void handleRefreshModels()}
-                    disabled={isRefreshingModels}
+                    disabled={isRefreshingModels || isSystemOneOnly(account.capabilities)}
                   >
                     <RefreshCw className={`size-3.5 ${isRefreshingModels ? 'animate-spin' : ''}`} />
                     {isRefreshingModels

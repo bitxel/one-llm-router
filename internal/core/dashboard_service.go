@@ -33,6 +33,14 @@ type DashboardAggregation struct {
 	Tokens        DashboardTokensCard
 	ErrorRate     DashboardErrorRateCard
 	TTFT          DashboardTTFTCard
+	ModelSpeeds   []DashboardModelSpeed
+}
+
+type DashboardModelSpeed struct {
+	Model                 string
+	OutputTokens          int
+	SampleCount           int
+	OutputTokensPerSecond float64
 }
 
 type DashboardSnapshot struct {

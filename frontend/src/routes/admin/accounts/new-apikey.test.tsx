@@ -117,6 +117,29 @@ describe('AdminAccountsNewAPIKey', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('API-key account created')
   })
 
+  it('keeps all three independent capabilities selected when submitting', async () => {
+    apiPostMock.mockResolvedValue({ id: 91 } as never)
+    const user = userEvent.setup()
+    await renderAPIKeyRoute()
+    await user.type(screen.getByTestId('apikey-name-input'), 'multi')
+    await user.type(screen.getByTestId('apikey-api-key-input'), 'test-key')
+    await user.type(screen.getByTestId('apikey-base-url-input'), 'https://gateway.example/v1')
+    for (const capability of [
+      'op.openai.chat_completions',
+      'op.openai.responses',
+      'op.systemone',
+    ]) {
+      await user.click(screen.getByTestId(`capability-${capability}`))
+    }
+    await user.click(screen.getByTestId('apikey-submit'))
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/api/admin/accounts',
+      expect.objectContaining({
+        capabilities: ['op.openai.chat_completions', 'op.openai.responses', 'op.systemone'],
+      }),
+    )
+  })
+
   it('accepts a multi-byte name client-side', async () => {
     apiPostMock.mockResolvedValue({
       id: 90,

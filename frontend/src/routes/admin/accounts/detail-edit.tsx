@@ -21,23 +21,28 @@ const t = i18n.getFixedT(null, 'accounts')
 
 import { invalidateAdminAccountQueries } from './query-keys'
 
-const EditSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, t('detailEdit.validation.nameRequired'))
-    .max(64, t('detailEdit.validation.nameMax')),
-  api_key: z.string().trim().max(256, 'accounts:detailEdit.validation.apiKeyMax'),
-  base_url: z
-    .string()
-    .trim()
-    .max(BASE_URL_MAX_LEN, 'accounts:detailEdit.validation.baseURLMax')
-    .refine(
-      (value) => value === '' || isValidBaseURL(value),
-      'accounts:detailEdit.validation.baseURLShape',
-    ),
-  capabilities: z.array(z.string()).default([]),
-})
+const EditSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, t('detailEdit.validation.nameRequired'))
+      .max(64, t('detailEdit.validation.nameMax')),
+    api_key: z.string().trim().max(256, 'accounts:detailEdit.validation.apiKeyMax'),
+    base_url: z
+      .string()
+      .trim()
+      .max(BASE_URL_MAX_LEN, 'accounts:detailEdit.validation.baseURLMax')
+      .refine(
+        (value) => value === '' || isValidBaseURL(value),
+        'accounts:detailEdit.validation.baseURLShape',
+      ),
+    capabilities: z.array(z.string()).default([]),
+  })
+  .refine((values) => !values.capabilities.includes('op.systemone') || values.base_url.length > 0, {
+    path: ['base_url'],
+    message: 'accounts:detailEdit.validation.systemOneBaseURL',
+  })
 
 type EditForm = z.infer<typeof EditSchema>
 

@@ -495,7 +495,7 @@ func TestRequestRecordRepo_QueryAdvancedFiltersAndOptions(t *testing.T) {
 	assert.ElementsMatch(t, []string{domain.ResponseModeJSON, domain.ResponseModeSSE}, options.ResponseModes)
 }
 
-func TestRequestRecordRepo_DashboardAggregatesRangeAccountTokensErrorsAndTTFT(t *testing.T) {
+func TestRequestRecordRepo_DashboardAggregatesRangeAccountTokensErrorsTTFTAndModelSpeeds(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 	acctRepo := NewAccountRepo(s.Engine())
@@ -518,6 +518,7 @@ func TestRequestRecordRepo_DashboardAggregatesRangeAccountTokensErrorsAndTTFT(t 
 			StatusCode:        200,
 			LatencyMs:         900,
 			TTFTMs:            &ttftFast,
+			Model:             ptrString("gpt-5.4"),
 			Outcome:           domain.OutcomeSuccess,
 			ResponseMode:      domain.ResponseModeSSE,
 			TokenUsage:        domain.JSONMap{"input": 100, "cached_input": 40, "output": 20},
@@ -530,6 +531,7 @@ func TestRequestRecordRepo_DashboardAggregatesRangeAccountTokensErrorsAndTTFT(t 
 			StatusCode:        429,
 			LatencyMs:         1200,
 			TTFTMs:            &ttftSlow,
+			Model:             ptrString("gpt-5.4"),
 			Outcome:           domain.OutcomeUpstreamError,
 			ResponseMode:      domain.ResponseModeSSE,
 			TokenUsage:        domain.JSONMap{"input_tokens": 20, "cached_input": 5, "output_tokens": 10},
@@ -541,9 +543,24 @@ func TestRequestRecordRepo_DashboardAggregatesRangeAccountTokensErrorsAndTTFT(t 
 			Path:              "/v1/responses",
 			StatusCode:        200,
 			LatencyMs:         100,
+			Model:             ptrString("gpt-5.4"),
 			Outcome:           domain.OutcomeSuccess,
 			ResponseMode:      domain.ResponseModeJSON,
 			TokenUsage:        domain.JSONMap{"input": 1000, "cached_input": 1000, "output": 1000},
+		},
+		{
+			RequestID: domain.NewRequestID(), UpstreamAccountID: &accountA.ID,
+			Method: "POST", Path: "/v1/responses", StatusCode: 200,
+			LatencyMs: 1000, Model: ptrString("gpt-5.4"), Outcome: domain.OutcomeSuccess,
+			ResponseMode: domain.ResponseModeSSE,
+			TokenUsage:   domain.JSONMap{"output": 999},
+		},
+		{
+			RequestID: domain.NewRequestID(), UpstreamAccountID: &accountA.ID,
+			Method: "POST", Path: "/v1/responses", StatusCode: 200,
+			LatencyMs: 100, TTFTMs: &ttftFast, Model: ptrString("gpt-5.4"), Outcome: domain.OutcomeSuccess,
+			ResponseMode: domain.ResponseModeSSE,
+			TokenUsage:   domain.JSONMap{"output": 999},
 		},
 	}
 	for _, record := range records {
@@ -559,19 +576,46 @@ func TestRequestRecordRepo_DashboardAggregatesRangeAccountTokensErrorsAndTTFT(t 
 
 	assert.Equal(t, core.DashboardRange7D, aggregation.Range)
 	assert.Equal(t, 6*60*60, aggregation.BucketSeconds)
-	assert.Equal(t, 2, aggregation.Requests.Total)
+	assert.Equal(t, 4, aggregation.Requests.Total)
 	assert.Equal(t, 45, aggregation.Tokens.Totals.InputCached)
 	assert.Equal(t, 75, aggregation.Tokens.Totals.InputNonCached)
-	assert.Equal(t, 30, aggregation.Tokens.Totals.Output)
+	assert.Equal(t, 2028, aggregation.Tokens.Totals.Output)
 	assert.Equal(t, 1, aggregation.ErrorRate.Errors)
-	assert.Equal(t, 2, aggregation.ErrorRate.Total)
-	assert.InDelta(t, 0.5, aggregation.ErrorRate.Value, 0.000001)
+	assert.Equal(t, 4, aggregation.ErrorRate.Total)
+	assert.InDelta(t, 0.25, aggregation.ErrorRate.Value, 0.000001)
 	require.NotNil(t, aggregation.TTFT.P95MS)
 	assert.Equal(t, 300, *aggregation.TTFT.P95MS)
-	assert.Equal(t, 2, aggregation.TTFT.SampleCount)
-	assert.Equal(t, 2, sumDashboardCounts(aggregation.Requests.Series))
+	assert.Equal(t, 3, aggregation.TTFT.SampleCount)
+	require.Len(t, aggregation.ModelSpeeds, 1)
+	assert.Equal(t, "gpt-5.4", aggregation.ModelSpeeds[0].Model)
+	assert.Equal(t, 30, aggregation.ModelSpeeds[0].OutputTokens)
+	assert.Equal(t, 2, aggregation.ModelSpeeds[0].SampleCount)
+	assert.InDelta(t, 30_000.0/1_700.0, aggregation.ModelSpeeds[0].OutputTokensPerSecond, 0.001)
+	assert.Equal(t, 4, sumDashboardCounts(aggregation.Requests.Series))
 	assert.Equal(t, 1, sumDashboardErrors(aggregation.ErrorRate.Series))
-	assert.Equal(t, 30, sumDashboardTokenOutput(aggregation.Tokens.Series))
+	assert.Equal(t, 2028, sumDashboardTokenOutput(aggregation.Tokens.Series))
+}
+
+func TestDashboardGenerationDurationMS_RequiresObservableSSEFirstToken(t *testing.T) {
+	ttft := 100
+	for _, tc := range []struct {
+		name   string
+		record domain.RequestRecord
+		wantMS int
+		wantOK bool
+	}{
+		{name: "sse without ttft", record: domain.RequestRecord{ResponseMode: domain.ResponseModeSSE, LatencyMs: 900}},
+		{name: "sse zero generation duration", record: domain.RequestRecord{ResponseMode: domain.ResponseModeSSE, LatencyMs: 100, TTFTMs: &ttft}},
+		{name: "sse generation duration", record: domain.RequestRecord{ResponseMode: domain.ResponseModeSSE, LatencyMs: 900, TTFTMs: &ttft}, wantMS: 800, wantOK: true},
+		{name: "non-sse uses full latency", record: domain.RequestRecord{ResponseMode: domain.ResponseModeJSON, LatencyMs: 900, TTFTMs: &ttft}, wantMS: 900, wantOK: true},
+		{name: "non-sse zero latency", record: domain.RequestRecord{ResponseMode: domain.ResponseModeJSON, LatencyMs: 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotMS, gotOK := dashboardGenerationDurationMS(tc.record)
+			assert.Equal(t, tc.wantMS, gotMS)
+			assert.Equal(t, tc.wantOK, gotOK)
+		})
+	}
 }
 
 func TestRequestRecordRepo_UsageSummaryStreamsTokenUsage(t *testing.T) {

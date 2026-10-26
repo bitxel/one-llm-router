@@ -42,6 +42,9 @@ func TestDashboardHandler_DefaultSuccessEnvelope(t *testing.T) {
 				},
 				ErrorRate: core.DashboardErrorRateCard{Value: 0.25, Total: 12, Errors: 3},
 				TTFT:      core.DashboardTTFTCard{P95MS: intPtr(240), SampleCount: 2},
+				ModelSpeeds: []core.DashboardModelSpeed{{
+					Model: "gpt-5.4", OutputTokens: 90, SampleCount: 3, OutputTokensPerSecond: 45,
+				}},
 			},
 			ActiveAccounts: 2,
 			AccountOptions: []core.DashboardAccountOption{
@@ -58,6 +61,10 @@ func TestDashboardHandler_DefaultSuccessEnvelope(t *testing.T) {
 	cards := data["cards"].(map[string]any)
 	active := cards["active_accounts"].(map[string]any)
 	assert.Equal(t, float64(2), active["value"])
+	modelSpeeds := cards["model_speeds"].([]any)
+	require.Len(t, modelSpeeds, 1)
+	assert.Equal(t, "gpt-5.4", modelSpeeds[0].(map[string]any)["model"])
+	assert.Equal(t, float64(45), modelSpeeds[0].(map[string]any)["output_tokens_per_second"])
 	assert.Equal(t, core.DashboardRange7D, service.lastQuery.Range)
 	assert.Nil(t, service.lastQuery.AccountID)
 }

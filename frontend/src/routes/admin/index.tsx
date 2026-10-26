@@ -368,6 +368,30 @@ export function AdminIndex() {
         )}
       </ul>
 
+      <section
+        data-testid="dashboard-model-speeds"
+        aria-label={t('modelSpeeds.title')}
+        className="mt-4 border border-[var(--line)] bg-[var(--panel)]"
+      >
+        <h2 className="border-b border-[var(--line)] px-4 py-3 text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-dim)]">
+          {t('modelSpeeds.title')}
+        </h2>
+        {dashboard?.cards.model_speeds.length ? (
+          <ul className="divide-y divide-[var(--line)]">
+            {dashboard.cards.model_speeds.map((item) => (
+              <li key={item.model} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 font-mono text-sm">
+                <span>{item.model}</span>
+                <span className="text-[var(--text-muted)]">
+                  {formatCount(item.output_tokens_per_second)} {t('modelSpeeds.unit')} · {formatCount(item.output_tokens)} {t('modelSpeeds.outputTokens')} · {formatCount(item.sample_count)} {t('modelSpeeds.requests')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="px-4 py-3 text-sm text-[var(--text-muted)]">{t('modelSpeeds.empty')}</p>
+        )}
+      </section>
+
       {editMode && hiddenCardIDs.length > 0 ? (
         <HiddenCardsArea
           hiddenCardIDs={hiddenCardIDs}

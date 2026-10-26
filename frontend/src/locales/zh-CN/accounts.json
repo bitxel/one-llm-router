@@ -116,7 +116,8 @@
       "modelRemoveFailed": "移除模型失败",
       "modelRefreshSuccess": "已从上游刷新模型",
       "modelRefreshFailed": "刷新模型失败"
-    }
+    },
+    "systemOneManualModels": "此账号的 System One 模型需手工添加，不支持自动发现。"
   },
   "detailEdit": {
     "panelTitle": "编辑 API 密钥账号",
@@ -145,7 +146,8 @@
       "nameMax": "昵称不能超过 64 个字符",
       "apiKeyMax": "API 密钥须为 1-256 个字符",
       "baseURLMax": "base_url 不能超过 256 个字符",
-      "baseURLShape": "base_url 必须是不含查询串与片段的绝对 http(s) URL"
+      "baseURLShape": "base_url 必须是不含查询串与片段的绝对 http(s) URL",
+      "systemOneBaseURL": "使用 System One 时必须填写 Base URL。"
     },
     "toasts": {
       "updateSuccess": "账号已更新",
@@ -213,7 +215,8 @@
       "apiKeyMax": "API 密钥须为 1-256 个字符",
       "baseURLMax": "base_url 不能超过 256 个字符",
       "baseURLShape": "base_url 必须是不含查询串与片段的绝对 http(s) URL",
-      "missingAccountID": "创建账号响应缺少账号 ID"
+      "missingAccountID": "创建账号响应缺少账号 ID",
+      "systemOneBaseURL": "使用 System One 时必须填写 Base URL。"
     },
     "toasts": {
       "createSuccess": "API 密钥账号已创建",

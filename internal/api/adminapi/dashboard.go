@@ -98,6 +98,7 @@ func dashboardSuccess(snapshot core.DashboardSnapshot) (generatedadminapi.Dashbo
 				Tokens:         generatedDashboardTokens(snapshot.Tokens),
 				ErrorRate:      generatedDashboardErrorRate(snapshot.ErrorRate),
 				Ttft:           generatedDashboardTTFT(snapshot.TTFT),
+				ModelSpeeds:    generatedDashboardModelSpeeds(snapshot.ModelSpeeds),
 			},
 		},
 	}
@@ -106,6 +107,17 @@ func dashboardSuccess(snapshot core.DashboardSnapshot) (generatedadminapi.Dashbo
 		return nil, err
 	}
 	return generatedadminapi.DashboardGet200JSONResponse(body), nil
+}
+
+func generatedDashboardModelSpeeds(speeds []core.DashboardModelSpeed) []generatedadminapi.DashboardModelSpeed {
+	out := make([]generatedadminapi.DashboardModelSpeed, 0, len(speeds))
+	for _, speed := range speeds {
+		out = append(out, generatedadminapi.DashboardModelSpeed{
+			Model: speed.Model, OutputTokens: speed.OutputTokens, SampleCount: speed.SampleCount,
+			OutputTokensPerSecond: speed.OutputTokensPerSecond,
+		})
+	}
+	return out
 }
 
 func dashboardInvalidFilter(field, reason string) (generatedadminapi.DashboardGetResponseObject, error) {

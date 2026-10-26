@@ -134,9 +134,15 @@ func (r *RequestRecordRepo) Dashboard(ctx context.Context, query core.DashboardQ
 	aggregation := newDashboardAggregation(normalized.Range, start, end, bucketDuration, bucketCount)
 	bucketTTFT := make([][]int, bucketCount)
 	allTTFT := make([]int, 0)
+	type modelSpeedAccumulator struct {
+		outputTokens int
+		durationMS   int
+		sampleCount  int
+	}
+	modelSpeeds := make(map[string]*modelSpeedAccumulator)
 
 	sess := r.engine.Context(ctx).
-		Cols("created_at", "upstream_account_id", "outcome", "token_usage", "ttft_ms").
+		Cols("created_at", "upstream_account_id", "outcome", "token_usage", "ttft_ms", "latency_ms", "model", "response_mode").
 		Where("created_at >= ?", start).
 		And("created_at <= ?", end)
 	defer func() { _ = sess.Close() }()
@@ -169,6 +175,18 @@ func (r *RequestRecordRepo) Dashboard(ctx context.Context, query core.DashboardQ
 		aggregation.Tokens.Series[idx].InputCached += tokens.InputCached
 		aggregation.Tokens.Series[idx].InputNonCached += tokens.InputNonCached
 		aggregation.Tokens.Series[idx].Output += tokens.Output
+		if record.Model != nil && strings.TrimSpace(*record.Model) != "" && tokens.Output > 0 {
+			if durationMS, ok := dashboardGenerationDurationMS(record); ok {
+				model := strings.TrimSpace(*record.Model)
+				if modelSpeeds[model] == nil {
+					modelSpeeds[model] = &modelSpeedAccumulator{}
+				}
+				acc := modelSpeeds[model]
+				acc.outputTokens += tokens.Output
+				acc.durationMS += durationMS
+				acc.sampleCount++
+			}
+		}
 
 		aggregation.ErrorRate.Total++
 		aggregation.ErrorRate.Series[idx].Total++
@@ -190,10 +208,30 @@ func (r *RequestRecordRepo) Dashboard(ctx context.Context, query core.DashboardQ
 		aggregation.ErrorRate.Series[i].Rate = dashboardRate(aggregation.ErrorRate.Series[i].Errors, aggregation.ErrorRate.Series[i].Total)
 	}
 	aggregation.TTFT.P95MS = dashboardP95(allTTFT)
+	for model, acc := range modelSpeeds {
+		aggregation.ModelSpeeds = append(aggregation.ModelSpeeds, core.DashboardModelSpeed{
+			Model: model, OutputTokens: acc.outputTokens, SampleCount: acc.sampleCount,
+			OutputTokensPerSecond: float64(acc.outputTokens) * 1000 / float64(acc.durationMS),
+		})
+	}
+	sort.Slice(aggregation.ModelSpeeds, func(i, j int) bool {
+		return aggregation.ModelSpeeds[i].Model < aggregation.ModelSpeeds[j].Model
+	})
 	for i := range aggregation.TTFT.Series {
 		aggregation.TTFT.Series[i].P95MS = dashboardP95(bucketTTFT[i])
 	}
 	return aggregation, nil
+}
+
+func dashboardGenerationDurationMS(record domain.RequestRecord) (int, bool) {
+	durationMS := record.LatencyMs
+	if record.ResponseMode == domain.ResponseModeSSE {
+		if record.TTFTMs == nil {
+			return 0, false
+		}
+		durationMS -= *record.TTFTMs
+	}
+	return durationMS, durationMS > 0
 }
 
 func applyRequestRecordSessionFilters(sess *xorm.Session, params core.QueryParams) *xorm.Session {

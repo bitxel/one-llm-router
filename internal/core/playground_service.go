@@ -354,13 +354,28 @@ func (s *PlaygroundService) Run(ctx context.Context, req PlaygroundRunRequest) (
 		account domain.UpstreamAccount
 		token   []byte
 	)
+	eligible := func(a domain.UpstreamAccount) bool {
+		if a.SystemOneOnly() {
+			return false
+		}
+		// Preserve legacy empty-capability Playground accounts.
+		if a.IsOAuth() || len(a.Capabilities) == 0 {
+			return true
+		}
+		op := "op.openai.responses.create"
+		if req.EffectiveEndpoint() == PlaygroundEndpointChatCompletions {
+			op = "op.openai.chat_completions.create"
+		}
+		return a.HasCapabilityFor(op)
+	}
+
 	switch req.SelectionMode {
 	case PlaygroundSelectionAuto:
 		sessionKey := ""
 		if req.SessionKey != nil {
 			sessionKey = *req.SessionKey
 		}
-		account, token, _, err = s.selector.Select(ctx, sessionKey)
+		account, token, _, err = s.selector.SelectEligible(ctx, sessionKey, eligible)
 		if err != nil {
 			if errors.Is(err, domain.ErrNoCapacity) {
 				s.recordRun(ctx, playgroundRecordInput{
@@ -382,7 +397,7 @@ func (s *PlaygroundService) Run(ctx context.Context, req PlaygroundRunRequest) (
 			return PlaygroundRunResult{}, err
 		}
 	case PlaygroundSelectionAccount:
-		account, token, _, err = s.selector.SelectByID(ctx, *req.AccountID)
+		account, token, _, err = s.selector.SelectByIDEligible(ctx, *req.AccountID, eligible)
 		if err != nil {
 			mappedErr := mapAccountSelectionError(err)
 			var unavailable *PlaygroundAccountUnavailableError

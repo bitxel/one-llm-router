@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -92,7 +93,7 @@ type UpstreamAccount struct {
 	// Capabilities declares which API operations this account can handle.
 	// Stored as JSON text array. Only meaningful for api_key accounts.
 	// Empty/nil means the account supports no capability-governed operations.
-	// Known values this iteration: "op.openai.chat_completions", "op.openai.responses".
+	// Known values: "op.openai.chat_completions", "op.openai.responses", "op.systemone".
 	Capabilities []string `xorm:"json 'capabilities'" json:"capabilities,omitempty"`
 
 	PrimaryUsedPercent     *float64   `xorm:"'primary_used_percent'" json:"-"`
@@ -149,10 +150,19 @@ func (a UpstreamAccount) IsOAuth() bool {
 	}
 }
 
+const CapabilitySystemOne = "op.systemone"
+
+// SystemOneOnly distinguishes accounts with no legacy operation capability.
+// Accounts supporting multiple protocols must remain eligible for each one.
+func (a UpstreamAccount) SystemOneOnly() bool {
+	return !a.IsOAuth() && slices.Contains(a.Capabilities, CapabilitySystemOne) && !slices.Contains(a.Capabilities, "op.openai.chat_completions") && !slices.Contains(a.Capabilities, "op.openai.responses")
+}
+
 // capabilityGovernedPrefixes is the set of OpID prefixes subject to
 // capability-based filtering. Each entry must NOT include a trailing "."
 // so HasPrefix matching works.
 var capabilityGovernedPrefixes = []string{
+	CapabilitySystemOne,
 	"op.openai.chat_completions",
 	"op.openai.responses",
 }
@@ -207,7 +217,7 @@ func (a *UpstreamAccount) HasCapabilityFor(opID string) bool {
 		return false
 	}
 	for _, cap := range a.Capabilities {
-		if strings.HasPrefix(opID, cap) {
+		if strings.HasPrefix(opID, cap+".") {
 			return true
 		}
 	}
@@ -260,6 +270,13 @@ func (a *UpstreamAccount) validateAPIKeyShape() error {
 	// NULL, which breaks rule 1 in exactly the same invisible way as
 	// a full token would. So we test the slice for nil, not len > 0.
 	var offenders []string
+	if slices.Contains(a.Capabilities, CapabilitySystemOne) {
+		if a.BaseURL == nil || strings.TrimSpace(*a.BaseURL) == "" {
+			return &ValidationError{Field: "base_url", Message: "base_url is required for System One"}
+		} else if err := ValidateBaseURL(*a.BaseURL); err != nil {
+			return err
+		}
+	}
 	if a.APIKey == "" {
 		offenders = append(offenders, "api_key=empty")
 	}
@@ -329,6 +346,9 @@ func (a *UpstreamAccount) validateAPIKeyShape() error {
 
 func (a *UpstreamAccount) validateOAuthShape() error {
 	var offenders []string
+	if slices.Contains(a.Capabilities, CapabilitySystemOne) {
+		offenders = append(offenders, "systemone requires api_key")
+	}
 	if a.APIKey != "" {
 		offenders = append(offenders, "api_key=non-empty")
 	}

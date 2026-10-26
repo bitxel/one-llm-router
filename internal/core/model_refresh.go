@@ -56,7 +56,7 @@ func NewModelRefresher(directClient, proxiedClient *http.Client, codexBackend, c
 // refresh endpoint keeps calling Refresh directly because it reports
 // errors synchronously.
 func (r *ModelRefresher) TriggerAsync(acct *domain.UpstreamAccount, repo ModelRefresherRepo) {
-	if r == nil || repo == nil || acct == nil || acct.Status != domain.AccountStatusActive {
+	if r == nil || repo == nil || acct == nil || acct.Status != domain.AccountStatusActive || acct.SystemOneOnly() {
 		return
 	}
 	go func() {
@@ -70,6 +70,9 @@ func (r *ModelRefresher) TriggerAsync(acct *domain.UpstreamAccount, repo ModelRe
 }
 
 func (r *ModelRefresher) Refresh(ctx context.Context, acct *domain.UpstreamAccount, modelRepo ModelRefresherRepo) (int, int, int, error) {
+	if acct.SystemOneOnly() {
+		return 0, 0, 0, errors.New("automatic model discovery is unavailable for System One-only accounts; add models manually")
+	}
 	acctID := acct.ID
 	r.logger.Info("model_refresh_started",
 		"account_id", acctID,

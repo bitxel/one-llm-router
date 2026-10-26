@@ -43,6 +43,30 @@ Native response routes and OpenAI-compatible facade routes differ only in downst
 - `POST /v1/responses` normalizes the request and may collect upstream SSE into downstream JSON when the client did not request streaming.
 - `POST /backend-api/codex/responses/compact` and `POST /v1/responses/compact` use the compact request structure; compact upstream payload strips `store` in addition to the unsupported upstream fields.
 
+## Image Generation Through Codex Responses
+
+OAuth Responses requests accept the `image_generation` tool and use the existing
+ChatGPT Codex `/codex/responses` upstream with the account's OAuth bearer token
+and `chatgpt-account-id`. The upstream remains streaming even when a facade
+client requests JSON. This capability does not enable `/v1/images/*` or send
+OAuth credentials to the OpenAI Platform Images API.
+
+- Streaming forwarding accepts SSE event data up to 16 MiB by default,
+  including Base64 image results in `response.output_item.done`. The SSE field
+  prefix and LF/CRLF framing do not consume this event-data budget.
+- JSON collection retains each complete `response.output_item.done.item`, keyed
+  by its non-negative integer `output_index`. When the terminal response's
+  `output` is absent, null, or empty, the collected items populate `output` in
+  index order. A non-empty terminal `output` remains authoritative.
+- Preserve complete items, including image `result`, format, size, and tool
+  metadata, plus terminal response status, error, and usage. Do not convert an
+  upstream failure into a successful response or derive image bytes from text.
+- Missing/invalid item indices or objects and conflicting completed items at the
+  same index are upstream protocol errors; identical repeated items are idempotent.
+- Non-streaming collection retains its separate 16 MiB total upstream-response
+  bound. Malformed, incomplete, or oversized SSE fails with
+  `upstream_response_invalid`; it must not return successful empty image output.
+
 ## WebSocket Contract
 
 Applies to:

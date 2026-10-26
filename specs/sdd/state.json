@@ -196,7 +196,7 @@
         "tasks_total": 21
       },
       "decisions": {
-        "ttft_definition": "TTFT is measured from router request start to the first SSE JSON event with type=response.output_text.delta and non-empty delta.",
+        "ttft_definition": "First-output-chunk latency is measured from the start of SSE response forwarding to forwarding the first non-empty data payload; payload format is opaque, comments and empty data fields are ignored.",
         "range_buckets": "1h=1 minute buckets, 1d=1 hour buckets, 7d=6 hour buckets, 30d=1 day buckets.",
         "dashboard_scope": "Core observability endpoint and dashboard UI, not a plugin; no alerts, cost chart, Prometheus exporter, or rollup table in 005."
       },

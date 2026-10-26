@@ -478,8 +478,13 @@ export type AccountListItem = {
      * Capability OpID prefixes the account supports. An empty list
      * (or absent key) means the account supports NO governed
      * operations — it will be skipped for any capability-gated
-     * route. OAuth accounts always skip capability checks.
-     * Example: `["op.openai.chat_completions", "op.openai.responses"]`.
+     * route. API-key capabilities are independent and may be combined:
+     * `op.openai.chat_completions`, `op.openai.responses`, `op.systemone`.
+     * System One requires an explicit base_url and API-key credentials;
+     * OAuth accounts retain only their existing mapped operations.
+     * System-One-only accounts use manual model configuration; refresh
+     * returns account_model_refresh_failed. Mixed accounts retain model discovery.
+     * Example: `["op.openai.chat_completions", "op.openai.responses", "op.systemone"]`.
      *
      */
     capabilities?: Array<string>;
@@ -604,12 +609,20 @@ export type DashboardTtftCard = {
     series: Array<DashboardTtftPoint>;
 };
 
+export type DashboardModelSpeed = {
+    model: string;
+    output_tokens: number;
+    sample_count: number;
+    output_tokens_per_second: number;
+};
+
 export type DashboardCards = {
     active_accounts: DashboardActiveAccountsCard;
     requests: DashboardRequestsCard;
     tokens: DashboardTokensCard;
     error_rate: DashboardErrorRateCard;
     ttft: DashboardTtftCard;
+    model_speeds: Array<DashboardModelSpeed>;
 };
 
 export type DashboardData = {
@@ -691,7 +704,7 @@ export type RequestLogRow = {
     status_code: number;
     latency_ms: number;
     /**
-     * Time to first streamed text token in milliseconds, present only for SSE records where the first text delta was observed.
+     * Elapsed time from starting SSE response forwarding until the first non-empty data payload is forwarded. Payload contents are not parsed; SSE comments and empty data fields are ignored.
      */
     ttft_ms?: number | null;
     outcome: RequestOutcome;

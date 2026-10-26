@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/provider"
 	"github.com/user/one-llm-router/internal/provider/openai"
+	"github.com/user/one-llm-router/internal/provider/systemone"
 )
 
 var hopByHopHeaders = map[string]bool{
@@ -173,6 +175,17 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if route.OpID == systemone.OpCreate {
+		if err := systemone.ValidateHeaders(r.Header, r.URL.RawQuery); err != nil {
+			status := http.StatusBadRequest
+			if errors.Is(err, systemone.ErrUnsupportedMedia) {
+				status = http.StatusUnsupportedMediaType
+			}
+			h.writeError(w, requestID, start, r, nil, status, ErrCodeInvalidRequest, err.Error(), domain.OutcomeRouterError, proxyErrorBodyCapture{})
+			return
+		}
+	}
+
 	var reqBodyBytes []byte
 	if r.Body != nil {
 		switch route.BodyPolicy {
@@ -202,6 +215,19 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			r.Body = newBoundedRequestBody(r.Body, h.maxRequestBody)
 		}
 	}
+	var clientReq provider.ClientRequest
+	if route.OpID == systemone.OpCreate {
+		var err error
+		clientReq, err = (systemone.Bridge{}).DecodeRequestBody(decodeInputFromGatewayRoute(route, r, reqBodyBytes, requestID, nil))
+		if err != nil {
+			h.writeError(w, requestID, start, r, nil, http.StatusBadRequest, ErrCodeInvalidRequest, "invalid systemone request", domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: reqBodyBytes, cause: err})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		r = r.WithContext(ctx)
+	}
+
 	originalReqBodyBytes := reqBodyBytes
 	effectiveReqBodyBytes := reqBodyBytes
 	renameMetadata := domain.JSONMap(nil)
@@ -229,7 +255,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	account, accessToken, _, err := h.selector.SelectEligible(r.Context(), sessionKey, proxyAccountEligible(route, eligibleAccountIDs))
 	if err != nil {
 		if errors.Is(err, domain.ErrNoCapacity) {
-			if hasModelFilter {
+			if hasModelFilter && route.OpID != systemone.OpCreate {
 				modelStr := ""
 				if extractedModel != nil {
 					modelStr = *extractedModel
@@ -278,7 +304,9 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// request with our router-side trace. Header filtering still controls
 	// operation-specific exceptions such as multipart transcribe.
 	r.Header.Set("X-Request-Id", requestID)
-	clientReq, err := bridge.DecodeClientRequest(r.Context(), decodeInputFromGatewayRoute(route, r, effectiveReqBodyBytes, requestID, renameMetadata))
+	if route.OpID != systemone.OpCreate {
+		clientReq, err = bridge.DecodeClientRequest(r.Context(), decodeInputFromGatewayRoute(route, r, effectiveReqBodyBytes, requestID, renameMetadata))
+	}
 	if err != nil {
 		h.writeError(w, requestID, start, r, &account,
 			http.StatusBadRequest, ErrCodeInvalidRequest, "invalid request body",
@@ -286,6 +314,13 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	upstreamBaseURL := account.EffectiveBaseURL()
+	if route.OpID == systemone.OpCreate {
+		if account.BaseURL == nil || strings.TrimSpace(*account.BaseURL) == "" {
+			h.writeError(w, requestID, start, r, &account, http.StatusInternalServerError, ErrCodeInternalError, "systemone account requires base_url", domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, routerMetadata: bridgeRouterMetadata})
+			return
+		}
+		upstreamBaseURL = *account.BaseURL
+	}
 	if account.IsOAuth() {
 		upstreamBaseURL = h.client.CodexBackendBaseURL()
 	}
@@ -360,6 +395,31 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = upstreamResp.Body.Close() }()
 
+	// System One is nonstreaming. Validate success before forwarding headers;
+	// never let a malformed provider response enter the generic SSE branch.
+	var systemOneBody []byte
+	var systemOneUsage domain.JSONMap
+	if route.OpID == systemone.OpCreate {
+		body, readErr := readBounded(upstreamResp.Body, defaultMaxUpstreamResponseBody, "upstream response too large")
+		if readErr == nil && upstreamResp.StatusCode >= 200 && upstreamResp.StatusCode < 300 {
+			media, _, mediaErr := mime.ParseMediaType(upstreamResp.Header.Get("Content-Type"))
+			if mediaErr != nil || media != "application/json" {
+				readErr = errors.New("systemone requires a JSON response")
+			} else {
+				systemOneUsage, readErr = systemone.ValidateResponse(body)
+			}
+		}
+		if readErr != nil {
+			status, code := http.StatusBadGateway, ErrCodeUpstreamRespInvalid
+			if errors.Is(r.Context().Err(), context.DeadlineExceeded) {
+				status, code = http.StatusGatewayTimeout, ErrCodeUpstreamTimeout
+			}
+			h.writeError(w, requestID, start, r, &account, status, code, "invalid systemone upstream response", domain.OutcomeRouterError, proxyErrorBodyCapture{clientRequestBody: originalReqBodyBytes, upstreamRequestBody: capture.UpstreamRequestBody, upstreamResponseBody: body, routerMetadata: bridgeRouterMetadata, cause: readErr})
+			return
+		}
+		systemOneBody = body
+	}
+
 	dynamicResponseDrops := dynamicHopByHopHeaders(upstreamResp.Header)
 	for key, values := range upstreamResp.Header {
 		lower := strings.ToLower(key)
@@ -391,6 +451,9 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	responseBody := io.Reader(upstreamResp.Body)
 	responseMode := openai.DetectResponseMode(upstreamResp.Header.Get("Content-Type"))
+	if route.OpID == systemone.OpCreate {
+		responseMode = domain.ResponseModeJSON
+	}
 	if responseMode == domain.ResponseModeJSON && shouldSniffResponseForSSE(r, originalReqBodyBytes, upstreamResp.StatusCode) {
 		buffered := bufio.NewReader(upstreamResp.Body)
 		responseBody = buffered
@@ -408,7 +471,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	outcome := domain.OutcomeSuccess
 	recordStatusCode := upstreamResp.StatusCode
 
-	if upstreamResp.StatusCode >= 400 {
+	if upstreamResp.StatusCode >= 400 || (route.OpID == systemone.OpCreate && upstreamResp.StatusCode >= 300) {
 		outcome = domain.OutcomeUpstreamError
 	}
 
@@ -442,7 +505,11 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		body, readErr := readBounded(responseBody, defaultMaxUpstreamResponseBody, "upstream response too large")
+		body := systemOneBody
+		var readErr error
+		if route.OpID != systemone.OpCreate {
+			body, readErr = readBounded(responseBody, defaultMaxUpstreamResponseBody, "upstream response too large")
+		}
 		if readErr != nil {
 			h.logger.Error("failed to read upstream response", "request_id", requestID, "error", readErr)
 			outcome = domain.OutcomeRouterError
@@ -458,7 +525,11 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			switch outcome {
 			case domain.OutcomeSuccess:
-				tokenUsage = openai.ExtractUsageFromJSON(body)
+				if route.OpID == systemone.OpCreate {
+					tokenUsage = systemOneUsage
+				} else {
+					tokenUsage = openai.ExtractUsageFromJSON(body)
+				}
 			case domain.OutcomeUpstreamError:
 				errCode = openai.ExtractErrorCode(body)
 			}
@@ -550,7 +621,7 @@ func mergeModelParams(base domain.JSONMap, extra domain.JSONMap) domain.JSONMap 
 const routerMetadataModelRenameKey = "model_rename"
 
 func (h *ProxyHandler) rewriteModelForRoute(route gatewayRoute, path string, body []byte) ([]byte, domain.JSONMap, bool) {
-	if h == nil || h.modelRenameFn == nil || len(body) == 0 {
+	if h == nil || h.modelRenameFn == nil || len(body) == 0 || route.OpID == systemone.OpCreate {
 		return nil, nil, false
 	}
 	if route.BodyPolicy != gatewayBodyPolicyJSONCaptureAllowed ||
@@ -755,6 +826,9 @@ func openAIBodyPolicy(policy gatewayBodyPolicy) openai.GatewayBodyPolicy {
 
 func proxyAccountEligible(route gatewayRoute, eligibleAccountIDs map[int64]struct{}) func(domain.UpstreamAccount) bool {
 	return func(account domain.UpstreamAccount) bool {
+		if route.OpID != systemone.OpCreate && account.SystemOneOnly() {
+			return false
+		}
 		if account.IsOAuth() {
 			if !route.OAuth.Eligible {
 				return false

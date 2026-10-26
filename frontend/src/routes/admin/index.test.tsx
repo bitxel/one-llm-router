@@ -111,6 +111,9 @@ const dashboardPayload: DashboardData = {
       errors: 16,
       series: [{ timestamp: '2026-04-25T00:00:00Z', total: 128, errors: 16, rate: 0.125 }],
     },
+    model_speeds: [
+      { model: 'gpt-5.4', output_tokens: 900, sample_count: 10, output_tokens_per_second: 90 },
+    ],
     ttft: {
       p95_ms: 420,
       sample_count: 12,
@@ -164,6 +167,8 @@ describe('AdminIndex dashboard', () => {
     expect(screen.getByTestId('dashboard-card-tokens')).toHaveTextContent('1,600')
     expect(screen.getByTestId('dashboard-card-error_rate')).toHaveTextContent('12.5%')
     expect(screen.getByTestId('dashboard-card-ttft')).toHaveTextContent('420 ms')
+    expect(screen.getByTestId('dashboard-model-speeds')).toHaveTextContent('gpt-5.4')
+    expect(screen.getByTestId('dashboard-model-speeds')).toHaveTextContent('90 output tokens/s')
     expect(screen.getAllByTestId('mock-responsive-chart').length).toBeGreaterThanOrEqual(4)
     expect(screen.getByRole('button', { name: 'Refresh' })).not.toHaveTextContent('Refresh')
     expect(screen.getByRole('button', { name: 'Edit dashboard' })).not.toHaveTextContent(
@@ -219,14 +224,16 @@ describe('AdminIndex dashboard', () => {
     expect(screen.queryByTestId('dashboard-settings')).not.toBeInTheDocument()
 
     await user.click(
-      within(screen.getByTestId('dashboard-card-ttft')).getByRole('button', { name: 'Hide TTFT' }),
+      within(screen.getByTestId('dashboard-card-ttft')).getByRole('button', {
+        name: 'Hide First Output Chunk',
+      }),
     )
 
     await waitFor(() => {
       expect(screen.queryByTestId('dashboard-card-ttft')).not.toBeInTheDocument()
     })
     expect(screen.getByTestId('dashboard-hidden-cards')).toBeInTheDocument()
-    expect(screen.getByTestId('dashboard-hidden-card-ttft')).toHaveTextContent('TTFT')
+    expect(screen.getByTestId('dashboard-hidden-card-ttft')).toHaveTextContent('First Output Chunk')
 
     fireEvent.dragStart(screen.getByTestId('dashboard-card-tokens'), {
       dataTransfer: createDataTransfer('tokens'),

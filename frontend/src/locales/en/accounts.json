@@ -116,7 +116,8 @@
       "modelRemoveFailed": "Failed to remove model",
       "modelRefreshSuccess": "Models refreshed from upstream",
       "modelRefreshFailed": "Failed to refresh models"
-    }
+    },
+    "systemOneManualModels": "Add System One models manually; automatic discovery is not available for this account."
   },
   "detailEdit": {
     "panelTitle": "Edit API-key account",
@@ -145,7 +146,8 @@
       "nameMax": "name must be at most 64 characters",
       "apiKeyMax": "API key must be 1-256 characters",
       "baseURLMax": "base_url must be <=256 characters",
-      "baseURLShape": "base_url must be an absolute http(s) URL without query or fragment"
+      "baseURLShape": "base_url must be an absolute http(s) URL without query or fragment",
+      "systemOneBaseURL": "Base URL is required for System One."
     },
     "toasts": {
       "updateSuccess": "Account updated",
@@ -213,7 +215,8 @@
       "apiKeyMax": "API key must be 1-256 characters",
       "baseURLMax": "base_url must be <=256 characters",
       "baseURLShape": "base_url must be an absolute http(s) URL without query or fragment",
-      "missingAccountID": "create account response missing account id"
+      "missingAccountID": "create account response missing account id",
+      "systemOneBaseURL": "Base URL is required for System One."
     },
     "toasts": {
       "createSuccess": "API-key account created",

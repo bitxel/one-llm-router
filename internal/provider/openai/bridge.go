@@ -30,7 +30,7 @@ func (a clientResponseAdapter) ClientContract() Contract {
 }
 
 const (
-	ClientResponseAdapterPassthrough         = "passthrough"
+	ClientResponseAdapterPassthrough         = provider.ResponseAdapterPassthrough
 	ClientResponseAdapterOpenAIResponsesJSON = "openai_responses_json"
 	ClientResponseAdapterOpenAIResponsesSSE  = "openai_responses_sse"
 	ClientResponseAdapterChatCompletionsJSON = "chat_completions_json"
@@ -39,6 +39,10 @@ const (
 	ClientResponseAdapterCodexNative         = "codex_native_passthrough"
 	ClientResponseAdapterWebSocketRelay      = "websocket_relay"
 )
+
+func DefaultOperationBridges() []OperationBridge {
+	return defaultOperationBridges()
+}
 
 func DefaultBridgeRegistry() *BridgeRegistry {
 	return provider.NewBridgeRegistry(defaultOperationBridges()...)

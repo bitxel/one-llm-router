@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"xorm.io/xorm"
@@ -813,9 +815,56 @@ func (r *AccountRepo) UpdateDetails(ctx context.Context, id int64, patch core.Ac
 		return nil, fmt.Errorf("update details %d: validate: %w", id, err)
 	}
 
-	if _, err := r.engine.ID(id).Cols(cols...).Update(&applied); err != nil {
+	session := r.engine.ID(id)
+	defer func() { _ = session.Close() }()
+	if patch.Capabilities != nil || patch.BaseURL != nil {
+		// Compare the fields used by the cross-field validation, without a schema change.
+		session = session.Where("auth_method = ? AND status = ?", acct.AuthMethod, acct.Status)
+		if acct.BaseURL == nil {
+			session = session.And("base_url IS NULL")
+		} else {
+			session = session.And("base_url = ?", *acct.BaseURL)
+		}
+		comparison := "capabilities = ?"
+		switch r.engine.DriverName() {
+		case "mysql":
+			comparison = "capabilities = CAST(? AS JSON)"
+		case "sqlite":
+			comparison = "json(capabilities) = json(?)"
+		}
+		if acct.Capabilities == nil {
+			comparison = "(capabilities IS NULL OR " + comparison + ")"
+		}
+		raw, err := json.Marshal(acct.Capabilities)
+		if err != nil {
+			return nil, fmt.Errorf("encode capability snapshot: %w", err)
+		}
+		session = session.And(comparison, string(raw))
+	}
+	affected, err := session.Cols(cols...).Update(&applied)
+	if err != nil {
 		return nil, fmt.Errorf("update details %d: %w", id, err)
 	}
+	if affected == 0 {
+		// MySQL reports changed rows, so an idempotent save may return zero.
+		current, err := r.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		baseMatches := patch.BaseURL == nil || (current.BaseURL == nil && applied.BaseURL == nil) ||
+			(current.BaseURL != nil && applied.BaseURL != nil && *current.BaseURL == *applied.BaseURL)
+		if current.AuthMethod == acct.AuthMethod && current.Status == acct.Status &&
+			(patch.Name == nil || current.Name == applied.Name) &&
+			(patch.APIKey == nil || current.APIKey == applied.APIKey) && baseMatches &&
+			(patch.Capabilities == nil || slices.Equal(current.Capabilities, applied.Capabilities)) {
+			if err := current.Validate(); err != nil {
+				return nil, fmt.Errorf("validate unchanged account %d: %w", id, err)
+			}
+			return current, nil
+		}
+		return nil, &domain.ValidationError{Field: "capabilities", Message: "account changed concurrently; reload and retry"}
+	}
+
 	return r.GetByID(ctx, id)
 }
 

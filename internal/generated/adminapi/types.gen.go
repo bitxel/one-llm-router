@@ -2847,8 +2847,13 @@ type AccountListItem struct {
 	// Capabilities Capability OpID prefixes the account supports. An empty list
 	// (or absent key) means the account supports NO governed
 	// operations — it will be skipped for any capability-gated
-	// route. OAuth accounts always skip capability checks.
-	// Example: `["op.openai.chat_completions", "op.openai.responses"]`.
+	// route. API-key capabilities are independent and may be combined:
+	// `op.openai.chat_completions`, `op.openai.responses`, `op.systemone`.
+	// System One requires an explicit base_url and API-key credentials;
+	// OAuth accounts retain only their existing mapped operations.
+	// System-One-only accounts use manual model configuration; refresh
+	// returns account_model_refresh_failed. Mixed accounts retain model discovery.
+	// Example: `["op.openai.chat_completions", "op.openai.responses", "op.systemone"]`.
 	Capabilities     *[]string  `json:"capabilities,omitempty"`
 	ChatgptAccountId *string    `json:"chatgpt_account_id,omitempty"`
 	CreatedAt        *time.Time `json:"created_at,omitempty"`
@@ -3225,6 +3230,7 @@ type DashboardActiveAccountsCard struct {
 type DashboardCards struct {
 	ActiveAccounts DashboardActiveAccountsCard `json:"active_accounts"`
 	ErrorRate      DashboardErrorRateCard      `json:"error_rate"`
+	ModelSpeeds    []DashboardModelSpeed       `json:"model_speeds"`
 	Requests       DashboardRequestsCard       `json:"requests"`
 	Tokens         DashboardTokensCard         `json:"tokens"`
 	Ttft           DashboardTTFTCard           `json:"ttft"`
@@ -3286,6 +3292,14 @@ type DashboardInvalidFilterEnvelopeDataField string
 
 // DashboardInvalidFilterEnvelopeMsg defines model for DashboardInvalidFilterEnvelope.Msg.
 type DashboardInvalidFilterEnvelopeMsg string
+
+// DashboardModelSpeed defines model for DashboardModelSpeed.
+type DashboardModelSpeed struct {
+	Model                 string  `json:"model"`
+	OutputTokens          int     `json:"output_tokens"`
+	OutputTokensPerSecond float64 `json:"output_tokens_per_second"`
+	SampleCount           int     `json:"sample_count"`
+}
 
 // DashboardRange defines model for DashboardRange.
 type DashboardRange string
@@ -4574,7 +4588,7 @@ type RequestLogDetail struct {
 	StatusCode     int                     `json:"status_code"`
 	TokenUsage     *map[string]interface{} `json:"token_usage,omitempty"`
 
-	// TtftMs Time to first streamed text token in milliseconds, present only for SSE records where the first text delta was observed.
+	// TtftMs Elapsed time from starting SSE response forwarding until the first non-empty data payload is forwarded. Payload contents are not parsed; SSE comments and empty data fields are ignored.
 	TtftMs            *int   `json:"ttft_ms,omitempty"`
 	UpstreamAccountId *int64 `json:"upstream_account_id,omitempty"`
 
@@ -4619,7 +4633,7 @@ type RequestLogRow struct {
 	StatusCode     int                     `json:"status_code"`
 	TokenUsage     *map[string]interface{} `json:"token_usage,omitempty"`
 
-	// TtftMs Time to first streamed text token in milliseconds, present only for SSE records where the first text delta was observed.
+	// TtftMs Elapsed time from starting SSE response forwarding until the first non-empty data payload is forwarded. Payload contents are not parsed; SSE comments and empty data fields are ignored.
 	TtftMs            *int   `json:"ttft_ms,omitempty"`
 	UpstreamAccountId *int64 `json:"upstream_account_id,omitempty"`
 }

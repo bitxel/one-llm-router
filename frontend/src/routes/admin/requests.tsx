@@ -1105,6 +1105,16 @@ function DetailTimestamp({ value }: { value: string }) {
 function RequestDetailSummary({ record }: { record: RequestLogDetail }) {
   const tokenUsage = tokenUsageParts(record.token_usage)
   const tokenUsageTooltip = tokenUsage?.tooltip ?? tokenUsageLegendTooltip()
+  const generationDurationMs =
+    record.response_mode === 'sse'
+      ? typeof record.ttft_ms === 'number'
+        ? record.latency_ms - record.ttft_ms
+        : null
+      : record.latency_ms
+  const outputTokens = tokenUsage?.output ?? 0
+  const outputTokensPerSecond = generationDurationMs !== null && generationDurationMs > 0 && outputTokens > 0
+    ? (outputTokens * 1000) / generationDurationMs
+    : null
   return (
     <div
       data-testid="request-detail-summary"
@@ -1126,7 +1136,14 @@ function RequestDetailSummary({ record }: { record: RequestLogDetail }) {
         <TokenUsageDetail usage={tokenUsage} tooltip={tokenUsageTooltip} />
       </SummaryCell>
       <SummaryCell label={t('labels.latency')}>
-        <LatencyDetail totalMs={record.latency_ms} ttftMs={record.ttft_ms} />
+        <div className="space-y-1">
+          <LatencyDetail totalMs={record.latency_ms} ttftMs={record.ttft_ms} />
+          {outputTokensPerSecond !== null ? (
+            <div title={t('labels.outputTokensPerSecondHelp')}>
+              {t('labels.outputTokensPerSecond', { value: formatSpeed(outputTokensPerSecond) })}
+            </div>
+          ) : null}
+        </div>
       </SummaryCell>
     </div>
   )
@@ -1549,6 +1566,10 @@ function LatencyDetail({ totalMs, ttftMs }: { totalMs: number; ttftMs?: number |
 
 function formatLatencyValue(value: number | null | undefined): string {
   return typeof value === 'number' ? `${value} ms` : t('emptyField')
+}
+
+function formatSpeed(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)
 }
 
 function AccountFacet({
@@ -2367,6 +2388,7 @@ function formatUsage(value: Record<string, unknown> | null | undefined): string 
 interface TokenUsageParts {
   label: string
   tooltip: string
+  output: number | null
 }
 
 function tokenUsageParts(
@@ -2411,6 +2433,7 @@ function tokenUsageParts(
   return {
     label,
     tooltip: tooltipParts.length > 0 ? tooltipParts.join('\n') : tokenUsageLegendTooltip(),
+    output,
   }
 }
 

@@ -106,7 +106,7 @@ const listPayload: RequestsListData = {
           upstream_endpoint: '/codex/responses',
         },
       },
-      response_mode: 'websocket',
+      response_mode: 'sse',
       token_usage: { input: 123, cached_input: 100, output: 234, reasoning: 123 },
     },
   ],
@@ -270,6 +270,7 @@ describe('AdminRequests', () => {
   })
 
   it('accepts websocket response mode filters from the URL', async () => {
+    listPayload.records[0].response_mode = 'websocket'
     await renderRequests('/admin/requests?response_mode=websocket')
 
     await waitFor(() => {
@@ -563,7 +564,8 @@ describe('AdminRequests', () => {
     expect(within(dialog).queryByText('"op_id"')).not.toBeInTheDocument()
     expect(within(dialog).queryByText('op.openai.responses.create')).not.toBeInTheDocument()
     expect(screen.queryByText(/"service_tier": "priority"/)).not.toBeInTheDocument()
-    expect(within(dialog).getAllByText('TTFT 17 ms / Total 45 ms').length).toBeGreaterThan(0)
+    expect(within(dialog).getAllByText('First output chunk 17 ms / Total 45 ms').length).toBeGreaterThan(0)
+    expect(within(dialog).getAllByText(/Output speed .* tokens\/s/).length).toBeGreaterThan(0)
 
     const responseSection = within(dialog).getByText('LLM Server → Router').closest('section')
     expect(responseSection).not.toBeNull()
@@ -599,7 +601,7 @@ describe('AdminRequests', () => {
     expect(within(upstreamSection as HTMLElement).getByText('/codex/responses')).toBeInTheDocument()
   })
 
-  it('shows only total latency when detail has no TTFT', async () => {
+  it('does not calculate SSE output speed when detail has no TTFT', async () => {
     const recordWithoutTTFT = { ...detailPayload.record }
     delete recordWithoutTTFT.ttft_ms
     callAdminMock.mockImplementation(async (call) => {
@@ -616,7 +618,42 @@ describe('AdminRequests', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Request Log Detail' })
     expect(within(dialog).getAllByText('Total 45 ms').length).toBeGreaterThan(0)
-    expect(within(dialog).queryByText(/TTFT/)).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(/First output chunk/)).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(/Output speed/)).not.toBeInTheDocument()
+  })
+
+  it('uses total latency for non-SSE output speed even when TTFT is present', async () => {
+    const nonSSERecord = { ...detailPayload.record, response_mode: 'websocket' as const }
+    callAdminMock.mockImplementation(async (call) => {
+      const marker = (await call) as unknown as SdkMarker
+      if (marker.op === 'list') return listPayload as never
+      if (marker.op === 'options') return optionsPayload as never
+      return { record: nonSSERecord } as never
+    })
+
+    const user = userEvent.setup()
+    await renderRequests()
+    await user.click(await screen.findByTestId('request-open-13'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Request Log Detail' })
+    expect(within(dialog).getAllByText('Output speed 5,200 tokens/s').length).toBeGreaterThan(0)
+  })
+
+  it('does not calculate SSE output speed when TTFT is not less than total latency', async () => {
+    const invalidTimingRecord = { ...detailPayload.record, ttft_ms: detailPayload.record.latency_ms }
+    callAdminMock.mockImplementation(async (call) => {
+      const marker = (await call) as unknown as SdkMarker
+      if (marker.op === 'list') return listPayload as never
+      if (marker.op === 'options') return optionsPayload as never
+      return { record: invalidTimingRecord } as never
+    })
+
+    const user = userEvent.setup()
+    await renderRequests()
+    await user.click(await screen.findByTestId('request-open-13'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Request Log Detail' })
+    expect(within(dialog).queryByText(/Output speed/)).not.toBeInTheDocument()
   })
 
   it('clears an open detail when list filters change', async () => {

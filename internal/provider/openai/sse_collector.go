@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +20,7 @@ type ResponsesSSECollector struct {
 	response     map[string]any
 	usage        any
 	terminalType string
+	outputItems  map[int]map[string]any
 }
 
 func (c *ResponsesSSECollector) AddEvent(data []byte) error {
@@ -26,8 +30,13 @@ func (c *ResponsesSSECollector) AddEvent(data []byte) error {
 	}
 
 	var event map[string]any
-	if err := json.Unmarshal([]byte(raw), &event); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&event); err != nil {
 		return fmt.Errorf("decode responses SSE event: %w", err)
+	}
+	if decoder.InputOffset() != int64(len(raw)) {
+		return errors.New("decode responses SSE event: unexpected trailing data")
 	}
 
 	eventType, _ := event["type"].(string)
@@ -40,7 +49,24 @@ func (c *ResponsesSSECollector) AddEvent(data []byte) error {
 		if text, ok := event["text"].(string); ok {
 			c.doneText = text
 		}
-	case "response.content_part.done", "response.output_item.done":
+	case "response.output_item.done":
+		indexValue, ok := event["output_index"].(json.Number)
+		index, err := strconv.Atoi(string(indexValue))
+		if !ok || err != nil || index < 0 {
+			return errors.New("responses SSE output_item.done requires a non-negative integer output_index")
+		}
+		item, ok := event["item"].(map[string]any)
+		if !ok || item == nil {
+			return errors.New("responses SSE output_item.done requires an item object")
+		}
+		if c.outputItems == nil {
+			c.outputItems = make(map[int]map[string]any)
+		}
+		if previous, exists := c.outputItems[index]; exists && !reflect.DeepEqual(previous, item) {
+			return fmt.Errorf("responses SSE conflicting completed items at output_index %d", index)
+		}
+		c.outputItems[index] = item
+	case "response.content_part.done":
 		if c.doneText == "" {
 			c.doneText = eventOutputText(event)
 		}
@@ -73,14 +99,32 @@ func (c *ResponsesSSECollector) AggregateJSON(requireTerminal bool) ([]byte, boo
 	}
 
 	if c.terminalType != "error" {
-		text := c.doneText
+		if len(c.outputItems) > 0 {
+			output, ok := c.response["output"].([]any)
+			if c.response["output"] != nil && !ok {
+				return nil, true, errors.New("responses SSE terminal output must be an array")
+			}
+			if len(output) == 0 {
+				indices := make([]int, 0, len(c.outputItems))
+				for index := range c.outputItems {
+					indices = append(indices, index)
+				}
+				sort.Ints(indices)
+				output = make([]any, 0, len(indices))
+				for _, index := range indices {
+					output = append(output, c.outputItems[index])
+				}
+				c.response["output"] = output
+			}
+		}
+		text := responseOutputText(c.response)
+		if text == "" {
+			text = c.doneText
+		}
 		if text == "" {
 			text = c.deltaText.String()
 		}
-		if text == "" {
-			text = responseOutputText(c.response)
-		}
-		if _, ok := c.response["output_text"]; !ok {
+		if _, ok := c.response["output_text"]; !ok || c.response["output_text"] == "" {
 			c.response["output_text"] = text
 		}
 		if c.usage != nil {

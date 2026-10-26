@@ -1,7 +1,7 @@
 {
   "eyebrow": "可观测性",
   "title": "仪表盘",
-  "intro": "通过路由器请求日志监控实时的账号容量、请求量、令牌构成、错误率与首字延迟。",
+  "intro": "通过路由器请求日志监控实时的账号容量、请求量、令牌构成、错误率与首个输出块延迟。",
   "errorTitle": "仪表盘不可用",
   "loading": "加载中",
   "emptyValue": "-",
@@ -52,9 +52,16 @@
       "meta": "{{errors}} / {{total}} 次错误"
     },
     "ttft": {
-      "title": "TTFT",
-      "shortTitle": "TTFT",
+      "title": "首个输出块",
+      "shortTitle": "首个输出块",
       "meta": "{{samples}} 个样本"
     }
+  },
+  "modelSpeeds": {
+    "title": "按模型统计输出速度",
+    "unit": "输出 token/s",
+    "outputTokens": "输出 token",
+    "requests": "请求",
+    "empty": "此时间范围内没有可用于统计的输出 token 用量。"
   }
 }

@@ -119,6 +119,7 @@ const routerDashboardPayload: DashboardData = {
     },
     error_rate: { value: 0, total: 0, errors: 0, series: [] },
     ttft: { p95_ms: null, sample_count: 0, series: [] },
+    model_speeds: [],
   },
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/user/one-llm-router/internal/domain"
 	"github.com/user/one-llm-router/internal/provider"
 	"github.com/user/one-llm-router/internal/provider/openai"
+	"github.com/user/one-llm-router/internal/provider/systemone"
 )
 
 type gatewayRouteKind string
@@ -47,7 +48,7 @@ type gatewayRoute struct {
 	ErrorCode    string
 }
 
-var defaultGatewayBridgeRegistry = openai.DefaultBridgeRegistry()
+var defaultGatewayBridgeRegistry = provider.NewBridgeRegistry(append(openai.DefaultOperationBridges(), systemone.Bridge{})...)
 
 func classifyGatewayRoute(method, rawPath string, websocket bool) gatewayRoute {
 	path := normalizeGatewayPath(rawPath)
@@ -111,6 +112,10 @@ func classifySupportedGatewayRoute(method, path string, websocket bool) (gateway
 	}
 
 	switch path {
+	case "/v1/systemone":
+		if method == http.MethodPost {
+			return platformDirectRoute(systemone.OpCreate, path), true
+		}
 	case "/v1/responses":
 		if method == http.MethodPost {
 			return platformAndOAuthCodexRoute(openai.OpOpenAIResponsesCreate, path, "/codex/responses"), true

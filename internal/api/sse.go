@@ -24,17 +24,15 @@ type SSEResult struct {
 var ErrSSEEventTooLarge = errors.New("SSE event too large")
 
 const (
-	// DefaultMaxSSEEventBytes matches codex-lb's max_sse_event_bytes=2MB so
-	// long reasoning events and multi-line tool-call deltas are not dropped
-	// mid-stream. Exported so main/config can override via env.
-	DefaultMaxSSEEventBytes = 2 << 20 // 2 MiB
+	// DefaultMaxSSEEventBytes accommodates Base64 image results from the
+	// Codex backend while bounding individual SSE lines and events.
+	DefaultMaxSSEEventBytes = 16 << 20 // 16 MiB
 	// bodyCaptureMaxBytes caps how much of the SSE response body we buffer
 	// for request_records body fields when body logging is enabled.
 	bodyCaptureMaxBytes = 1 << 20 // 1 MiB
 )
 
-// maxSSEEventBytes is package-level so main() can override it at process
-// start from ROUTER_MAX_SSE_EVENT_MB. It is read-only after startup.
+// maxSSEEventBytes is read-only while requests are being served.
 var maxSSEEventBytes = DefaultMaxSSEEventBytes
 
 // SetMaxSSEEventBytes lets the entrypoint inject the configured cap before
@@ -53,7 +51,8 @@ func ForwardSSE(w http.ResponseWriter, upstream io.Reader, captureBody bool) SSE
 	}
 
 	scanner := bufio.NewScanner(upstream)
-	scanner.Buffer(make([]byte, 0, 256*1024), maxSSEEventBytes)
+	// The event-data limit excludes the SSE field prefix and CRLF framing.
+	scanner.Buffer(make([]byte, 0, 256*1024), maxSSEEventBytes+len("data: ")+2)
 
 	var result SSEResult
 	var eventData bytes.Buffer
@@ -102,6 +101,7 @@ func ForwardSSE(w http.ResponseWriter, upstream io.Reader, captureBody bool) SSE
 			}
 
 			if !eventTooLarge && eventData.Len() > 0 {
+				captureFirstOutputChunk(&result, start)
 				processSSEEvent(&result, responseCollector, eventData.Bytes(), start)
 				eventData.Reset()
 			}
@@ -111,11 +111,16 @@ func ForwardSSE(w http.ResponseWriter, upstream io.Reader, captureBody bool) SSE
 	}
 
 	if !eventTooLarge && eventData.Len() > 0 {
+		captureFirstOutputChunk(&result, start)
 		processSSEEvent(&result, responseCollector, eventData.Bytes(), start)
 	}
 
 	if err := scanner.Err(); err != nil {
-		result.Err = err
+		if errors.Is(err, bufio.ErrTooLong) {
+			result.Err = errors.Join(ErrSSEEventTooLarge, err)
+		} else {
+			result.Err = err
+		}
 	}
 
 	if flusher != nil {
@@ -135,11 +140,14 @@ func ForwardSSE(w http.ResponseWriter, upstream io.Reader, captureBody bool) SSE
 	return result
 }
 
-func processSSEEvent(result *SSEResult, responseCollector *openai.ResponsesSSECollector, data []byte, start time.Time) {
-	if result.TTFTMs == nil && openai.IsOutputTextTokenEvent(data) {
+func captureFirstOutputChunk(result *SSEResult, start time.Time) {
+	if result.TTFTMs == nil {
 		ms := int(time.Since(start).Milliseconds())
 		result.TTFTMs = &ms
 	}
+}
+
+func processSSEEvent(result *SSEResult, responseCollector *openai.ResponsesSSECollector, data []byte, start time.Time) {
 	usage := openai.ExtractUsageFromEvent(data)
 	if usage != nil {
 		result.TokenUsage = usage
